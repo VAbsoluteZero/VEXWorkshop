@@ -1,0 +1,38 @@
+{
+   "version": 3,
+   "cmakeMinimumRequired": {
+      "major": 3,
+      "minor": 18,
+      "patch": 0
+   },
+   "configurePresets": [
+      {
+         "name": "gcc",
+         "displayName": "GCC",
+         "description": "Default build options for GCC",
+         "generator": "MinGW",
+         "binaryDir": "${sourceDir}/build",
+         "cacheVariables": {
+            "CMAKE_CXX_FLAGS": "-Wsuggest-override"
+         }
+      },
+      {
+         "name": "clang",
+         "displayName": "Clang",
+         "description": "Default build options for Clang",
+         "generator": "Visual Studio 16 2019",
+         "binaryDir": "${sourceDir}/build",
+         "cacheVariables": {
+         }
+      },
+      {
+         "name": "MSVC",
+         "displayName": "MSVC",
+         "description": "Default build options for MSVC",
+         "generator": "Visual Studio 16 2019",
+         "binaryDir": "${sourceDir}/build",
+         "cacheVariables": { 
+         }
+      }
+   ]
+}
