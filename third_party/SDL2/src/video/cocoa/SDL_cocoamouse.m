@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2021 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -253,7 +253,7 @@ Cocoa_WarpMouseGlobal(int x, int y)
 static void
 Cocoa_WarpMouse(SDL_Window * window, int x, int y)
 {
-    Cocoa_WarpMouseGlobal(x + window->x, y + window->y);
+    Cocoa_WarpMouseGlobal(window->x + x, window->y + y);
 }
 
 static int
@@ -262,9 +262,9 @@ Cocoa_SetRelativeMouseMode(SDL_bool enabled)
     /* We will re-apply the relative mode when the window gets focus, if it
      * doesn't have focus right now.
      */
-    SDL_Window *window = SDL_GetMouseFocus();
+    SDL_Window *window = SDL_GetKeyboardFocus();
     if (!window) {
-      return 0;
+        return 0;
     }
 
     /* We will re-apply the relative mode when the window finishes being moved,
@@ -473,15 +473,19 @@ Cocoa_HandleMouseWheel(SDL_Window *window, NSEvent *event)
         }
     }
 
-    if (x > 0) {
-        x = SDL_ceil(x);
-    } else if (x < 0) {
-        x = SDL_floor(x);
-    }
-    if (y > 0) {
-        y = SDL_ceil(y);
-    } else if (y < 0) {
-        y = SDL_floor(y);
+    /* For discrete scroll events from conventional mice, always send a full tick.
+       For continuous scroll events from trackpads, send fractional deltas for smoother scrolling. */
+    if (![event respondsToSelector:@selector(hasPreciseScrollingDeltas)] || ![event hasPreciseScrollingDeltas]) {
+        if (x > 0) {
+            x = SDL_ceil(x);
+        } else if (x < 0) {
+            x = SDL_floor(x);
+        }
+        if (y > 0) {
+            y = SDL_ceil(y);
+        } else if (y < 0) {
+            y = SDL_floor(y);
+        }
     }
 
     SDL_SendMouseWheel(window, mouseID, x, y, direction);

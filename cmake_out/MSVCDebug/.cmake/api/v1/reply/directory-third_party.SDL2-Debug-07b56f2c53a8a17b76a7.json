@@ -1,0 +1,285 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"install"
+		],
+		"files" : 
+		[
+			"third_party/SDL2/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 2976,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 2983,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 2990,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 3010,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 3018,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 3026,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 3033,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 3048,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"third_party/SDL2/Debug/SDL2d.lib"
+			],
+			"targetId" : "SDL2::@4aec6807ea83f133a622",
+			"targetIndex" : 4,
+			"targetIsImportLibrary" : true,
+			"type" : "target"
+		},
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "bin",
+			"paths" : 
+			[
+				"third_party/SDL2/Debug/SDL2d.dll"
+			],
+			"targetId" : "SDL2::@4aec6807ea83f133a622",
+			"targetIndex" : 4,
+			"type" : "target"
+		},
+		{
+			"backtrace" : 2,
+			"component" : "Unspecified",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"third_party/SDL2/Debug/SDL2maind.lib"
+			],
+			"targetId" : "SDL2main::@4aec6807ea83f133a622",
+			"targetIndex" : 6,
+			"type" : "target"
+		},
+		{
+			"backtrace" : 3,
+			"component" : "Unspecified",
+			"destination" : "lib",
+			"paths" : 
+			[
+				"third_party/SDL2/Debug/SDL2-staticd.lib"
+			],
+			"targetId" : "SDL2-static::@4aec6807ea83f133a622",
+			"targetIndex" : 5,
+			"type" : "target"
+		},
+		{
+			"backtrace" : 4,
+			"component" : "Unspecified",
+			"destination" : "cmake",
+			"exportName" : "SDL2Targets",
+			"exportTargets" : 
+			[
+				{
+					"id" : "SDL2::@4aec6807ea83f133a622",
+					"index" : 4
+				}
+			],
+			"paths" : 
+			[
+				"third_party/SDL2/CMakeFiles/Export/cmake/SDL2Targets.cmake"
+			],
+			"type" : "export"
+		},
+		{
+			"backtrace" : 5,
+			"component" : "Unspecified",
+			"destination" : "cmake",
+			"exportName" : "SDL2mainTargets",
+			"exportTargets" : 
+			[
+				{
+					"id" : "SDL2main::@4aec6807ea83f133a622",
+					"index" : 6
+				}
+			],
+			"paths" : 
+			[
+				"third_party/SDL2/CMakeFiles/Export/cmake/SDL2mainTargets.cmake"
+			],
+			"type" : "export"
+		},
+		{
+			"backtrace" : 6,
+			"component" : "Unspecified",
+			"destination" : "cmake",
+			"exportName" : "SDL2staticTargets",
+			"exportTargets" : 
+			[
+				{
+					"id" : "SDL2-static::@4aec6807ea83f133a622",
+					"index" : 5
+				}
+			],
+			"paths" : 
+			[
+				"third_party/SDL2/CMakeFiles/Export/cmake/SDL2staticTargets.cmake"
+			],
+			"type" : "export"
+		},
+		{
+			"backtrace" : 7,
+			"component" : "Devel",
+			"destination" : "cmake",
+			"paths" : 
+			[
+				"third_party/SDL2/SDL2Config.cmake",
+				"cmake_out/MSVCDebug/SDL2ConfigVersion.cmake"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 8,
+			"component" : "Unspecified",
+			"destination" : "include/SDL2",
+			"paths" : 
+			[
+				"third_party/SDL2/include/SDL.h",
+				"third_party/SDL2/include/SDL_assert.h",
+				"third_party/SDL2/include/SDL_atomic.h",
+				"third_party/SDL2/include/SDL_audio.h",
+				"third_party/SDL2/include/SDL_bits.h",
+				"third_party/SDL2/include/SDL_blendmode.h",
+				"third_party/SDL2/include/SDL_clipboard.h",
+				"third_party/SDL2/include/SDL_config_android.h",
+				"third_party/SDL2/include/SDL_config_emscripten.h",
+				"third_party/SDL2/include/SDL_config_iphoneos.h",
+				"third_party/SDL2/include/SDL_config_macosx.h",
+				"third_party/SDL2/include/SDL_config_minimal.h",
+				"third_party/SDL2/include/SDL_config_os2.h",
+				"third_party/SDL2/include/SDL_config_pandora.h",
+				"third_party/SDL2/include/SDL_config_windows.h",
+				"third_party/SDL2/include/SDL_config_winrt.h",
+				"third_party/SDL2/include/SDL_copying.h",
+				"third_party/SDL2/include/SDL_cpuinfo.h",
+				"third_party/SDL2/include/SDL_egl.h",
+				"third_party/SDL2/include/SDL_endian.h",
+				"third_party/SDL2/include/SDL_error.h",
+				"third_party/SDL2/include/SDL_events.h",
+				"third_party/SDL2/include/SDL_filesystem.h",
+				"third_party/SDL2/include/SDL_gamecontroller.h",
+				"third_party/SDL2/include/SDL_gesture.h",
+				"third_party/SDL2/include/SDL_haptic.h",
+				"third_party/SDL2/include/SDL_hidapi.h",
+				"third_party/SDL2/include/SDL_hints.h",
+				"third_party/SDL2/include/SDL_joystick.h",
+				"third_party/SDL2/include/SDL_keyboard.h",
+				"third_party/SDL2/include/SDL_keycode.h",
+				"third_party/SDL2/include/SDL_loadso.h",
+				"third_party/SDL2/include/SDL_locale.h",
+				"third_party/SDL2/include/SDL_log.h",
+				"third_party/SDL2/include/SDL_main.h",
+				"third_party/SDL2/include/SDL_messagebox.h",
+				"third_party/SDL2/include/SDL_metal.h",
+				"third_party/SDL2/include/SDL_misc.h",
+				"third_party/SDL2/include/SDL_mouse.h",
+				"third_party/SDL2/include/SDL_mutex.h",
+				"third_party/SDL2/include/SDL_name.h",
+				"third_party/SDL2/include/SDL_opengl.h",
+				"third_party/SDL2/include/SDL_opengl_glext.h",
+				"third_party/SDL2/include/SDL_opengles.h",
+				"third_party/SDL2/include/SDL_opengles2.h",
+				"third_party/SDL2/include/SDL_opengles2_gl2.h",
+				"third_party/SDL2/include/SDL_opengles2_gl2ext.h",
+				"third_party/SDL2/include/SDL_opengles2_gl2platform.h",
+				"third_party/SDL2/include/SDL_opengles2_khrplatform.h",
+				"third_party/SDL2/include/SDL_pixels.h",
+				"third_party/SDL2/include/SDL_platform.h",
+				"third_party/SDL2/include/SDL_power.h",
+				"third_party/SDL2/include/SDL_quit.h",
+				"third_party/SDL2/include/SDL_rect.h",
+				"third_party/SDL2/include/SDL_render.h",
+				"third_party/SDL2/include/SDL_rwops.h",
+				"third_party/SDL2/include/SDL_scancode.h",
+				"third_party/SDL2/include/SDL_sensor.h",
+				"third_party/SDL2/include/SDL_shape.h",
+				"third_party/SDL2/include/SDL_stdinc.h",
+				"third_party/SDL2/include/SDL_surface.h",
+				"third_party/SDL2/include/SDL_system.h",
+				"third_party/SDL2/include/SDL_syswm.h",
+				"third_party/SDL2/include/SDL_test.h",
+				"third_party/SDL2/include/SDL_test_assert.h",
+				"third_party/SDL2/include/SDL_test_common.h",
+				"third_party/SDL2/include/SDL_test_compare.h",
+				"third_party/SDL2/include/SDL_test_crc32.h",
+				"third_party/SDL2/include/SDL_test_font.h",
+				"third_party/SDL2/include/SDL_test_fuzzer.h",
+				"third_party/SDL2/include/SDL_test_harness.h",
+				"third_party/SDL2/include/SDL_test_images.h",
+				"third_party/SDL2/include/SDL_test_log.h",
+				"third_party/SDL2/include/SDL_test_md5.h",
+				"third_party/SDL2/include/SDL_test_memory.h",
+				"third_party/SDL2/include/SDL_test_random.h",
+				"third_party/SDL2/include/SDL_thread.h",
+				"third_party/SDL2/include/SDL_timer.h",
+				"third_party/SDL2/include/SDL_touch.h",
+				"third_party/SDL2/include/SDL_types.h",
+				"third_party/SDL2/include/SDL_version.h",
+				"third_party/SDL2/include/SDL_video.h",
+				"third_party/SDL2/include/SDL_vulkan.h",
+				"third_party/SDL2/include/begin_code.h",
+				"third_party/SDL2/include/close_code.h",
+				"cmake_out/MSVCDebug/third_party/SDL2/include/SDL_config.h",
+				"cmake_out/MSVCDebug/third_party/SDL2/include/SDL_revision.h"
+			],
+			"type" : "file"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "third_party/SDL2",
+		"source" : "third_party/SDL2"
+	}
+}

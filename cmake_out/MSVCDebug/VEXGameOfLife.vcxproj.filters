@@ -1,0 +1,270 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\CMakeFiles\VEXGameOfLife.dir\cmake_pch.cxx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Memory\Memory.cpp">
+      <Filter>vex\VEXlib\VCore\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\TypeInfoUtils .cpp">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\VUtilsBase.cpp">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\ComponentBase.cpp">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\Storage.cpp">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\World.cpp">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\Misc\RunSample.cpp">
+      <Filter>vex\VEXlib\VFramework\Misc</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\Misc\VUtils.cpp">
+      <Filter>vex\VEXlib\VFramework\Misc</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\TestSamples\TrivialSamples.cpp">
+      <Filter>vex\VEXlib\VFramework\TestSamples</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\Main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\application\Application.cpp">
+      <Filter>src\application</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\application\Platfrom.cpp">
+      <Filter>src\application</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\application\SDLDx11Application.cpp">
+      <Filter>src\application</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\application\SDLWindow.cpp">
+      <Filter>src\application</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\demos\pathfinding\FlowFieldsDemo.cpp">
+      <Filter>src\demos\pathfinding</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\render\ARenderSystem.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\render\Camera.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\render\SDLRenderer.cpp">
+      <Filter>src\render</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\threading\JobAPI.cpp">
+      <Filter>src\threading</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\threading\JobThread.cpp">
+      <Filter>src\threading</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\src\utils\ImGuiUtils.cpp">
+      <Filter>src\utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Containers\Dict.h">
+      <Filter>vex\VEXlib\VCore\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Containers\Ring.h">
+      <Filter>vex\VEXlib\VCore\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Containers\SOAJoint.h">
+      <Filter>vex\VEXlib\VCore\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Containers\Stack.h">
+      <Filter>vex\VEXlib\VCore\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Containers\Tuple.h">
+      <Filter>vex\VEXlib\VCore\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Containers\Union.h">
+      <Filter>vex\VEXlib\VCore\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Dependencies\MurmurHash3.h">
+      <Filter>vex\VEXlib\VCore\Dependencies</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Dependencies\fastmod.h">
+      <Filter>vex\VEXlib\VCore\Dependencies</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Memory\Memory.h">
+      <Filter>vex\VEXlib\VCore\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Systems\ISystem.h">
+      <Filter>vex\VEXlib\VCore\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Systems\SystemManager.h">
+      <Filter>vex\VEXlib\VCore\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\CoreTemplates.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\HashUtils.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\StateRecorder.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\TTraits.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\TypeInfoUtils.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\VMath.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\Utils\VUtilsBase.h">
+      <Filter>vex\VEXlib\VCore\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\ComponentBase.h">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\Entity.h">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\IGlobal.h">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\Storage.h">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VCore\World\World.h">
+      <Filter>vex\VEXlib\VCore\World</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\Misc\Color.h">
+      <Filter>vex\VEXlib\VFramework\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\Misc\RunSample.h">
+      <Filter>vex\VEXlib\VFramework\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\Misc\VUtils.h">
+      <Filter>vex\VEXlib\VFramework\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\vex\VEXLib\VFramework\VEXBase.h">
+      <Filter>vex\VEXlib\VFramework</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\application\Application.h">
+      <Filter>src\application</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\application\Environment.h">
+      <Filter>src\application</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\application\Platfrom.h">
+      <Filter>src\application</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\application\SDLDx11Application.h">
+      <Filter>src\application</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\application\SDLWindow.h">
+      <Filter>src\application</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\demos\pathfinding\FlowFieldsDemo.h">
+      <Filter>src\demos\pathfinding</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\render\ARenderSystem.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\render\Camera.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\render\SDLRenderer.h">
+      <Filter>src\render</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\scene\Grid.h">
+      <Filter>src\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\threading\JobAPI.h">
+      <Filter>src\threading</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\threading\JobThread.h">
+      <Filter>src\threading</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\src\utils\ImGuiUtils.h">
+      <Filter>src\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\CMakeFiles\VEXGameOfLife.dir\Debug\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\CMakeFiles\VEXGameOfLife.dir\Release\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\CMakeFiles\VEXGameOfLife.dir\RELWITHDEBINFO\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Precompile Header File">
+      <UniqueIdentifier>{EB2B2D8B-2757-3E6A-A8EA-02672196F1A2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{C5203605-A318-370F-B5A7-EA889F2ED764}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{0F602EC2-854D-3A6D-B3F8-EEE98466161C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\application">
+      <UniqueIdentifier>{4861B86B-09DC-3E1A-A585-01B2ED57BE8C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\demos">
+      <UniqueIdentifier>{3474D943-71CB-3786-BA0E-265B7F5C74DC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\demos\pathfinding">
+      <UniqueIdentifier>{7DF09096-316A-38C8-AF99-A474F020D9DC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\render">
+      <UniqueIdentifier>{24DC65B4-0832-3EBF-9D19-B66752E21565}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\scene">
+      <UniqueIdentifier>{2B2524BE-EE3E-3DF2-AC9A-8119766BA8F2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\threading">
+      <UniqueIdentifier>{8364988B-3C1D-38F1-BE94-3D5B3A0192F1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\utils">
+      <UniqueIdentifier>{BA759A1A-D2F6-3AE2-8660-BEBD303BD213}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex">
+      <UniqueIdentifier>{8787843B-7E59-3484-B71F-3138672EB641}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib">
+      <UniqueIdentifier>{BEEDFF40-6FF0-3F30-BCFA-2593DB85497B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore">
+      <UniqueIdentifier>{0A2CC424-7CF6-3DC3-A9C1-6297F25C35ED}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore\Containers">
+      <UniqueIdentifier>{1140462D-07B8-3677-975E-D3AD5F9F3FBE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore\Dependencies">
+      <UniqueIdentifier>{C97040C9-9035-34FF-8E75-C08F159F9DA7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore\Memory">
+      <UniqueIdentifier>{D5877D35-2DC8-3787-8C15-5840D117D105}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore\Systems">
+      <UniqueIdentifier>{45056EB1-44FE-38EF-8DAD-8ECC417D2400}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore\Utils">
+      <UniqueIdentifier>{50E560C2-DA08-3389-ACE7-5038727190B3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VCore\World">
+      <UniqueIdentifier>{3ACC1484-0BE2-322D-B825-6771D1BEA26F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VFramework">
+      <UniqueIdentifier>{F1341578-A0E9-3987-820B-B6CB32430E3C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VFramework\Misc">
+      <UniqueIdentifier>{D6472183-51F2-38D9-875A-976BA4D308A4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vex\VEXlib\VFramework\TestSamples">
+      <UniqueIdentifier>{BABA0C24-BD98-3A2B-BC7E-34FA0C3C32DB}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

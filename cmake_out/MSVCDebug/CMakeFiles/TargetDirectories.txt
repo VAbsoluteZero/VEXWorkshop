@@ -1,0 +1,16 @@
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/CMakeFiles/imgui.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/CMakeFiles/VEXGameOfLife.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/CMakeFiles/INSTALL.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/CMakeFiles/ALL_BUILD.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/SDL2/CMakeFiles/SDL2main.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/SDL2/CMakeFiles/SDL2.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/SDL2/CMakeFiles/SDL2-static.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/SDL2/CMakeFiles/uninstall.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/SDL2/CMakeFiles/INSTALL.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/SDL2/CMakeFiles/ALL_BUILD.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/spdlog/CMakeFiles/spdlog.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/spdlog/CMakeFiles/INSTALL.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/spdlog/CMakeFiles/ALL_BUILD.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/glm/CMakeFiles/INSTALL.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/glm/CMakeFiles/ALL_BUILD.dir
+E:/VAbsoluteZero/GameOfLife/cmake_out/MSVCDebug/third_party/glm/glm/CMakeFiles/INSTALL.dir

@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui_draw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui_tables.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui_demo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui_widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_sdl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_dx11.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_allegro5.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_android.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_dx10.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_dx11.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_dx12.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_dx9.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_glfw.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_glut.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_marmalade.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_metal.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_opengl2.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_opengl3.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_opengl3_loader.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_osx.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_sdl.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_sdlrenderer.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_vulkan.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_wgpu.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\backends\imgui_impl_win32.h">
+      <Filter>third_party\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imconfig.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imgui_internal.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imstb_rectpack.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imstb_textedit.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\imstb_truetype.h">
+      <Filter>third_party\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\misc\cpp\imgui_stdlib.h">
+      <Filter>third_party\imgui\misc\cpp</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\misc\freetype\imgui_freetype.h">
+      <Filter>third_party\imgui\misc\freetype</Filter>
+    </ClInclude>
+    <ClInclude Include="E:\VAbsoluteZero\GameOfLife\third_party\imgui\misc\single_file\imgui_single_file.h">
+      <Filter>third_party\imgui\misc\single_file</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{C5203605-A318-370F-B5A7-EA889F2ED764}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party">
+      <UniqueIdentifier>{DD00FE4C-BE7F-3B11-AE36-0CF6975C0DF5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui">
+      <UniqueIdentifier>{DD179819-0467-317D-ACBE-6C6E118C644F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\backends">
+      <UniqueIdentifier>{116F7626-386E-3DF9-8066-0734CFC22FB0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\misc">
+      <UniqueIdentifier>{8B40EDAD-FA63-3493-BE73-56E67E998168}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\misc\cpp">
+      <UniqueIdentifier>{7EE52E63-EF40-357D-B5C4-3C5E3A54CA87}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\misc\freetype">
+      <UniqueIdentifier>{2D0CB20F-B327-3065-992B-53A15515992E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party\imgui\misc\single_file">
+      <UniqueIdentifier>{B3CABF4D-928F-3DE1-8B6E-FF131C2DA601}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

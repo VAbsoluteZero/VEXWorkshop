@@ -1,0 +1,119 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RELWITHDEBINFO|x64">
+      <Configuration>RELWITHDEBINFO</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{994FD886-31C7-3402-BC4A-30CD0AE41E10}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0.22000.0</WindowsTargetPlatformVersion>
+    <Keyword>Win32Proj</Keyword>
+    <Platform>x64</Platform>
+    <Platform>x64</Platform>
+    <ProjectName>ALL_BUILD</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RELWITHDEBINFO|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RELWITHDEBINFO|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>E:\VAbsoluteZero\GameOfLife\third_party\SDL2\include;E:\VAbsoluteZero\GameOfLife\third_party\spdlog\include;E:\VAbsoluteZero\GameOfLife\third_party\glm;E:\VAbsoluteZero\GameOfLife\vex\VEXlib;E:\VAbsoluteZero\GameOfLife\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>E:\VAbsoluteZero\GameOfLife\third_party\SDL2\include;E:\VAbsoluteZero\GameOfLife\third_party\spdlog\include;E:\VAbsoluteZero\GameOfLife\third_party\glm;E:\VAbsoluteZero\GameOfLife\vex\VEXlib;E:\VAbsoluteZero\GameOfLife\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RELWITHDEBINFO|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>E:\VAbsoluteZero\GameOfLife\third_party\SDL2\include;E:\VAbsoluteZero\GameOfLife\third_party\spdlog\include;E:\VAbsoluteZero\GameOfLife\third_party\glm;E:\VAbsoluteZero\GameOfLife\vex\VEXlib;E:\VAbsoluteZero\GameOfLife\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\third_party\SDL2\SDL2.vcxproj">
+      <Project>{75835C0F-50C9-3E8D-9D4A-51F44525E207}</Project>
+      <Name>SDL2</Name>
+    </ProjectReference>
+    <ProjectReference Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\third_party\SDL2\SDL2-static.vcxproj">
+      <Project>{B87757B6-4F24-37AD-BE32-BFA8BB1E5D7D}</Project>
+      <Name>SDL2-static</Name>
+    </ProjectReference>
+    <ProjectReference Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\third_party\SDL2\SDL2main.vcxproj">
+      <Project>{84DA8DEF-BCA7-35B9-9DBB-7C5C5E2FA7B2}</Project>
+      <Name>SDL2main</Name>
+    </ProjectReference>
+    <ProjectReference Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\VEXGameOfLife.vcxproj">
+      <Project>{281512A1-1729-38C4-B766-699E77D6375E}</Project>
+      <Name>VEXGameOfLife</Name>
+    </ProjectReference>
+    <ProjectReference Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\imgui.vcxproj">
+      <Project>{7954BC6E-9C72-3EAE-9D92-B45CDCADE2E0}</Project>
+      <Name>imgui</Name>
+    </ProjectReference>
+    <ProjectReference Include="E:\VAbsoluteZero\GameOfLife\cmake_out\MSVCDebug\third_party\spdlog\spdlog.vcxproj">
+      <Project>{237DD2FD-7458-3B85-965F-AD6446047354}</Project>
+      <Name>spdlog</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
