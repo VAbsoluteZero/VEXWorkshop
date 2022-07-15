@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2021 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
   Copyright (C) 2021 NVIDIA Corporation
 
   This software is provided 'as-is', without any express or implied
@@ -142,7 +142,7 @@ typedef GLXContext(*PFNGLXCREATECONTEXTATTRIBSARBPROC) (Display * dpy,
 #endif
 
 #define OPENGL_REQUIRES_DLOPEN
-#if defined(OPENGL_REQUIRES_DLOPEN) && defined(SDL_LOADSO_DLOPEN)
+#if defined(OPENGL_REQUIRES_DLOPEN) && defined(HAVE_DLOPEN)
 #include <dlfcn.h>
 #define GL_LoadObject(X)    dlopen(X, (RTLD_NOW|RTLD_GLOBAL))
 #define GL_LoadFunction     dlsym
@@ -174,7 +174,7 @@ X11_GL_LoadLibrary(_THIS, const char *path)
     }
     _this->gl_config.dll_handle = GL_LoadObject(path);
     if (!_this->gl_config.dll_handle) {
-#if defined(OPENGL_REQUIRES_DLOPEN) && defined(SDL_LOADSO_DLOPEN)
+#if defined(OPENGL_REQUIRES_DLOPEN) && defined(HAVE_DLOPEN)
         SDL_SetError("Failed loading %s: %s", path, dlerror());
 #endif
         return -1;
@@ -247,11 +247,6 @@ X11_GL_LoadLibrary(_THIS, const char *path)
         X11_GL_UseEGL(_this) ) {
 #if SDL_VIDEO_OPENGL_EGL
         X11_GL_UnloadLibrary(_this);
-        /* Better avoid conflicts! */
-        if (_this->gl_config.dll_handle != NULL ) {
-            GL_UnloadObject(_this->gl_config.dll_handle);
-            _this->gl_config.dll_handle = NULL;
-        }
         _this->GL_LoadLibrary = X11_GLES_LoadLibrary;
         _this->GL_GetProcAddress = X11_GLES_GetProcAddress;
         _this->GL_UnloadLibrary = X11_GLES_UnloadLibrary;

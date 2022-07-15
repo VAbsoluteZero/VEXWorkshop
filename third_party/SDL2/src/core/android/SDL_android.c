@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2021 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -148,6 +148,10 @@ JNIEXPORT jstring JNICALL SDL_JAVA_INTERFACE(nativeGetHint)(
         JNIEnv *env, jclass cls,
         jstring name);
 
+JNIEXPORT jboolean JNICALL SDL_JAVA_INTERFACE(nativeGetHintBoolean)(
+        JNIEnv *env, jclass cls,
+        jstring name, jboolean default_value);
+
 JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetenv)(
         JNIEnv *env, jclass cls,
         jstring name, jstring value);
@@ -189,6 +193,7 @@ static JNINativeMethod SDLActivity_tab[] = {
     { "nativeResume",               "()V", SDL_JAVA_INTERFACE(nativeResume) },
     { "nativeFocusChanged",         "(Z)V", SDL_JAVA_INTERFACE(nativeFocusChanged) },
     { "nativeGetHint",              "(Ljava/lang/String;)Ljava/lang/String;", SDL_JAVA_INTERFACE(nativeGetHint) },
+    { "nativeGetHintBoolean",       "(Ljava/lang/String;Z)Z", SDL_JAVA_INTERFACE(nativeGetHintBoolean) },
     { "nativeSetenv",               "(Ljava/lang/String;Ljava/lang/String;)V", SDL_JAVA_INTERFACE(nativeSetenv) },
     { "onNativeOrientationChanged", "(I)V", SDL_JAVA_INTERFACE(onNativeOrientationChanged) },
     { "nativeAddTouch",             "(ILjava/lang/String;)V", SDL_JAVA_INTERFACE(nativeAddTouch) },
@@ -298,6 +303,7 @@ static jmethodID midClipboardGetText;
 static jmethodID midClipboardHasText;
 static jmethodID midClipboardSetText;
 static jmethodID midCreateCustomCursor;
+static jmethodID midDestroyCustomCursor;
 static jmethodID midGetContext;
 static jmethodID midGetDisplayDPI;
 static jmethodID midGetManifestEnvironmentVariables;
@@ -577,6 +583,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetupJNI)(JNIEnv *env, jclass cl
     midClipboardHasText = (*env)->GetStaticMethodID(env, mActivityClass, "clipboardHasText", "()Z");
     midClipboardSetText = (*env)->GetStaticMethodID(env, mActivityClass, "clipboardSetText", "(Ljava/lang/String;)V");
     midCreateCustomCursor = (*env)->GetStaticMethodID(env, mActivityClass, "createCustomCursor", "([IIIII)I");
+    midDestroyCustomCursor = (*env)->GetStaticMethodID(env, mActivityClass, "destroyCustomCursor", "(I)V");
     midGetContext = (*env)->GetStaticMethodID(env, mActivityClass, "getContext","()Landroid/content/Context;");
     midGetDisplayDPI = (*env)->GetStaticMethodID(env, mActivityClass, "getDisplayDPI", "()Landroid/util/DisplayMetrics;");
     midGetManifestEnvironmentVariables = (*env)->GetStaticMethodID(env, mActivityClass, "getManifestEnvironmentVariables", "()Z");
@@ -607,6 +614,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetupJNI)(JNIEnv *env, jclass cl
         !midClipboardHasText ||
         !midClipboardSetText ||
         !midCreateCustomCursor ||
+        !midDestroyCustomCursor ||
         !midGetContext ||
         !midGetDisplayDPI ||
         !midGetManifestEnvironmentVariables ||
@@ -1001,6 +1009,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(onNativeSurfaceChanged)(JNIEnv *env, j
 {
     SDL_LockMutex(Android_ActivityMutex);
 
+#if SDL_VIDEO_OPENGL_EGL
     if (Android_Window)
     {
         SDL_VideoDevice *_this = SDL_GetVideoDevice();
@@ -1013,6 +1022,7 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(onNativeSurfaceChanged)(JNIEnv *env, j
 
         /* GL Context handling is done in the event loop because this function is run from the Java thread */
     }
+#endif
 
     SDL_UnlockMutex(Android_ActivityMutex);
 }
@@ -1043,10 +1053,12 @@ retry:
             }
         }
 
+#if SDL_VIDEO_OPENGL_EGL
         if (data->egl_surface != EGL_NO_SURFACE) {
             SDL_EGL_DestroySurface(_this, data->egl_surface);
             data->egl_surface = EGL_NO_SURFACE;
         }
+#endif
 
         if (data->native_window) {
             ANativeWindow_release(data->native_window);
@@ -1301,6 +1313,19 @@ JNIEXPORT jstring JNICALL SDL_JAVA_INTERFACE(nativeGetHint)(
     const char *hint = SDL_GetHint(utfname);
 
     jstring result = (*env)->NewStringUTF(env, hint);
+    (*env)->ReleaseStringUTFChars(env, name, utfname);
+
+    return result;
+}
+
+JNIEXPORT jboolean JNICALL SDL_JAVA_INTERFACE(nativeGetHintBoolean)(
+                                    JNIEnv *env, jclass cls,
+                                    jstring name, jboolean default_value)
+{
+    jboolean result;
+
+    const char *utfname = (*env)->GetStringUTFChars(env, name, NULL);
+    result = SDL_GetHintBoolean(utfname, default_value);
     (*env)->ReleaseStringUTFChars(env, name, utfname);
 
     return result;
@@ -2105,6 +2130,15 @@ void Android_JNI_HapticStop(int device_id)
 /* See SDLActivity.java for constants. */
 #define COMMAND_SET_KEEP_SCREEN_ON    5
 
+
+int SDL_AndroidSendMessage(Uint32 command, int param)
+{
+    if (command >= 0x8000) {
+        return Android_JNI_SendMessage(command, param);
+    }
+    return -1;
+}
+
 /* sends message to be handled on the UI event dispatch thread */
 int Android_JNI_SendMessage(int command, int param)
 {
@@ -2485,6 +2519,12 @@ int Android_JNI_CreateCustomCursor(SDL_Surface *surface, int hot_x, int hot_y)
     return custom_cursor;
 }
 
+void Android_JNI_DestroyCustomCursor(int cursorID)
+{
+    JNIEnv *env = Android_JNI_GetEnv();
+    (*env)->CallStaticVoidMethod(env, mActivityClass, midDestroyCustomCursor, cursorID);
+    return;
+}
 
 SDL_bool Android_JNI_SetCustomCursor(int cursorID)
 {
@@ -2513,23 +2553,23 @@ SDL_bool Android_JNI_SetRelativeMouseEnabled(SDL_bool enabled)
 SDL_bool Android_JNI_RequestPermission(const char *permission)
 {
     JNIEnv *env = Android_JNI_GetEnv();
-	const int requestCode = 1;
+    const int requestCode = 1;
 
-	/* Wait for any pending request on another thread */
-	while (SDL_AtomicGet(&bPermissionRequestPending) == SDL_TRUE) {
-		SDL_Delay(10);
-	}
-	SDL_AtomicSet(&bPermissionRequestPending, SDL_TRUE);
+    /* Wait for any pending request on another thread */
+    while (SDL_AtomicGet(&bPermissionRequestPending) == SDL_TRUE) {
+        SDL_Delay(10);
+    }
+    SDL_AtomicSet(&bPermissionRequestPending, SDL_TRUE);
 
     jstring jpermission = (*env)->NewStringUTF(env, permission);
     (*env)->CallStaticVoidMethod(env, mActivityClass, midRequestPermission, jpermission, requestCode);
     (*env)->DeleteLocalRef(env, jpermission);
 
-	/* Wait for the request to complete */
-	while (SDL_AtomicGet(&bPermissionRequestPending) == SDL_TRUE) {
-		SDL_Delay(10);
-	}
-	return bPermissionRequestResult;
+    /* Wait for the request to complete */
+    while (SDL_AtomicGet(&bPermissionRequestPending) == SDL_TRUE) {
+        SDL_Delay(10);
+    }
+    return bPermissionRequestResult;
 }
 
 /* Show toast notification */

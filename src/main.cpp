@@ -1,32 +1,43 @@
-#include "other.h"
-#include <stdio.h>
+#include <SDL.h>
+#include <application/Application.h>
 
-#include "SDL.h"
+#include <memory>
 
- 
-int SDL_main(int argc, char *argv[])
+#include "VCore/Containers/Dict.h"
+#include "VCore/Utils/CoreTemplates.h"
+#include "VFramework/Misc/RunSample.h"
+#include "VFramework/VEXBase.h"
+#include "application/Platfrom.h"
+#include "demos/pathfinding/FlowFieldsDemo.h"
+
+using namespace vex;
+
+int main(int argc, char** argv)
 {
-  SDL_Init(SDL_INIT_VIDEO);
-  int i = 0;
+	//#ifdef _MSC_VER
+	//	IsMSVC = true;
+	//#endif // DEBUG
+	//
+	//#ifdef __clang__
+	//	IsClang = true;
+	//#endif
 
-  SDL_Window *window = SDL_CreateWindow(
-    "SDL2Test",
-    SDL_WINDOWPOS_UNDEFINED,
-    SDL_WINDOWPOS_UNDEFINED,
-    640,
-    480,
-    0
-  );
+	// SampleRunner::global().runSamples("test_defer");
 
-  SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-  SDL_RenderClear(renderer);
-  SDL_RenderPresent(renderer);
+	std::unordered_map<int, const char*> stdmp{{10, "add"}, {3, "tst"}};
 
-  SDL_Delay(3000);
+	vex::Dict<int, const char*> dt{{10, "add"}, {3, "tst"}};
+	dt[0] = "test";
+	dt[1] = "test2";
+	dt[2] = "test3";
+	dt[4] = "test4";
+	dt.remove(1);
 
-  SDL_DestroyWindow(window);
-  SDL_Quit();
+	vp::StartupConfig config;
 
-  return 0;
+	auto& app = vp::Application::init(config); 
+	i32 result_code = app.runLoop();
+
+	spdlog::info("returning from main with code:{}", result_code);
+	return result_code;
 }
