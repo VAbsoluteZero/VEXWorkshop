@@ -10,19 +10,20 @@ namespace vp
 {
 	struct FramerateArgs
 	{
-		static constexpr i32 kMaxAllowed = 4096 * 16;
-		i32 TargetFramerate = -1;
-		i32 ActualFPS = 0;
-		double TimeSinceLastFrame = 0;
-		inline bool fpsUnconstrained() const { return TargetFramerate < 0; }
-		inline auto framerate() const
+		static constexpr i32 k_max_allowed = 4096 * 16;
+		i32 target_framerate = -1;
+
+		u32 frame_number = 0;
+
+		inline bool fpsUnconstrained() const { return target_framerate < 0; }
+		inline u32 framerate() const
 		{
 			if (fpsUnconstrained())
-				return kMaxAllowed;
-			return TargetFramerate;
+				return (u32)k_max_allowed;
+			return (u32)target_framerate;
 		}
 
-		inline auto framerateClamped(i32 Min = 30, i32 Max = kMaxAllowed)
+		inline auto framerateClamped(i32 Min = 30, i32 Max = k_max_allowed)
 		{
 			return glm::clamp<i32>(framerate(), Min, Max);
 		}
@@ -62,7 +63,7 @@ namespace vp
 		static Application& get()
 		{
 			auto& me = staticSelf();
-			assert(me.created && "application was not created");
+			checkAlwaysRel(me.created, "application was not created");
 			return me;
 		}
 
@@ -109,6 +110,6 @@ namespace vp
 
 	//=====================================================================================
 	// variables
-	static inline FrameTime gTime = {};
+	inline FrameTime gTime = {};
 
 } // namespace vp

@@ -138,6 +138,7 @@ source_group("Headers" FILES "${SRC_ITEM}")
 target_include_directories(imgui PUBLIC ${SDL2_INCLUDE_DIRS})
 # imgui/backends/ contains the SDL implementation
 target_include_directories(imgui PUBLIC 
+    "${VEXGameOfLife_SOURCE_DIR}/third_party/misc/" 
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/" 
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/")
 # Configure Imgui to use OpengGL through SDL2

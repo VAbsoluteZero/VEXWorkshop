@@ -8,7 +8,7 @@ namespace vp
 	struct StartupConfig
 	{
 		WindowParams WindowArgs;
-		i32 TargetFramerate = -1;
+		i32 target_framerate = -1;
 	}; 
 
 	struct DrawCtx

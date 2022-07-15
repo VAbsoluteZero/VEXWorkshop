@@ -44,8 +44,8 @@ void vp::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
 		visuals.fnt_tiny = io.Fonts->AddFontFromFileTTF("content/fonts/roboto_light.ttf",
 			scale_font(9), NULL, io.Fonts->GetGlyphRangesDefault());
 
-		visuals.fnt_log = io.Fonts->AddFontFromFileTTF("content/fonts/space_regular.ttf",
-			scale_font(10), NULL, io.Fonts->GetGlyphRangesDefault());
+		visuals.fnt_log = io.Fonts->AddFontFromFileTTF("content/fonts/ubuntu_mono.ttf",
+			scale_font(9), NULL, io.Fonts->GetGlyphRangesDefault());
 
 		io.Fonts->Build();
 	}
@@ -55,7 +55,7 @@ void vp::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
 	{ // vs-like
 		auto new_style = ImGui::GetStyle();
 		ImVec4* colors = new_style.Colors;
-
+		 
 		const ImVec4 bg_clr = colorFromBytes(37, 37, 38);
 		const ImVec4 light_bg = colorFromBytes(82, 82, 85);
 		const ImVec4 very_light = colorFromBytes(90, 90, 95);

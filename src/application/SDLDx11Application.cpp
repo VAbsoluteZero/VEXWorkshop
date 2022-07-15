@@ -446,24 +446,7 @@ void vp::SdlDx11Application::postFrame(vp::Application& owner)
 		ImGui_ImplDX11_NewFrame(); // compiles shaders when called first time
 		ImGui::Render();
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-	}
-	// prepare frame
-	if (vertex_buffer_ptr)
-	{  
-		UINT vertex_stride = 3 * sizeof(float);
-		UINT vertex_offset = 0;
-		UINT vertex_count = 3;
-
-		impl->d3d_device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		impl->d3d_device_ctx->IASetInputLayout(impl->input_layout_ptr);
-		impl->d3d_device_ctx->IASetVertexBuffers(
-			0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
-
-		impl->d3d_device_ctx->VSSetShader(impl->vertex_shader_ptr, NULL, 0);
-		impl->d3d_device_ctx->PSSetShader(impl->pixel_shader_ptr, NULL, 0);
-
-		impl->d3d_device_ctx->Draw(vertex_count, 0);
-	}
+	} 
 	/////////////////////////////////////////////////////////////////////////////////
 	impl->swap_chain->Present(0, 0); // Present without vsync
 	/////////////////////////////////////////////////////////////////////////////////

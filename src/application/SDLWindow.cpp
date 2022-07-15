@@ -46,10 +46,4 @@ std::unique_ptr<SDLWindow> vp::SDLWindow::create(const WindowParams& params)
 	return nullptr;
 }
 
-vp::SDLWindow::~SDLWindow() { SDL_DestroyWindow(sdl_window); }
-
-void vp::SDLWindow::assignViewportRenderer(tRenderer* in_renderer)
-{
-	check_(in_renderer && !renderer);
-	renderer = in_renderer; 
-}
+vp::SDLWindow::~SDLWindow() { SDL_DestroyWindow(sdl_window); } 

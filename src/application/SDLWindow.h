@@ -28,8 +28,7 @@ namespace vp
 	class SDLWindow
 	{
 	public:
-		using tWindowHandle = SDL_Window;
-		using tRenderer = SDL_Renderer;
+		using tWindowHandle = SDL_Window; 
 
 		int height() { return params.h; }
 		int width() { return params.w; }
@@ -37,22 +36,19 @@ namespace vp
 
 		static std::unique_ptr<SDLWindow> create(const WindowParams& params);
 
-		tWindowHandle* getRawWindow() { return sdl_window; }
-		tRenderer* getRawRenderer() { return renderer; } 
+		tWindowHandle* getRawWindow() { return sdl_window; } 
 
 		v2i32 windowSize() { return {params.w, params.h}; }
 		v2i32 display_size{0, 0};
 
 		~SDLWindow();
-
-		void assignViewportRenderer(tRenderer* renderer);
+		 
 
 	private:
 		SDLWindow() = default;
 		SDLWindow(const SDLWindow&) = default;
 
 		WindowParams params;
-		tWindowHandle* sdl_window = nullptr;
-		tRenderer* renderer = nullptr;
+		tWindowHandle* sdl_window = nullptr; 
 	};
 } // namespace vp
