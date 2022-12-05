@@ -9,6 +9,9 @@
 #include "VFramework/VEXBase.h"
 #include "application/Platfrom.h"
 #include "demos/pathfinding/FlowFieldsDemo.h"
+#include "VCore/Memory/Memory.h"
+
+#include <vector>
 
 using namespace vex;
 
@@ -32,6 +35,12 @@ int main(int argc, char** argv)
 	dt[2] = "test3";
 	dt[4] = "test4";
 	dt.remove(1);
+
+	struct StdAllocAdaptor : vex::Allocator
+	{
+	};
+	 
+
 
 	vp::StartupConfig config;
 

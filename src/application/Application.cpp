@@ -35,12 +35,30 @@ namespace vexgui
 
 static void setupLoggers();
 
-std::string aatst{"test"};
 
 vp::Application& vp::Application::init(const StartupConfig& config)
 {
 	setupLoggers();
 	vexgui::createConsole();
+
+	vp::console::makeAndRegisterCmd("app.quit", "Exit application.\n", true,
+		[](const vp::console::CmdCtx& ctx)
+		{
+			vp::Application::get().quit();
+			return true;
+		});
+	vp::console::makeAndRegisterCmd("app.set_fps", "Limit fps\n", true,
+		[](const vp::console::CmdCtx& ctx)
+		{
+			auto opt_int = ctx.parsed_args->get<int>(0);
+			if (opt_int)
+			{
+				i32 v = opt_int.value_or(-1);
+				vp::Application::get().setMaxFps(v);
+				SPDLOG_WARN("# try to limit fps to {}", v);
+			}
+			return false;
+		});
 
 	Application& self = staticSelf();
 
@@ -53,17 +71,7 @@ vp::Application& vp::Application::init(const StartupConfig& config)
 	if (!self.app_impl)
 	{
 		self.setApplicationType<SdlDx11Application>(true);
-	}
-
-	vex::Dict<const char*, int> p;
-	auto kkkk = "test";
-	p.emplaceAndGet(kkkk, 10);
-	bool bc = p.contains(aatst.c_str());
-
-	auto riprip = std::hash<const char*>{};
-	i32 hash_code = std::hash<const char*>{}(kkkk)&0x7FFFFFFF;
-	i32 hash_code2 = std::hash<const char*>{}(aatst.c_str()) & 0x7FFFFFFF;
-
+	} 
 
 	return self;
 }
@@ -94,24 +102,17 @@ i32 vp::Application::runLoop()
 				pending_stop = true;
 			}
 		}
+		//-----------------------------------------------------------------------------
 		// prepare frame
 		{
 			app_impl->preFrame(*this);
 		}
+		//-----------------------------------------------------------------------------
 		// frame
 		{
 			app_impl->frame(*this);
 		}
-
-		if (tst++; tst % 300 == 0)
-		{
-			SPDLOG_WARN("test stuff, {}", framerate.frame_number);
-		}
-		if (tst % 800 == 0)
-		{
-			SPDLOG_ERROR("2 test stuff, {}", framerate.frame_number);
-		}
-
+		//-----------------------------------------------------------------------------
 		// imgui draw callbacks
 		{
 			vexgui::setupImGuiForDrawPass(*this);
@@ -126,6 +127,7 @@ i32 vp::Application::runLoop()
 				view.delayed_gui_drawcalls.clear();
 			}
 		}
+		//-----------------------------------------------------------------------------
 		// post frame
 		{
 			app_impl->postFrame(*this);
@@ -169,7 +171,9 @@ void vexgui::setupImGuiForDrawPass(vp::Application& app)
 		{
 			defer_ { ImGui::EndMenu(); };
 			//
-			if (ImGui::MenuItem("Console", nullptr, &g_console_open)) {}
+			if (ImGui::MenuItem("Console", nullptr, &g_console_open))
+			{
+			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Reset UI Layout"))
 			{
@@ -270,27 +274,6 @@ namespace vexgui
 	static PedningEntries g_pending_console_lines;
 
 	// Portable helpers
-	static int Stricmp(const char* s1, const char* s2)
-	{
-		int d = 0;
-		while ((d = toupper(*s2) - toupper(*s1)) == 0 && *s1 && *s2)
-		{
-			s1++;
-			s2++;
-		}
-		return d;
-	}
-	static int Strnicmp(const char* s1, const char* s2, int n)
-	{
-		int d = 0;
-		while (n > 0 && (d = toupper(*s2) - toupper(*s1)) == 0 && *s1)
-		{
-			s1++;
-			s2++;
-			n--;
-		}
-		return d;
-	}
 	static char* Strdup(const char* s)
 	{
 		IM_ASSERT(s);
@@ -326,6 +309,30 @@ namespace vexgui
 			history_pos = -1;
 			auto_scroll = true;
 			scroll_to_bottom = false;
+
+			static bool once = false;
+			if (!once)
+			{
+				once = true;
+				vp::console::makeAndRegisterCmd("test",
+					"blah blah\nlong \n msg\n in\n lines\n test.\n", true,
+					[](const vp::console::CmdCtx& ctx)
+					{
+						return true;
+					});
+
+				vp::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
+					[](const vp::console::CmdCtx& ctx)
+					{
+						SPDLOG_INFO("# other stuff: {}\n", ctx.parsed_args->get<int>("id", -1));
+						return true;
+					});
+				vp::console::makeAndRegisterCmd("cmd_2", " I am cmd!\n desc desc.\n", true,
+					[](const vp::console::CmdCtx& ctx)
+					{
+						return ctx.parsed_args->get<int>("id", -1) == 42;
+					});
+			}
 		}
 		~ConsoleWindow() {}
 
@@ -349,8 +356,6 @@ namespace vexgui
 			}
 			defer_ { ImGui::End(); };
 
-			ImGui::PushFont(vp::g_view_hub.visuals.fnt_log);
-			defer_ { ImGui::PopFont(); };
 
 			// As a specific feature guaranteed by the library, after calling Begin() the last Item
 			// represent the title bar. So e.g. IsItemHovered() will return true when hovering the
@@ -396,47 +401,52 @@ namespace vexgui
 				ImGui::EndPopup();
 			}
 
-			// #todo consider clipping rectangle (read about it in imgui_demo.cpp, where original
-			// is)
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1)); // Tighten spacing
-			for (auto riter = items_rbuf.rbegin(); !riter.isDone(); ++riter)
+			// #todo consider some sort of clipping rectangle (read about it in imgui_demo.cpp,
+			// where original is located)
 			{
-				const char* item = (*riter).c_str();
-				if (!text_filter.PassFilter(item))
-					continue;
+				ImGui::PushFont(vp::g_view_hub.visuals.fnt_log);
+				defer_ { ImGui::PopFont(); };
 
-				ImVec4 color;
-				bool has_color = false;
-				if (strncmp(item, "E ", 2) == 0)
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1)); // Tighten spacing
+				for (auto riter = items_rbuf.rbegin(); !riter.isDone(); ++riter)
 				{
-					color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
-					has_color = true;
+					const char* item = (*riter).c_str();
+					if (!text_filter.PassFilter(item))
+						continue;
+
+					ImVec4 color;
+					bool has_color = false;
+					if (strncmp(item, "E ", 2) == 0)
+					{
+						color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+						has_color = true;
+					}
+					else if (strncmp(item, "W ", 2) == 0)
+					{
+						color = ImVec4(1.0f, 1.0f, 0.8f, 1.0f);
+						has_color = true;
+					}
+					else if (strncmp(item, "# ", 2) == 0)
+					{
+						color = ImVec4(1.0f, 0.8f, 0.6f, 1.0f);
+						has_color = true;
+					}
+					if (has_color)
+						ImGui::PushStyleColor(ImGuiCol_Text, color);
+					ImGui::TextUnformatted(item);
+					if (has_color)
+						ImGui::PopStyleColor();
 				}
-				else if (strncmp(item, "W ", 2) == 0)
-				{
-					color = ImVec4(1.0f, 1.0f, 0.8f, 1.0f);
-					has_color = true;
-				}
-				else if (strncmp(item, "# ", 2) == 0)
-				{
-					color = ImVec4(1.0f, 0.8f, 0.6f, 1.0f);
-					has_color = true;
-				}
-				if (has_color)
-					ImGui::PushStyleColor(ImGuiCol_Text, color);
-				ImGui::TextUnformatted(item);
-				if (has_color)
-					ImGui::PopStyleColor();
+
+				if (scroll_to_bottom ||
+					(auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
+					ImGui::SetScrollHereY(1.0f);
+				scroll_to_bottom = false;
+
+				ImGui::PopStyleVar();
 			}
-
-			if (scroll_to_bottom || (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
-				ImGui::SetScrollHereY(1.0f);
-			scroll_to_bottom = false;
-
-			ImGui::PopStyleVar();
 			ImGui::EndChild();
 			ImGui::Separator();
-
 			// Command-line
 			bool reclaim_focus = false;
 			ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue |
@@ -461,28 +471,6 @@ namespace vexgui
 
 		void ExecCommand(const char* command_line)
 		{
-			static bool tst = false;
-			if (!tst)
-			{
-				tst = true;
-				vp::console::makeAndRegisterCmd(
-					"test", "blah blah", true, [](const vp::console::CmdCtx& ctx) { return true; });
-
-				vp::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
-					[](const vp::console::CmdCtx& ctx)
-					{
-						// tst
-						SPDLOG_INFO("# other stuff: {}\n", ctx.parsed_args->get<int>("id", -1));
-						return true;
-					});
-				vp::console::makeAndRegisterCmd("cmd_2", " I am cmd!\n desc desc.\n", true,
-					[](const vp::console::CmdCtx& ctx)
-					{
-						// tst
-						return ctx.parsed_args->get<int>("id", -1) == 42;
-					});
-			}
-
 			std::string full = command_line;
 			const char* cmd_s = full.c_str();
 			const char* cmd_e = full.c_str() + full.size();
@@ -497,6 +485,7 @@ namespace vexgui
 			if (cmd_name_e <= cmd_s)
 				return;
 
+			// print out command, to both console and log (console would receive it via sink)
 			SPDLOG_INFO("# {}\n", command_line);
 
 			std::string cmd_part(cmd_s, cmd_name_e);
@@ -547,7 +536,6 @@ namespace vexgui
 			{
 				case ImGuiInputTextFlags_CallbackCompletion:
 				{
-					/* #todo COMMAND LIST
 					// Example of TEXT COMPLETION
 					// Locate beginning of current word
 					const char* word_end = data->Buf + data->CursorPos;
@@ -560,13 +548,28 @@ namespace vexgui
 						word_start--;
 					}
 
-					// Build a list of candidates
-					ImVector<const char*> candidates;
-					for (int i = 0; i < Commands.Size; i++)
-						if (Strnicmp(Commands[i], word_start, (int)(word_end - word_start)) == 0)
-							candidates.push_back(Commands[i]);
+					using CmdMap = vex::Dict<const char*, vp::console::ClCommand>;
+					const CmdMap& cmd_dict = vp::console::CmdRunner::global().commands;
 
-					if (candidates.Size == 1)
+					// Build a list of candidates
+					// #fixme : frame allocator
+					static std::vector<const char*> candidates;
+					candidates.clear();
+					for ([[maybe_unused]] const auto& [key, cmd] : cmd_dict)
+					{
+						// as it is case sensetive impl, we can just compare bytes
+						if (std::memcmp(key, word_start, (int)(word_end - word_start)) == 0)
+						{
+							candidates.push_back(key);
+						}
+					}
+
+					const i32 canditate_count = candidates.size();
+					if (canditate_count == 0)
+					{
+						return 0;
+					}
+					else if (canditate_count == 1)
 					{
 						// Single match. Delete the beginning of the word and replace it entirely so
 						// we've got nice casing.
@@ -581,19 +584,29 @@ namespace vexgui
 						// So inputing "C"+Tab will complete to "CL" then display "CLEAR" and
 						// "CLASSIFY" as matches.
 						int match_len = (int)(word_end - word_start);
-						for (;;)
+
+						int dbg_guard = 1000;
+						for (; dbg_guard > 0; dbg_guard--) // meant to be infinite
 						{
 							int c = 0;
 							bool all_candidates_matches = true;
-							for (int i = 0; i < candidates.Size && all_candidates_matches; i++)
+							for (int i = 0; i < canditate_count && all_candidates_matches; i++)
+							{
 								if (i == 0)
-									c = toupper(candidates[i][match_len]);
-								else if (c == 0 || c != toupper(candidates[i][match_len]))
+								{
+									c = candidates[i][match_len];
+								}
+								else if (c == 0 || (c != candidates[i][match_len]))
+								{
 									all_candidates_matches = false;
+									break;
+								}
+							}
 							if (!all_candidates_matches)
 								break;
 							match_len++;
 						}
+						check(dbg_guard > 0, "infinite loop prevented");
 
 						if (match_len > 0)
 						{
@@ -605,10 +618,10 @@ namespace vexgui
 
 						// List matches
 						Add("Possible matches:\n");
-						for (int i = 0; i < candidates.Size; i++)
+						for (int i = 0; i < canditate_count; i++)
 							Add(fmt::format("- {}\n", candidates[i]));
 					}
-					*/
+
 					break;
 				}
 				case ImGuiInputTextFlags_CallbackHistory:
@@ -666,6 +679,14 @@ namespace spdlog::sinks
 		void sink_it_(const spdlog::details::log_msg& msg) override
 		{
 			thread_local spdlog::memory_buf_t formatted; // thread_local implies 'static'
+
+			// pass unformatted, considered to be 'raw message'
+			if ((msg.payload.size() > 2) && (msg.payload[0] == '#' || msg.payload[0] == '*'))
+			{
+				vexgui::g_pending_console_lines.push(msg.payload.data(), msg.payload.size());
+				return;
+			}
+
 			spdlog::sinks::base_sink<spdlog::details::null_mutex>::formatter_->format(
 				msg, formatted);
 
@@ -693,4 +714,3 @@ static void setupLoggers()
 namespace vp
 {
 } // namespace vp
-  // -arg=

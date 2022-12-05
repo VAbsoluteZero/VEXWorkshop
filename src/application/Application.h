@@ -16,16 +16,15 @@ namespace vp
 		u32 frame_number = 0;
 
 		inline bool fpsUnconstrained() const { return target_framerate < 0; }
-		inline u32 framerate() const
+		inline u32 desiredFramerate() const
 		{
 			if (fpsUnconstrained())
 				return (u32)k_max_allowed;
 			return (u32)target_framerate;
 		}
-
-		inline auto framerateClamped(i32 Min = 30, i32 Max = k_max_allowed)
+		inline auto framerateClamped(i32 Min = 8, i32 Max = k_max_allowed)
 		{
-			return glm::clamp<i32>(framerate(), Min, Max);
+			return glm::clamp<i32>(desiredFramerate(), Min, Max);
 		}
 	};
 
@@ -60,7 +59,7 @@ namespace vp
 	public:
 		static Application& init(const StartupConfig& config);
 
-		static Application& get()
+		static inline Application& get()
 		{
 			auto& me = staticSelf();
 			checkAlwaysRel(me.created, "application was not created");
@@ -68,13 +67,15 @@ namespace vp
 		}
 
 		inline bool isRunning() const { return running; }
-		i32 runLoop();
-		inline void quit() { pending_stop = true; } 
-
-		tWindow* getMainWindow() const { return main_window.get(); }
+		inline void quit() { pending_stop = true; }
+		inline void setMaxFps(i32 target) { framerate.target_framerate = target; }
+		inline i32 getMaxFps(i32 target) { return framerate.desiredFramerate(); }
+		inline tWindow* getMainWindow() const { return main_window.get(); }
 
 		template <typename T>
 		void setApplicationType(bool init);
+
+		i32 runLoop();
 
 	private:
 		static Application& staticSelf()
@@ -84,14 +85,14 @@ namespace vp
 		}
 		Application() = default;
 
-		std::unique_ptr<IGraphicsImpl> app_impl; 
+		std::unique_ptr<IGraphicsImpl> app_impl;
 		std::unique_ptr<tWindow> main_window;
 
 		FramerateArgs framerate;
 
 		bool running = false;
 		bool pending_stop = false;
-		bool created = false;  
+		bool created = false;
 	};
 
 	template <typename T>
@@ -99,7 +100,7 @@ namespace vp
 	{
 		if (app_impl)
 		{
-			app_impl->teardown(*this); 
+			app_impl->teardown(*this);
 		}
 		app_impl.reset(new T());
 		if (init)

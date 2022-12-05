@@ -35,7 +35,7 @@ namespace vp::console
 		bool registered = false;
 		// const char* last_error_msg = nullptr;
 		std::function<bool(const CmdCtx&)> command;
-		void trigger(std::string args_as_text);
+		bool trigger(std::string args_as_text);
 	};
 
 	struct CmdRunner
@@ -49,7 +49,8 @@ namespace vp::console
 		bool registerCmd(ClCommand cmd, bool replace_if_needed = true)
 		{
 			auto key = cmd.name;
-			if (replace_if_needed || !commands.contains(key))
+			bool b_does_not_contain = !commands.contains(key);
+			if (replace_if_needed || b_does_not_contain)
 			{
 				cmd.registered = true;
 				commands.emplace(cmd.name, std::move(cmd));
@@ -59,8 +60,8 @@ namespace vp::console
 		}
 		void remove(const char* key) { commands.remove(key); }
 		 
-
-		vex::Dict<const char*, ClCommand> commands;
+		CmdRunner();
+		vex::Dict<const char*, ClCommand> commands; 
 	};
 } // namespace vp::console
 

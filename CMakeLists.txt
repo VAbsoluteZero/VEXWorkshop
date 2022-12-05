@@ -85,6 +85,7 @@ include_directories(${SDL2_INCLUDE_DIRS})
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/SDL2/include/")
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/spdlog/include/")
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/glm/")
+include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/")
 include_directories(${VEX_INCLUDE_DIRS})
 include_directories(${VEXGameOfLife_SOURCE_DIR}/src) 
 # ------------------------------------------------------------------------------------------------- 
@@ -106,8 +107,9 @@ file(GLOB VEX_OTHER_FILES
     CONFIGURE_DEPENDS 
     "${VEXGameOfLife_SOURCE_DIR}/.clang-format" "${VEX_ROOTDIR}/.clang-format"
     "${VEXGameOfLife_SOURCE_DIR}/*.txt" "${VEXGameOfLife_SOURCE_DIR}/*.json"
-    "${VEXGameOfLife_SOURCE_DIR}/src/*.txt" "${VEXGameOfLife_SOURCE_DIR}/src/*.json"
-    "${VEX_ROOTDIR}/*.txt" "${VEX_ROOTDIR}/*.json")
+    "${VEXGameOfLife_SOURCE_DIR}/src/*.txt" "${VEXGameOfLife_SOURCE_DIR}/src/*.json" 
+    "${VEXGameOfLife_SOURCE_DIR}/content/shaders/*.hlsl" 
+    "${VEX_ROOTDIR}/*.txt" "${VEX_ROOTDIR}/*.hlsl" "${VEX_ROOTDIR}/*.json")
 
 file(GLOB_RECURSE VEX_GLM_HEADERS 
     CONFIGURE_DEPENDS 
@@ -180,7 +182,8 @@ if (MSVC)
 	    set(VEX_MSVC_CLANG YES)
     endif()
 endif()
-# manifest
+# manifest 
+
 
 # -------------------------------------------------------------------------------------------------
 # add to targets
@@ -188,6 +191,10 @@ endif()
 set(EXECUTABLE_OUTPUT_PATH  ${VEXGameOfLife_SOURCE_DIR}/build/) 
 
 add_executable(VEXGameOfLife ${VEX_ALLSRC})
+
+add_subdirectory("third_party/rapidobj")
+
+target_link_libraries(VEXGameOfLife PRIVATE rapidobj::rapidobj)
 
 target_precompile_headers(VEXGameOfLife PRIVATE 
     "${VEXGameOfLife_SOURCE_DIR}/third_party/glm/glm_common.h"
@@ -205,6 +212,7 @@ target_precompile_headers(VEXGameOfLife PRIVATE
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     if(MSVC)
+        add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>)
         message(STATUS "MSVC_TOOLSET_VERSION: ${MSVC_TOOLSET_VERSION}")
         if(NOT VEX_MSVC_CLANG)
             target_compile_options(VEXGameOfLife PUBLIC "/ZI")
@@ -216,7 +224,6 @@ endif()
 
 target_link_libraries(VEXGameOfLife PRIVATE imgui)
 target_link_libraries(VEXGameOfLife PRIVATE SDL2main SDL2-static) 
-
 
 target_sources(VEXGameOfLife PRIVATE app_manifest.manifest)
 
