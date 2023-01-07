@@ -41,15 +41,23 @@ namespace vp
 		// plain shader stuff
 		ID3DBlob* vertshad_plain = nullptr;
 		ID3DBlob* pixelshad_plain = nullptr;
-		ID3D11InputLayout* sil_plain = nullptr;
+		ID3D11InputLayout* sil_plain = nullptr; 
+
+		ID3D11VertexShader* vshad_plain = nullptr;
+		ID3D11PixelShader* pshad_plain = nullptr;
+
+		// plain2 shader stuff
+		ID3DBlob* vertshad_plain2 = nullptr;                  
+		ID3DBlob* pixelshad_plain2 = nullptr;
+		ID3D11InputLayout* sil_plain2 = nullptr;
+
+		ID3D11VertexShader* vshad_plain2 = nullptr;
+		ID3D11PixelShader* pshad_plain2 = nullptr;
 
 		// diffuse shader stuff
 		ID3DBlob* vertshad_diffuse = nullptr;
 		ID3DBlob* pixelshad_diffuse = nullptr;
 		ID3D11InputLayout* sil_diffuse = nullptr;
-
-		ID3D11VertexShader* vertex_shader_ptr = nullptr;
-		ID3D11PixelShader* pixel_shader_ptr = nullptr;
 
 		// main window viewport
 		ID3D11RenderTargetView* window_target_view = nullptr;
@@ -93,7 +101,7 @@ namespace vp
 			sd.SampleDesc.Count = 1;
 			sd.SampleDesc.Quality = 0;
 			sd.Windowed = true;
-			sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD; // DXGI_SWAP_EFFECT_DISCARD;
+			sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // DXGI_SWAP_EFFECT_DISCARD;
 													  // DXGI_SWAP_EFFECT_FLIP_DISCARD
 
 			u32 createDeviceFlags = 0;
@@ -141,7 +149,7 @@ namespace vp
 				desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 				desc.BackFace = desc.FrontFace;
 				d3d_device->CreateDepthStencilState(&desc, &viewport_stencil_state);
-			}
+			} 
 			// Create the rasterizer state
 			{
 				D3D11_RASTERIZER_DESC desc;
@@ -235,11 +243,11 @@ namespace vp
 				}
 
 				hr = d3d_device->CreateVertexShader(vertshad_plain->GetBufferPointer(),
-					vertshad_plain->GetBufferSize(), NULL, &vertex_shader_ptr);
+					vertshad_plain->GetBufferSize(), NULL, &vshad_plain);
 				check_(SUCCEEDED(hr));
 
 				hr = d3d_device->CreatePixelShader(pixelshad_plain->GetBufferPointer(),
-					pixelshad_plain->GetBufferSize(), NULL, &pixel_shader_ptr);
+					pixelshad_plain->GetBufferSize(), NULL, &pshad_plain);
 				check_(SUCCEEDED(hr));
 
 				D3D11_INPUT_ELEMENT_DESC input_desc[] = {
@@ -791,73 +799,44 @@ void vp::SdlDx11Application::frame(vp::Application& owner)
 		last_drawn_viewport_sz = im_viewport_size;
 	}
 
-	// prepare frame
-	if (vertex_buffer_ptr)
+	// prepare frame 
 	{
-		static u32 ctst = 0;
-		ctst += 1000000;
-		ImVec4 clear_color = ImVec4(0.07f, ((float)ctst) / (float)UINT32_MAX, 0.12f, 1.00f);
+		ImVec4 clear_color = ImVec4(0.17f, 0.11f, 0.25f, 1.00f);
 		const float clear_color_with_alpha[4] = {clear_color.x * clear_color.w,
 			clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w};
+
 		impl->d3d_device_ctx->OMSetRenderTargets(1, &impl->viewport_target_view, nullptr);
 		impl->d3d_device_ctx->ClearRenderTargetView(
 			impl->viewport_target_view, clear_color_with_alpha);
 
-		// impl->d3d_device_ctx->OMSetDepthStencilState(impl->depth_state_no_depth, 0);
-		// impl->d3d_device_ctx->RSSetState(impl->pRasterizerState);
+		// Setup viewport
+		auto main_window = owner.getMainWindow();
+		D3D11_VIEWPORT vp;
+		memset(&vp, 0, sizeof(D3D11_VIEWPORT));
+		vp.Width = im_viewport_size.x;
+		vp.Height = im_viewport_size.y;
+		vp.MinDepth = 0.0f;
+		vp.MaxDepth = 1.0f;
+		vp.TopLeftX = vp.TopLeftY = 0;
+		impl->d3d_device_ctx->RSSetViewports(1, &vp);
 
-		UINT vertex_stride = 3 * sizeof(float);
-		UINT vertex_offset = 0;
-		UINT vertex_count = 3;
+		impl->d3d_device_ctx->OMSetDepthStencilState(impl->viewport_stencil_state, 0);
+		impl->d3d_device_ctx->RSSetState(impl->viewport_rasterizer_state);
+
+		u32 vertex_stride = 3 * sizeof(float);
+		u32 vertex_offset = 0;
+		u32 vertex_count = 3;
 
 		impl->d3d_device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		impl->d3d_device_ctx->IASetInputLayout(impl->sil_plain);
 		impl->d3d_device_ctx->IASetVertexBuffers(
 			0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
 
-		impl->d3d_device_ctx->VSSetShader(impl->vertex_shader_ptr, NULL, 0);
-		impl->d3d_device_ctx->PSSetShader(impl->pixel_shader_ptr, NULL, 0);
+		impl->d3d_device_ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+		impl->d3d_device_ctx->PSSetShader(impl->pshad_plain, NULL, 0);
 
 		impl->d3d_device_ctx->Draw(vertex_count, 0);
 	}
-	// else
-	//{
-	//	ImVec4 clear_color = ImVec4(0.17f, 0.11f, 0.25f, 1.00f);
-	//	const float clear_color_with_alpha[4] = {clear_color.x * clear_color.w,
-	//		clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w};
-
-	//	impl->d3d_device_ctx->OMSetRenderTargets(1, &impl->viewport_target_view, nullptr);
-	//	impl->d3d_device_ctx->ClearRenderTargetView(
-	//		impl->viewport_target_view, clear_color_with_alpha);
-
-	//	// Setup viewport
-	//	auto main_window = owner.getMainWindow();
-	//	D3D11_VIEWPORT vp;
-	//	memset(&vp, 0, sizeof(D3D11_VIEWPORT));
-	//	vp.Width = im_viewport_size.x;
-	//	vp.Height = im_viewport_size.y;
-	//	vp.MinDepth = 0.0f;
-	//	vp.MaxDepth = 1.0f;
-	//	vp.TopLeftX = vp.TopLeftY = 0;
-	//	impl->d3d_device_ctx->RSSetViewports(1, &vp);
-
-	//	impl->d3d_device_ctx->OMSetDepthStencilState(impl->viewport_stencil_state, 0);
-	//	impl->d3d_device_ctx->RSSetState(impl->viewport_rasterizer_state);
-
-	//	u32 vertex_stride = 3 * sizeof(float);
-	//	u32 vertex_offset = 0;
-	//	u32 vertex_count = 3;
-
-	//	impl->d3d_device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	//	impl->d3d_device_ctx->IASetInputLayout(impl->sil_plain);
-	//	impl->d3d_device_ctx->IASetVertexBuffers(
-	//		0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
-
-	//	impl->d3d_device_ctx->VSSetShader(impl->vertex_shader_ptr, NULL, 0);
-	//	impl->d3d_device_ctx->PSSetShader(impl->pixel_shader_ptr, NULL, 0);
-
-	//	impl->d3d_device_ctx->Draw(vertex_count, 0);
-	//}
 }
 
 void vp::SdlDx11Application::postFrame(vp::Application& owner)
