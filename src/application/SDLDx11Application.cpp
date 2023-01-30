@@ -24,6 +24,22 @@
 #include "Application.h"
 #include "SDLDx11Application.h"
 
+template <typename PtrT>
+void releaseAndNullCOMPtr(PtrT& ptr)
+{
+	if (nullptr != ptr)
+	{
+		ptr->Release();
+		ptr = nullptr;
+	}
+}
+
+struct alignas(16) CBGeneric
+{
+	mtx4 view_proj = mtx4_identity;
+	mtx4 model = mtx4_identity;
+};
+
 namespace vp
 {
 	struct SdlDx11Impl
@@ -38,21 +54,14 @@ namespace vp
 
 		ID3DBlob* error_blob = nullptr;
 
+		ID3D11Buffer* cb_generic = NULL;
 		// plain shader stuff
 		ID3DBlob* vertshad_plain = nullptr;
 		ID3DBlob* pixelshad_plain = nullptr;
-		ID3D11InputLayout* sil_plain = nullptr; 
+		ID3D11InputLayout* sil_plain = nullptr;
 
 		ID3D11VertexShader* vshad_plain = nullptr;
 		ID3D11PixelShader* pshad_plain = nullptr;
-
-		// plain2 shader stuff
-		ID3DBlob* vertshad_plain2 = nullptr;                  
-		ID3DBlob* pixelshad_plain2 = nullptr;
-		ID3D11InputLayout* sil_plain2 = nullptr;
-
-		ID3D11VertexShader* vshad_plain2 = nullptr;
-		ID3D11PixelShader* pshad_plain2 = nullptr;
 
 		// diffuse shader stuff
 		ID3DBlob* vertshad_diffuse = nullptr;
@@ -102,7 +111,7 @@ namespace vp
 			sd.SampleDesc.Quality = 0;
 			sd.Windowed = true;
 			sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // DXGI_SWAP_EFFECT_DISCARD;
-													  // DXGI_SWAP_EFFECT_FLIP_DISCARD
+														   // DXGI_SWAP_EFFECT_FLIP_DISCARD
 
 			u32 createDeviceFlags = 0;
 
@@ -149,7 +158,7 @@ namespace vp
 				desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 				desc.BackFace = desc.FrontFace;
 				d3d_device->CreateDepthStencilState(&desc, &viewport_stencil_state);
-			} 
+			}
 			// Create the rasterizer state
 			{
 				D3D11_RASTERIZER_DESC desc;
@@ -195,21 +204,20 @@ namespace vp
 			return true;
 		}
 
-		void initViewportStuff()
+		void compileGlobalShaders()
 		{
 			u32 flags = D3DCOMPILE_ENABLE_STRICTNESS;
 #if defined(DEBUG) || defined(_DEBUG)
 			flags |= D3DCOMPILE_DEBUG; // add more debug output
 #endif
-			constexpr auto vp_size_w = 1800;
-			constexpr auto vp_size_h = 1800;
 
+			static constexpr LPCWSTR shadpath = L"content/shaders/world_gizmos.hlsl";
 			// plain shader IL
 			{
 				// COMPILE VERTEX SHADER
-				HRESULT hr = D3DCompileFromFile(L"content/shaders/plain_dbg.hlsl", nullptr,
-					D3D_COMPILE_STANDARD_FILE_INCLUDE, "vs_main", "vs_5_0", flags, 0,
-					&vertshad_plain, &error_blob);
+				HRESULT hr =
+					D3DCompileFromFile(shadpath, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+						"vs_main", "vs_5_0", flags, 0, &vertshad_plain, &error_blob);
 				if (FAILED(hr))
 				{
 					if (error_blob)
@@ -225,9 +233,8 @@ namespace vp
 				}
 
 				// COMPILE PIXEL SHADER
-				hr = D3DCompileFromFile(L"content/shaders/plain_dbg.hlsl", nullptr,
-					D3D_COMPILE_STANDARD_FILE_INCLUDE, "ps_main", "ps_5_0", flags, 0,
-					&pixelshad_plain, &error_blob);
+				hr = D3DCompileFromFile(shadpath, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+					"ps_main", "ps_5_0", flags, 0, &pixelshad_plain, &error_blob);
 				if (FAILED(hr))
 				{
 					if (error_blob)
@@ -315,7 +322,37 @@ namespace vp
 				check(SUCCEEDED(hr), "could not create input layout for shader");
 			}
 #endif
+		}
 
+		void initializeResourcesAndViweport(v2i32 vp_size)
+		{
+			compileGlobalShaders();
+			createViewportBuffers(vp_size);
+
+			CBGeneric VsConstData{};
+
+			// Fill in a buffer description.
+			D3D11_BUFFER_DESC cb_desc;
+			cb_desc.ByteWidth = sizeof(CBGeneric);
+			cb_desc.Usage = D3D11_USAGE_DYNAMIC;
+			cb_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			cb_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			cb_desc.MiscFlags = 0;
+			cb_desc.StructureByteStride = 0;
+
+			// Fill in the subresource data.
+			D3D11_SUBRESOURCE_DATA init_data;
+			init_data.pSysMem = &VsConstData;
+			init_data.SysMemPitch = 0;
+			init_data.SysMemSlicePitch = 0;
+
+			// Create the buffer.
+			auto hr = d3d_device->CreateBuffer(&cb_desc, &init_data, &cb_generic);
+			check(hr == S_OK, "whaaat");
+		}
+
+		void createViewportBuffers(v2i32 vp_size)
+		{
 			// test viewport stuff
 			{
 				D3D11_TEXTURE2D_DESC viewport_tex_desc;
@@ -327,8 +364,8 @@ namespace vp
 				ZeroMemory(&viewport_tv_desc, sizeof(viewport_tv_desc));
 				ZeroMemory(&viewport_shader_res_desc, sizeof(viewport_shader_res_desc));
 
-				viewport_tex_desc.Width = vp_size_w;
-				viewport_tex_desc.Height = vp_size_h;
+				viewport_tex_desc.Width = vp_size.x;
+				viewport_tex_desc.Height = vp_size.y;
 				viewport_tex_desc.MipLevels = 1;
 				viewport_tex_desc.ArraySize = 1;
 				viewport_tex_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -363,7 +400,7 @@ namespace vp
 			}
 
 			return;
-			// create depth bufer for viewport
+			// create depth buffer for viewport
 			{
 				D3D11_TEXTURE2D_DESC ds_desc;
 				ZeroMemory(&ds_desc, sizeof(D3D11_TEXTURE2D_DESC));
@@ -373,8 +410,8 @@ namespace vp
 				ds_desc.CPUAccessFlags = 0; // No CPU access required.
 				ds_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-				ds_desc.Width = vp_size_w;
-				ds_desc.Height = vp_size_h;
+				ds_desc.Width = vp_size.x;
+				ds_desc.Height = vp_size.y;
 
 				ds_desc.MipLevels = 1;
 				ds_desc.SampleDesc.Count = 1;
@@ -407,7 +444,6 @@ namespace vp
 				auto hr = d3d_device->CreateDepthStencilState(
 					&stencil_state_desc, &viewport_stencil_state);
 			}
-
 			// Create the rasterizer state for view
 			{
 				D3D11_RASTERIZER_DESC rasterized_desc;
@@ -436,31 +472,29 @@ namespace vp
 
 		void cleanupDeviceD3D()
 		{
-			cleanupRenderTarget();
-			if (swap_chain)
-			{
-				swap_chain->Release();
-				swap_chain = nullptr;
-			}
-			if (d3d_device_ctx)
-			{
-				d3d_device_ctx->Release();
-				d3d_device_ctx = nullptr;
-			}
-			if (d3d_device)
-			{
-				d3d_device->Release();
-				d3d_device = nullptr;
-			}
+			releaseAndNullCOMPtr(window_target_view);
+
+			cleanupViewportBuffers();
+
+			releaseAndNullCOMPtr(swap_chain);
+			releaseAndNullCOMPtr(d3d_device_ctx);
+			releaseAndNullCOMPtr(d3d_device);
 		}
 
-		void cleanupRenderTarget()
+		void cleanupViewportBuffers()
 		{
-			if (window_target_view)
-			{
-				window_target_view->Release();
-				window_target_view = nullptr;
-			}
+			releaseAndNullCOMPtr(viewport_target_view);
+			releaseAndNullCOMPtr(viewport_srv);
+			releaseAndNullCOMPtr(viewport_tex2d);
+			releaseAndNullCOMPtr(viewport_stencil_tex);
+			releaseAndNullCOMPtr(viewport_stencil_view);
+		}
+
+		void resizeViewport(v2i32 vp_size)
+		{
+			cleanupViewportBuffers();
+
+			createViewportBuffers(vp_size);
 		}
 	};
 } // namespace vp
@@ -573,7 +607,6 @@ struct TmpModel
 ID3D11ShaderResourceView* createTextureImageView(ID3D11Device* d3d_device, const char* path)
 {
 	spdlog::stopwatch sw;
-	//
 	//
 	int width, height, chanels;
 	stbi_uc* pixels = stbi_load(path, &width, &height, &chanels, STBI_rgb_alpha);
@@ -698,9 +731,8 @@ i32 vp::SdlDx11Application::init(vp::Application& owner)
 		return 2;
 	}
 
-	// debug shaders
 	{
-		impl->initViewportStuff();
+		impl->initializeResourcesAndViweport({800, 800});
 	}
 
 	// init imgui
@@ -759,7 +791,7 @@ void vp::SdlDx11Application::preFrame(vp::Application& owner)
 	vp.TopLeftX = vp.TopLeftY = 0;
 	impl->d3d_device_ctx->RSSetViewports(1, &vp);
 
-	// #fixme : temporary snippet, before proper viewport is done
+	// #fixme
 	vp::ImView* view = vp::g_view_hub.views.tryGet(g_view_name);
 	if (view)
 	{
@@ -786,6 +818,7 @@ void vp::SdlDx11Application::preFrame(vp::Application& owner)
 
 void vp::SdlDx11Application::frame(vp::Application& owner)
 {
+	static spdlog::stopwatch g_frame_sw;
 	if (!valid)
 		return;
 
@@ -795,47 +828,64 @@ void vp::SdlDx11Application::frame(vp::Application& owner)
 
 	if (last_drawn_viewport_sz != im_viewport_size)
 	{
-		// #todo resize buffers
 		last_drawn_viewport_sz = im_viewport_size;
+		impl->resizeViewport(im_viewport_size);
 	}
 
-	// prepare frame 
+	// prepare frame
 	{
-		ImVec4 clear_color = ImVec4(0.17f, 0.11f, 0.25f, 1.00f);
+		ImVec4 clear_color = ImVec4(0.17f, 0.31f, 0.25f, 1.00f);
 		const float clear_color_with_alpha[4] = {clear_color.x * clear_color.w,
 			clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w};
 
-		impl->d3d_device_ctx->OMSetRenderTargets(1, &impl->viewport_target_view, nullptr);
-		impl->d3d_device_ctx->ClearRenderTargetView(
-			impl->viewport_target_view, clear_color_with_alpha);
+		auto ctx = impl->d3d_device_ctx;
+
+		ctx->OMSetRenderTargets(1, &impl->viewport_target_view, nullptr);
+		ctx->ClearRenderTargetView(impl->viewport_target_view, clear_color_with_alpha);
 
 		// Setup viewport
-		auto main_window = owner.getMainWindow();
-		D3D11_VIEWPORT vp;
-		memset(&vp, 0, sizeof(D3D11_VIEWPORT));
-		vp.Width = im_viewport_size.x;
-		vp.Height = im_viewport_size.y;
-		vp.MinDepth = 0.0f;
-		vp.MaxDepth = 1.0f;
-		vp.TopLeftX = vp.TopLeftY = 0;
-		impl->d3d_device_ctx->RSSetViewports(1, &vp);
+		{
+			auto main_window = owner.getMainWindow();
+			auto vp = vex::makeZeroed<D3D11_VIEWPORT>();
+			vp.Width = im_viewport_size.x;
+			vp.Height = im_viewport_size.y;
+			vp.MinDepth = 0.0f;
+			vp.MaxDepth = 1.0f;
+			vp.TopLeftX = vp.TopLeftY = 0;
+			ctx->RSSetViewports(1, &vp);
+		}
 
-		impl->d3d_device_ctx->OMSetDepthStencilState(impl->viewport_stencil_state, 0);
-		impl->d3d_device_ctx->RSSetState(impl->viewport_rasterizer_state);
+		ctx->OMSetDepthStencilState(impl->viewport_stencil_state, 0);
+		ctx->RSSetState(impl->viewport_rasterizer_state);
 
 		u32 vertex_stride = 3 * sizeof(float);
 		u32 vertex_offset = 0;
 		u32 vertex_count = 3;
 
-		impl->d3d_device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		impl->d3d_device_ctx->IASetInputLayout(impl->sil_plain);
-		impl->d3d_device_ctx->IASetVertexBuffers(
-			0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
+		ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		ctx->IASetInputLayout(impl->sil_plain);
+		ctx->IASetVertexBuffers(0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
 
-		impl->d3d_device_ctx->VSSetShader(impl->vshad_plain, NULL, 0);
-		impl->d3d_device_ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+		// Update Constant Buffer
+		CBGeneric data{};
+		using namespace std::chrono_literals;
+		auto sec_el = g_frame_sw.elapsed() / 1.0s;
+		float part = glm::sin(sec_el);
+		mtx4 mod_mat = glm::scale(mtx4_identity, v3f{0.5f + 0.2f * part});
 
-		impl->d3d_device_ctx->Draw(vertex_count, 0);
+		data.model = mod_mat;
+
+		D3D11_MAPPED_SUBRESOURCE mappedResource{};
+		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+		CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+		ctx->Unmap(impl->cb_generic, 0);
+
+		ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+
+		ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+		ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+		ctx->Draw(vertex_count, 0);
 	}
 }
 
@@ -847,7 +897,7 @@ void vp::SdlDx11Application::postFrame(vp::Application& owner)
 	/////////////////////////////////////////////////////////////////////////////////
 	// prepare frame
 	{
-		ImVec4 clear_color = ImVec4(0.17f, 0.21f, 0.25f, 1.00f);
+		ImVec4 clear_color = ImVec4(0.37f, 0.21f, 0.25f, 1.00f);
 		const float clear_color_with_alpha[4] = {clear_color.x * clear_color.w,
 			clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w};
 		impl->d3d_device_ctx->OMSetRenderTargets(1, &impl->window_target_view, nullptr);

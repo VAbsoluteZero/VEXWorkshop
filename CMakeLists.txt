@@ -244,5 +244,6 @@ else ()
 endif ()
 
 target_link_libraries(VEXGameOfLife PRIVATE d3d11)
+target_link_libraries(VEXGameOfLife PRIVATE dxgi)
 
   

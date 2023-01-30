@@ -7,20 +7,20 @@ cbuffer cbPerFrame : register(b0)
 /* vertex attributes go here to input to the vertex shader */
 struct VSinput
 {
-	float3 Position : POS;
+	float3 position_local : POS;
 };
 
 /* outputs from vertex shader go here. can be interpolated to pixel shader */
 struct VSOutput
 {
-	float4 Position : SV_POSITION; // required output of VS
+	float4 position_local : SV_POSITION; // required output of VS
 };
 
 VSOutput vs_main(VSinput input)
 {
 	VSOutput output = (VSOutput)0; 
 
-	output.Position = mul(mul(float4(vin.Position, 1.0f), matModel), matVP);
+	output.position_local = mul(mul(float4(input.position_local, 1.0f), matModel), matVP);
 
 	return output;
 }

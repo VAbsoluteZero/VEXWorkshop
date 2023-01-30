@@ -2,28 +2,27 @@
 #include <application/Application.h>
 
 #include <memory>
+#include <vector>
 
 #include "VCore/Containers/Dict.h"
+#include "VCore/Memory/Memory.h"
 #include "VCore/Utils/CoreTemplates.h"
 #include "VFramework/Misc/RunSample.h"
 #include "VFramework/VEXBase.h"
 #include "application/Platfrom.h"
 #include "demos/pathfinding/FlowFieldsDemo.h"
-#include "VCore/Memory/Memory.h"
-
-#include <vector>
 
 using namespace vex;
 
 int main(int argc, char** argv)
 {
-	//#ifdef _MSC_VER
+	// #ifdef _MSC_VER
 	//	IsMSVC = true;
-	//#endif // DEBUG
+	// #endif // DEBUG
 	//
-	//#ifdef __clang__
+	// #ifdef __clang__
 	//	IsClang = true;
-	//#endif
+	// #endif
 
 	// SampleRunner::global().runSamples("test_defer");
 
@@ -36,15 +35,12 @@ int main(int argc, char** argv)
 	dt[4] = "test4";
 	dt.remove(1);
 
-	struct StdAllocAdaptor : vex::Allocator
-	{
-	};
-	 
-
 
 	vp::StartupConfig config;
 
-	auto& app = vp::Application::init(config); 
+	config.WindowArgs.w = 1100;
+
+	auto& app = vp::Application::init(config);
 	i32 result_code = app.runLoop();
 
 	spdlog::info("returning from main with code:{}", result_code);
