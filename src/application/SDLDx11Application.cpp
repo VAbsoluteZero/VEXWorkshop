@@ -38,6 +38,8 @@ struct alignas(16) CBGeneric
 {
 	mtx4 view_proj = mtx4_identity;
 	mtx4 model = mtx4_identity;
+	v4f col;
+	v4f cols[3];
 };
 
 namespace vp
@@ -91,7 +93,7 @@ namespace vp
 			sdl_window = raw_window;
 			SDL_VERSION(&sdl_wm_info.version);
 			SDL_GetWindowWMInfo(raw_window, &sdl_wm_info);
-			window_handle = (HWND)sdl_wm_info.info.win.window;
+			window_handle = (HWND)sdl_wm_info.info.win.window;;
 		}
 		bool createDeviceD3D()
 		{
@@ -152,12 +154,12 @@ namespace vp
 				desc.DepthEnable = false;
 				desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 				desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
-				desc.StencilEnable = false;
+				desc.StencilEnable = true;
 				desc.FrontFace.StencilFailOp = desc.FrontFace.StencilDepthFailOp =
 					desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
 				desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 				desc.BackFace = desc.FrontFace;
-				d3d_device->CreateDepthStencilState(&desc, &viewport_stencil_state);
+				d3d_device->CreateDepthStencilState(&desc, &stencil_state);
 			}
 			// Create the rasterizer state
 			{
@@ -170,7 +172,6 @@ namespace vp
 				desc.DepthClipEnable = true;
 				d3d_device->CreateRasterizerState(&desc, &rasterizer_state);
 			}
-			return true;
 			// Create Depth/Stencil buffer
 			{
 				D3D11_TEXTURE2D_DESC ds_desc;
@@ -190,15 +191,9 @@ namespace vp
 				ds_desc.SampleDesc.Quality = 0;
 				ds_desc.Usage = D3D11_USAGE_DEFAULT;
 				auto hr = d3d_device->CreateTexture2D(&ds_desc, nullptr, &stencil_buffer_tex);
-				if (FAILED(hr))
-				{
-					return false;
-				}
+				check_(!FAILED(hr));
 				hr = d3d_device->CreateDepthStencilView(stencil_buffer_tex, nullptr, &stencil_view);
-				if (FAILED(hr))
-				{
-					return false;
-				}
+				check_(!FAILED(hr));
 			}
 
 			return true;
@@ -398,8 +393,6 @@ namespace vp
 					viewport_tex2d, &viewport_shader_res_desc, &viewport_srv);
 				check(SUCCEEDED(result_code), "could not CreateShaderResourceView");
 			}
-
-			return;
 			// create depth buffer for viewport
 			{
 				D3D11_TEXTURE2D_DESC ds_desc;
@@ -419,16 +412,10 @@ namespace vp
 				ds_desc.Usage = D3D11_USAGE_DEFAULT;
 
 				auto hr = d3d_device->CreateTexture2D(&ds_desc, nullptr, &viewport_stencil_tex);
-				if (FAILED(hr))
-				{
-					return;
-				}
+				check_(!FAILED(hr));
 				hr = d3d_device->CreateDepthStencilView(
 					viewport_stencil_tex, nullptr, &viewport_stencil_view);
-				if (FAILED(hr))
-				{
-					return;
-				}
+				check_(!FAILED(hr));
 			}
 			// Create depth-stencil State
 			{
@@ -463,10 +450,7 @@ namespace vp
 				// Create the rasterizer state object.
 				auto hr = d3d_device->CreateRasterizerState(&rasterized_desc, //
 					&viewport_rasterizer_state);
-				if (FAILED(hr))
-				{
-					return;
-				}
+				check_(!FAILED(hr));
 			}
 		}
 
@@ -512,9 +496,9 @@ ID3D11Buffer* vertex_buffer_ptr = nullptr;
 //	-0.1f, -0.5f, 0.0f, // point at bottom-left
 // };
 static float vertex_data_array[] = {
-	0.0f, 0.5f, .0f,   // point at top
-	0.5f, -0.5f, .0f,  // point at bottom-right
-	-0.5f, -0.5f, .0f, // point at bottom-left
+	0.0f, 0.5f, .20f,	// point at top
+	0.5f, -0.5f, .20f,	// point at bottom-right
+	-0.5f, -0.5f, .20f, // point at bottom-left
 };
 struct MatricesMVP
 {
@@ -603,6 +587,10 @@ struct TmpModel
 		}
 	}
 };
+
+
+ID3D11ShaderResourceView* g_demo_texview = nullptr;
+static TmpModel g_demo;
 
 ID3D11ShaderResourceView* createTextureImageView(ID3D11Device* d3d_device, const char* path)
 {
@@ -712,13 +700,17 @@ TmpModel loadModel(const vp::SdlDx11Impl* dximpl, const char* path)
 	return mod;
 }
 
-ID3D11ShaderResourceView* g_demo_texview = nullptr;
-static TmpModel g_demo;
 
 i32 vp::SdlDx11Application::init(vp::Application& owner)
 {
+	auto tst = SDL_GetBasePath();
+	spdlog::info("path base : {}", tst);
+
 	auto main_window = owner.getMainWindow();
-	SDL_Window* window = main_window->getRawWindow();
+	SDL_Window* window = main_window->getRawWindow(); 
+
+	SDL_SetWindowAlwaysOnTop(window, SDL_bool::SDL_TRUE);
+	SDL_SetWindowPosition(window, 2700, SDL_WINDOWPOS_UNDEFINED);
 
 	this->impl = &sdl_impl;
 
@@ -740,9 +732,6 @@ i32 vp::SdlDx11Application::init(vp::Application& owner)
 		auto gImguiContext = ImGui::CreateContext();
 		ImGui_ImplDX11_Init(impl->d3d_device, impl->d3d_device_ctx);
 		ImGui_ImplSDL2_InitForSDLRenderer(window);
-
-		auto tst = SDL_GetBasePath();
-		spdlog::info("path : {}", tst);
 	}
 
 	valid = true;
@@ -840,8 +829,10 @@ void vp::SdlDx11Application::frame(vp::Application& owner)
 
 		auto ctx = impl->d3d_device_ctx;
 
-		ctx->OMSetRenderTargets(1, &impl->viewport_target_view, nullptr);
+		ctx->OMSetRenderTargets(1, &impl->viewport_target_view, impl->viewport_stencil_view);
 		ctx->ClearRenderTargetView(impl->viewport_target_view, clear_color_with_alpha);
+		ctx->ClearDepthStencilView(
+			impl->viewport_stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 		// Setup viewport
 		{
@@ -866,26 +857,77 @@ void vp::SdlDx11Application::frame(vp::Application& owner)
 		ctx->IASetInputLayout(impl->sil_plain);
 		ctx->IASetVertexBuffers(0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
 
-		// Update Constant Buffer
-		CBGeneric data{};
-		using namespace std::chrono_literals;
-		auto sec_el = g_frame_sw.elapsed() / 1.0s;
-		float part = glm::sin(sec_el);
-		mtx4 mod_mat = glm::scale(mtx4_identity, v3f{0.5f + 0.2f * part});
+		{ // 1
+			CBGeneric data{};
+			using namespace std::chrono_literals;
+			auto sec_el = g_frame_sw.elapsed() / 1.0s;
+			float part = glm::sin(sec_el);
+			mtx4 mod_mat = glm::scale(mtx4_identity, v3f{0.5f + 0.2f * part});
+			mtx4 z_offset = glm::translate(mtx4_identity, v3f{0, 0, 0.1f});
 
-		data.model = mod_mat;
+			data.model = mod_mat;
+			data.col = {0.7f, 0.7f, 0, 1.f};
 
-		D3D11_MAPPED_SUBRESOURCE mappedResource{};
-		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-		CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
-		ctx->Unmap(impl->cb_generic, 0);
+			D3D11_MAPPED_SUBRESOURCE mappedResource{};
+			HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+			CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+			ctx->Unmap(impl->cb_generic, 0);
 
-		ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+			ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
 
-		ctx->VSSetShader(impl->vshad_plain, NULL, 0);
-		ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+			ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+			ctx->PSSetShader(impl->pshad_plain, NULL, 0);
 
-		ctx->Draw(vertex_count, 0);
+			ctx->Draw(vertex_count, 0);
+		}
+		{ // 2
+			CBGeneric data{};
+			using namespace std::chrono_literals;
+			auto sec_el = g_frame_sw.elapsed() / 1.0s;
+			float part = glm::sin(sec_el) * 0.5f;
+			mtx4 mod_mat = glm::translate(mtx4_identity, v3f{0.5f, 0, 0.3f});
+			data.model = mod_mat;
+
+			v3f npos = mod_mat * v4f{2, 2, 2, 1};
+
+			data.col = v4f{0.22f, 0.1f, 0.9f, 1.f};
+
+			D3D11_MAPPED_SUBRESOURCE mappedResource{};
+			HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+			CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+			ctx->Unmap(impl->cb_generic, 0);
+
+			ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+
+			ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+			ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+			ctx->Draw(vertex_count, 0);
+		}
+		{ // 3
+			CBGeneric data{};
+			using namespace std::chrono_literals;
+			auto sec_el = g_frame_sw.elapsed() / 1.0s;
+			float part = glm::sin(sec_el);
+			mtx4 scale = glm::scale(mtx4_identity, v3f{0.5f});
+			mtx4 z_offset = glm::translate(mtx4_identity, v3f{-0.4f, 0, 0.1f});
+			mtx4 z_rot = glm::rotate(mtx4_identity, part, {0, 0, 1});
+
+			data.model = z_offset * z_rot * scale; 
+			data.col = {0.7f, 0.0f, 0, 1.f};
+
+			D3D11_MAPPED_SUBRESOURCE mappedResource{};
+			HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+			CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+			ctx->Unmap(impl->cb_generic, 0);
+
+			ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+
+			ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+			ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+			ctx->Draw(vertex_count, 0);
+		}
 	}
 }
 
@@ -900,9 +942,14 @@ void vp::SdlDx11Application::postFrame(vp::Application& owner)
 		ImVec4 clear_color = ImVec4(0.37f, 0.21f, 0.25f, 1.00f);
 		const float clear_color_with_alpha[4] = {clear_color.x * clear_color.w,
 			clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w};
-		impl->d3d_device_ctx->OMSetRenderTargets(1, &impl->window_target_view, nullptr);
+		impl->d3d_device_ctx->OMSetRenderTargets(1, &impl->window_target_view, impl->stencil_view);
 		impl->d3d_device_ctx->ClearRenderTargetView(
 			impl->window_target_view, clear_color_with_alpha);
+		impl->d3d_device_ctx->ClearDepthStencilView(
+			impl->stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+		impl->d3d_device_ctx->OMSetDepthStencilState(impl->stencil_state, 0);
+		impl->d3d_device_ctx->RSSetState(impl->rasterizer_state);
 
 
 		ImGui_ImplDX11_NewFrame(); // compiles shaders when called first time

@@ -2,6 +2,10 @@ cbuffer cbPerFrame : register(b0)
 {
 	float4x4 matVP;
 	float4x4 matModel;
+	float4 color1;
+	float4 color2;
+	float4 color3;
+	float4 color4; 
 };
 
 /* vertex attributes go here to input to the vertex shader */
@@ -14,18 +18,20 @@ struct VSinput
 struct VSOutput
 {
 	float4 position_local : SV_POSITION; // required output of VS
+	float4 col : COLOR;
 };
 
 VSOutput vs_main(VSinput input)
 {
 	VSOutput output = (VSOutput)0; 
 
-	output.position_local = mul(mul(float4(input.position_local, 1.0f), matModel), matVP);
+	output.position_local = mul(matVP, mul(matModel, float4(input.position_local, 1.0f)));
+	output.col = color1;
 
 	return output;
 }
 
 float4 ps_main(VSOutput input) : SV_TARGET
 {
-	return float4(0.4, 0.8, 0.4, 1.0); // must return an RGBA colour
+	return input.col; // must return an RGBA colour
 }
