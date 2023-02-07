@@ -25,7 +25,7 @@ namespace vp
 		PostDefault = 9000,
 		Late = 12000,
 		Latest = 14000
-	}; 
+	};
 	  
 	struct IGraphicsImpl
 	{

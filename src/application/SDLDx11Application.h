@@ -23,6 +23,8 @@ namespace vp
 		 
 		void teardown(vp::Application& owner) override;
 
+		void helloTriangles();
+		void demoRoom();
 	private:
 		struct SdlDx11Impl* impl = nullptr;
 		bool valid = false;

@@ -34,24 +34,92 @@ namespace vp
 	 */
 	struct FrameTime
 	{
-		inline const float getUnscaled() { return unscalled_dt_f32; }
-		inline const double getUnscaledF64() { return unscaled_dt; }
+		double unscaled_runtime = 0;
 
-		inline const float get() { return delta_time_f32; }
-		inline const double getF64() { return dt; }
+		double unscaled_dt = 0;
+		double dt = 0;
+		// cached f32 version so there is no need to cast.
+		float unscalled_dt_f32 = 0;
+		float delta_time_f32 = 0;
 
 		inline const void setTimeMutlipier(double value) { mult = (value < 0 ? 0 : value); }
 		inline const double getTimeMutlipier() { return mult; }
 
+		inline void update(double dt_sec)
+		{
+			unscaled_dt = dt_sec;
+			dt = dt_sec * mult;
+
+			unscalled_dt_f32 = (f32)dt_sec;
+			delta_time_f32 = (f32)dt;
+
+			unscaled_runtime += dt_sec;
+		}
+
 		friend class Application;
 
 	private:
-		double unscaled_dt = 0;
-		double dt = 0;
 		double mult = 1.0f;
-		// cached f32 version so there is no need to cast.
-		float unscalled_dt_f32 = 0;
-		float delta_time_f32 = 0;
+	};
+
+	using OptNumValue = vex::Union<i32, f32, bool>;
+	struct SettingVal
+	{
+		OptNumValue val;
+	};
+
+	struct SettingsContainer
+	{
+		vex::Dict<std::string, OptNumValue> settings;
+		vex::Dict<std::string, std::function<void(OptNumValue)>> on_changed; 
+		bool changed_this_tick = true;
+
+		template <typename T>
+		bool setValue(std::string key, T val)
+		{
+			if (checkAlways(on_changed.contains(key), "Entry does not exist in app settings"))
+			{ 
+				return false;
+			}
+			OptNumValue& opt_val = settings[key];
+			if (T* stored_val = opt_val.find<std::decay_t<T>>(); nullptr != stored_val)
+			{
+				*stored_val = val;
+				if (std::function<void(OptNumValue)>* cb = on_changed.tryGet(key); nullptr != cb)
+				{
+					(*cb)(val);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		template <typename T>
+		void addSetting(std::string key, T default_val)
+		{
+			constexpr bool v_is_supported =
+				std::is_same_v<T, i32> || std::is_same_v<T, f32> || std::is_same_v<T, bool>;
+			static_assert(v_is_supported, "type is not supported");
+
+			OptNumValue v = default_val;
+			settings.emplace(std::move(key), std::move(v));
+		}
+		template <typename T>
+		void addSetting(std::string key, T default_val, std::function<void(OptNumValue)> cb_changed)
+		{
+			addSetting(key, default_val);
+
+			checkAlways(!on_changed.contains(key),
+				"Warning: overriding 'on_changed' callback in app settings");
+
+			on_changed.emplace(std::move(key), cb_changed);
+		}
+
+		void removeSetting(std::string key)
+		{
+			settings.remove(key);
+			on_changed.remove(key);
+		}
 	};
 
 	class Application
@@ -71,6 +139,8 @@ namespace vp
 		inline void setMaxFps(i32 target) { framerate.target_framerate = target; }
 		inline i32 getMaxFps(i32 target) { return framerate.desiredFramerate(); }
 		inline tWindow* getMainWindow() const { return main_window.get(); }
+		inline SettingsContainer& getSettings() { return settings; }
+		inline const FrameTime& getTime() { return ftime; }
 
 		template <typename T>
 		void setApplicationType(bool init);
@@ -87,8 +157,10 @@ namespace vp
 
 		std::unique_ptr<IGraphicsImpl> app_impl;
 		std::unique_ptr<tWindow> main_window;
+		SettingsContainer settings;
 
 		FramerateArgs framerate;
+		FrameTime ftime;
 
 		bool running = false;
 		bool pending_stop = false;
@@ -111,6 +183,6 @@ namespace vp
 
 	//=====================================================================================
 	// variables
-	inline FrameTime gTime = {};
+	inline FrameTime g_time = {};
 
 } // namespace vp

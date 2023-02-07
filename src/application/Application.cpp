@@ -16,6 +16,7 @@
 #include <misc/cpp/imgui_stdlib.h>
 //
 #include <VCore/Containers/Ring.h>
+#include <spdlog/stopwatch.h>
 #include <utils/CLI.h>
 #include <utils/ImGuiUtils.h>
 
@@ -34,6 +35,7 @@ namespace vexgui
 } // namespace vexgui
 
 static void setupLoggers();
+static void setupSettings(vp::Application& app);
 
 
 vp::Application& vp::Application::init(const StartupConfig& config)
@@ -56,6 +58,7 @@ vp::Application& vp::Application::init(const StartupConfig& config)
 				i32 v = opt_int.value_or(-1);
 				vp::Application::get().setMaxFps(v);
 				SPDLOG_WARN("# try to limit fps to {}", v);
+				return true;
 			}
 			return false;
 		});
@@ -71,11 +74,13 @@ vp::Application& vp::Application::init(const StartupConfig& config)
 	if (!self.app_impl)
 	{
 		self.setApplicationType<SdlDx11Application>(true);
-	} 
+	}
+	setupSettings(self);
 
 	return self;
 }
 
+spdlog::stopwatch g_frame_sw;
 i32 vp::Application::runLoop()
 {
 	running = true;
@@ -90,6 +95,7 @@ i32 vp::Application::runLoop()
 	u32 tst = 0;
 	// Event handler
 	SDL_Event sdl_event = {};
+
 	do
 	{
 		// Handle events on queue
@@ -115,6 +121,7 @@ i32 vp::Application::runLoop()
 		//-----------------------------------------------------------------------------
 		// imgui draw callbacks
 		{
+			settings.changed_this_tick = false;
 			vexgui::setupImGuiForDrawPass(*this);
 
 			for (auto& [view_name, view] : g_view_hub.views)
@@ -130,10 +137,18 @@ i32 vp::Application::runLoop()
 		//-----------------------------------------------------------------------------
 		// post frame
 		{
-			app_impl->postFrame(*this);
+			app_impl->postFrame(*this); 
 		}
 
-		framerate.frame_number++;
+		// time & fps
+		{
+			using namespace std::chrono_literals;
+			framerate.frame_number++;
+			double dt_sec = g_frame_sw.elapsed() / 1.0s;
+			ftime.update(dt_sec);
+
+			g_frame_sw.reset();
+		}
 	} while (running && !pending_stop);
 
 	if (app_impl)
@@ -238,7 +253,7 @@ namespace vexgui
 	// slightly tweaked to better match needs of the app.
 
 
-	//#todo thread safe double buffer.
+	// #todo thread safe double buffer.
 	struct PedningEntries
 	{
 		void copy_from(const std::vector<std::string>& vec)
@@ -711,6 +726,86 @@ static void setupLoggers()
 	spdlog::set_default_logger(std::make_shared<spdlog::logger>("vex", sink_list));
 }
 
-namespace vp
+void setupSettings(vp::Application& app)
 {
-} // namespace vp
+	auto& settings_container = app.getSettings();
+
+	settings_container.addSetting("gfx.wireframe", false);
+	settings_container.addSetting("gfx.cullmode", 1);
+
+	for (auto [k, v] : settings_container.settings)
+	{
+	}
+	vp::console::makeAndRegisterCmd("app.set",
+		"Change application settings. Type 'list' to list all. \n", true,
+		[](const vp::console::CmdCtx& ctx)
+		{
+			std::optional<std::string_view> cmd_key = ctx.parsed_args->get<std::string_view>(0);
+			if (!cmd_key)
+				return false;
+
+			std::string option{cmd_key.value()};
+
+			auto& settings_dict = vp::Application::get().getSettings().settings;
+
+			if (option == "list")
+			{
+				SPDLOG_INFO(
+					"* available options & expected type of arg (additional constraints may "
+					"apply):");
+				for (auto [k, v] : settings_dict)
+				{
+					const char* type_name = nullptr;
+					v.match(
+						[&](i32& a)
+						{
+							type_name = "int32";
+							SPDLOG_INFO("* {} : {} | expects {}", k, a, type_name);
+						},
+						[&](f32& a)
+						{
+							type_name = "f32";
+							SPDLOG_INFO("* {} : {} | expects {}", k, a, type_name);
+						},
+						[&](bool& a)
+						{
+							type_name = "bool";
+							SPDLOG_INFO("* {} : {} | expects {}", k, a, type_name);
+						});
+				}
+				return true;
+			}
+			vp::OptNumValue* entry = settings_dict.tryGet(option);
+
+			if (nullptr == entry)
+				return false;
+
+			bool matched = false;
+			entry->match(
+				[&](i32& v)
+				{
+					matched = true;
+					auto cmd_value = ctx.parsed_args->get<i32>(1);
+					if (cmd_value)
+						v = cmd_value.value();
+				},
+				[&](f32& v)
+				{
+					matched = true;
+					auto cmd_value = ctx.parsed_args->get<f32>(1);
+					if (cmd_value)
+						v = cmd_value.value();
+				},
+				[&](bool& v)
+				{
+					matched = true;
+					auto cmd_value = ctx.parsed_args->get<bool>(1);
+					if (cmd_value)
+						v = cmd_value.value();
+				});
+
+			vp::Application::get().getSettings().changed_this_tick = true;
+			//SPDLOG_WARN("# could not set value to setting");
+			return matched;
+		});
+}

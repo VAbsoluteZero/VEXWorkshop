@@ -93,7 +93,8 @@ namespace vp
 			sdl_window = raw_window;
 			SDL_VERSION(&sdl_wm_info.version);
 			SDL_GetWindowWMInfo(raw_window, &sdl_wm_info);
-			window_handle = (HWND)sdl_wm_info.info.win.window;;
+			window_handle = (HWND)sdl_wm_info.info.win.window;
+			;
 		}
 		bool createDeviceD3D()
 		{
@@ -112,8 +113,9 @@ namespace vp
 			sd.SampleDesc.Count = 1;
 			sd.SampleDesc.Quality = 0;
 			sd.Windowed = true;
-			sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // DXGI_SWAP_EFFECT_DISCARD;
-														   // DXGI_SWAP_EFFECT_FLIP_DISCARD
+			sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+			// DXGI_SWAP_EFFECT_FLIP_DISCARD; // DXGI_SWAP_EFFECT_DISCARD;
+			// DXGI_SWAP_EFFECT_FLIP_DISCARD
 
 			u32 createDeviceFlags = 0;
 
@@ -441,7 +443,7 @@ namespace vp
 				rasterized_desc.DepthBias = 0;
 				rasterized_desc.DepthBiasClamp = 0.0f;
 				rasterized_desc.DepthClipEnable = true;
-				rasterized_desc.FillMode = D3D11_FILL_SOLID;
+				rasterized_desc.FillMode = D3D11_FILL_WIREFRAME;
 				rasterized_desc.FrontCounterClockwise = false;
 				rasterized_desc.MultisampleEnable = false;
 				rasterized_desc.ScissorEnable = false;
@@ -490,11 +492,6 @@ static vp::SdlDx11Impl sdl_impl{};
 constexpr auto g_view_name = "Viewport";
 
 ID3D11Buffer* vertex_buffer_ptr = nullptr;
-// static float vertex_data_array[] = {
-//	0.0f, 0.5f, 0.0f,	// point at top
-//	1.0f, -0.5f, 0.0f,	// point at bottom-right
-//	-0.1f, -0.5f, 0.0f, // point at bottom-left
-// };
 static float vertex_data_array[] = {
 	0.0f, 0.5f, .20f,	// point at top
 	0.5f, -0.5f, .20f,	// point at bottom-right
@@ -575,7 +572,7 @@ struct TmpModel
 		{
 			auto vert_desc = vex::makeZeroed<D3D11_BUFFER_DESC>();
 
-			vert_desc.ByteWidth = indices.size() * sizeof(Vertex);
+			vert_desc.ByteWidth = indices.size() * sizeof(u32);
 			vert_desc.Usage = D3D11_USAGE_DEFAULT;
 			vert_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 
@@ -588,8 +585,11 @@ struct TmpModel
 	}
 };
 
+struct TmpMaterial
+{
+	ID3D11ShaderResourceView* tex_view = nullptr;
+};
 
-ID3D11ShaderResourceView* g_demo_texview = nullptr;
 static TmpModel g_demo;
 
 ID3D11ShaderResourceView* createTextureImageView(ID3D11Device* d3d_device, const char* path)
@@ -707,7 +707,7 @@ i32 vp::SdlDx11Application::init(vp::Application& owner)
 	spdlog::info("path base : {}", tst);
 
 	auto main_window = owner.getMainWindow();
-	SDL_Window* window = main_window->getRawWindow(); 
+	SDL_Window* window = main_window->getRawWindow();
 
 	SDL_SetWindowAlwaysOnTop(window, SDL_bool::SDL_TRUE);
 	SDL_SetWindowPosition(window, 2700, SDL_WINDOWPOS_UNDEFINED);
@@ -723,6 +723,7 @@ i32 vp::SdlDx11Application::init(vp::Application& owner)
 		return 2;
 	}
 
+	// initialize viewport
 	{
 		impl->initializeResourcesAndViweport({800, 800});
 	}
@@ -737,7 +738,7 @@ i32 vp::SdlDx11Application::init(vp::Application& owner)
 	valid = true;
 
 	vp::g_view_hub.views.emplace(g_view_name, vp::ImView{g_view_name});
-	// g_demo = loadModel(this->impl, "content/models/cc_demo/viking_room.obj");
+	g_demo = loadModel(this->impl, "content/models/cc_demo/viking_room_obj");
 
 	if (!vertex_buffer_ptr)
 	{
@@ -767,6 +768,25 @@ void vp::SdlDx11Application::preFrame(vp::Application& owner)
 	{
 		ImGui_ImplSDL2_NewFrame(); // window & inputs related frame init specific for SDL
 		ImGui::NewFrame();		   // cross-platform logic for a  new frame imgui init
+	}
+
+	// upd settings
+	if (auto options = owner.getSettings(); options.changed_this_tick)
+	{
+		auto opt_dict = options.settings;
+
+		// rasterizer state:
+		{
+			D3D11_RASTERIZER_DESC rasterized_desc;
+			ZeroMemory(&rasterized_desc, sizeof(D3D11_RASTERIZER_DESC));
+			impl->viewport_rasterizer_state->GetDesc(&rasterized_desc);
+			if (auto entry = opt_dict.tryGet("gfx.wireframe"); entry && entry->has<bool>())
+				rasterized_desc.FillMode =
+					entry->get<bool>() ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+
+			auto hr = impl->d3d_device->CreateRasterizerState(&rasterized_desc, //
+				&impl->viewport_rasterizer_state);
+		}
 	}
 
 	// Setup viewport
@@ -808,6 +828,7 @@ void vp::SdlDx11Application::preFrame(vp::Application& owner)
 void vp::SdlDx11Application::frame(vp::Application& owner)
 {
 	static spdlog::stopwatch g_frame_sw;
+	using namespace std::chrono_literals;
 	if (!valid)
 		return;
 
@@ -848,87 +869,130 @@ void vp::SdlDx11Application::frame(vp::Application& owner)
 
 		ctx->OMSetDepthStencilState(impl->viewport_stencil_state, 0);
 		ctx->RSSetState(impl->viewport_rasterizer_state);
-
-		u32 vertex_stride = 3 * sizeof(float);
-		u32 vertex_offset = 0;
-		u32 vertex_count = 3;
-
-		ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		ctx->IASetInputLayout(impl->sil_plain);
-		ctx->IASetVertexBuffers(0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
-
-		{ // 1
-			CBGeneric data{};
-			using namespace std::chrono_literals;
-			auto sec_el = g_frame_sw.elapsed() / 1.0s;
-			float part = glm::sin(sec_el);
-			mtx4 mod_mat = glm::scale(mtx4_identity, v3f{0.5f + 0.2f * part});
-			mtx4 z_offset = glm::translate(mtx4_identity, v3f{0, 0, 0.1f});
-
-			data.model = mod_mat;
-			data.col = {0.7f, 0.7f, 0, 1.f};
-
-			D3D11_MAPPED_SUBRESOURCE mappedResource{};
-			HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-			CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
-			ctx->Unmap(impl->cb_generic, 0);
-
-			ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
-
-			ctx->VSSetShader(impl->vshad_plain, NULL, 0);
-			ctx->PSSetShader(impl->pshad_plain, NULL, 0);
-
-			ctx->Draw(vertex_count, 0);
-		}
-		{ // 2
-			CBGeneric data{};
-			using namespace std::chrono_literals;
-			auto sec_el = g_frame_sw.elapsed() / 1.0s;
-			float part = glm::sin(sec_el) * 0.5f;
-			mtx4 mod_mat = glm::translate(mtx4_identity, v3f{0.5f, 0, 0.3f});
-			data.model = mod_mat;
-
-			v3f npos = mod_mat * v4f{2, 2, 2, 1};
-
-			data.col = v4f{0.22f, 0.1f, 0.9f, 1.f};
-
-			D3D11_MAPPED_SUBRESOURCE mappedResource{};
-			HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-			CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
-			ctx->Unmap(impl->cb_generic, 0);
-
-			ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
-
-			ctx->VSSetShader(impl->vshad_plain, NULL, 0);
-			ctx->PSSetShader(impl->pshad_plain, NULL, 0);
-
-			ctx->Draw(vertex_count, 0);
-		}
-		{ // 3
-			CBGeneric data{};
-			using namespace std::chrono_literals;
-			auto sec_el = g_frame_sw.elapsed() / 1.0s;
-			float part = glm::sin(sec_el);
-			mtx4 scale = glm::scale(mtx4_identity, v3f{0.5f});
-			mtx4 z_offset = glm::translate(mtx4_identity, v3f{-0.4f, 0, 0.1f});
-			mtx4 z_rot = glm::rotate(mtx4_identity, part, {0, 0, 1});
-
-			data.model = z_offset * z_rot * scale; 
-			data.col = {0.7f, 0.0f, 0, 1.f};
-
-			D3D11_MAPPED_SUBRESOURCE mappedResource{};
-			HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-			CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
-			ctx->Unmap(impl->cb_generic, 0);
-
-			ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
-
-			ctx->VSSetShader(impl->vshad_plain, NULL, 0);
-			ctx->PSSetShader(impl->pshad_plain, NULL, 0);
-
-			ctx->Draw(vertex_count, 0);
-		}
+		//helloTriangles();
+		demoRoom();
 	}
+}
+
+void vp::SdlDx11Application::helloTriangles()
+{
+	static spdlog::stopwatch g_frame_sw;
+	using namespace std::chrono_literals;
+	auto ctx = impl->d3d_device_ctx;
+
+	u32 vertex_stride = 3 * sizeof(float);
+	u32 vertex_offset = 0;
+	u32 vertex_count = 3;
+
+	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	ctx->IASetInputLayout(impl->sil_plain);
+	ctx->IASetVertexBuffers(0, 1, &vertex_buffer_ptr, &vertex_stride, &vertex_offset);
+
+	{ // 1
+		CBGeneric data{};
+		auto sec_el = g_frame_sw.elapsed() / 1.0s;
+		float part = glm::sin(sec_el);
+		mtx4 mod_mat = glm::scale(mtx4_identity, v3f{0.5f + 0.2f * part});
+		mtx4 z_offset = glm::translate(mtx4_identity, v3f{0, 0, 0.1f});
+
+		data.model = mod_mat;
+		data.col = {0.7f, 0.7f, 0, 1.f};
+
+		D3D11_MAPPED_SUBRESOURCE mappedResource{};
+		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+		CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+		ctx->Unmap(impl->cb_generic, 0);
+
+		ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+
+		ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+		ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+		ctx->Draw(vertex_count, 0);
+	}
+	{ // 2
+		CBGeneric data{};
+		auto sec_el = g_frame_sw.elapsed() / 1.0s;
+		float part = glm::sin(sec_el) * 0.5f;
+		mtx4 mod_mat = glm::translate(mtx4_identity, v3f{0.5f, 0, 0.3f});
+		data.model = mod_mat;
+
+		v3f npos = mod_mat * v4f{2, 2, 2, 1};
+
+		data.col = v4f{0.22f, 0.1f, 0.9f, 1.f};
+
+		D3D11_MAPPED_SUBRESOURCE mappedResource{};
+		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+		CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+		ctx->Unmap(impl->cb_generic, 0);
+
+		ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+
+		ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+		ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+		ctx->Draw(vertex_count, 0);
+	}
+	{ // 3
+		CBGeneric data{};
+		auto sec_el = g_frame_sw.elapsed() / 1.0s;
+		float part = glm::sin(sec_el);
+		mtx4 scale = glm::scale(mtx4_identity, v3f{0.5f});
+		mtx4 z_offset = glm::translate(mtx4_identity, v3f{-0.4f, 0, 0.1f});
+		mtx4 z_rot = glm::rotate(mtx4_identity, part, {0, 0, 1});
+
+		data.model = z_offset * z_rot * scale;
+		data.col = {0.7f, 0.0f, 0, 1.f};
+
+		D3D11_MAPPED_SUBRESOURCE mappedResource{};
+		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+		CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+		ctx->Unmap(impl->cb_generic, 0);
+
+		ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+
+		ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+		ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+		ctx->Draw(vertex_count, 0);
+	}
+}
+
+void vp::SdlDx11Application::demoRoom()
+{ //
+	auto ctx = impl->d3d_device_ctx;
+
+	auto g_d3dVertexBuffer = g_demo.vertex_buffer;
+	auto g_d3dIndexBuffer = g_demo.index_buffer;
+	const u32 stride = sizeof(Vertex);
+	const u32 offset = 0;
+
+	ctx->IASetVertexBuffers(0, 1, &g_d3dVertexBuffer, &stride, &offset);
+	ctx->IASetInputLayout(impl->sil_plain);
+	{
+		CBGeneric data{}; 
+		mtx4 scale = glm::scale(mtx4_identity, v3f{0.4f});
+		mtx4 z_offset = glm::translate(mtx4_identity, v3f{-0.1f, 0, 0.1f});
+		mtx4 z_rot = glm::rotate(mtx4_identity, 45.f, {0, 1, 0});
+
+		data.model = z_offset * z_rot * scale;
+		data.col = {0.1f, 0.6f, 0.3f, 1.f};
+
+		D3D11_MAPPED_SUBRESOURCE mappedResource{};
+		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+		CopyMemory(mappedResource.pData, &data, sizeof(CBGeneric));
+		ctx->Unmap(impl->cb_generic, 0);
+
+		ctx->VSSetConstantBuffers(0, 1, &impl->cb_generic);
+	}
+	 
+	ctx->VSSetShader(impl->vshad_plain, NULL, 0);
+	ctx->PSSetShader(impl->pshad_plain, NULL, 0);
+
+	ctx->IASetIndexBuffer(g_d3dIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST); 
+	  
+	ctx->DrawIndexed(g_demo.indices.size(), 0, 0);
 }
 
 void vp::SdlDx11Application::postFrame(vp::Application& owner)
