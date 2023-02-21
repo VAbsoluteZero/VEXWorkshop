@@ -227,12 +227,12 @@ void vexgui::setupImGuiForDrawPass(vp::Application& app)
 		ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
 		ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
-			main_dockspace, ImGuiDir_Left, 0.12f, nullptr, &dockspace_id);
+			main_dockspace, ImGuiDir_Left, 0.16f, nullptr, &dockspace_id);
 		ImGuiID dock_id_down =
-			ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.25f, nullptr, &dockspace_id);
+			ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.25f, nullptr, &dockspace_id); 
 
 		ImGui::DockBuilderDockWindow("Console", dock_id_down);
-		ImGui::DockBuilderDockWindow("Details", dock_id_left);
+		ImGui::DockBuilderDockWindow("Details", dock_id_left); 
 		ImGui::DockBuilderFinish(main_dockspace);
 	}
 

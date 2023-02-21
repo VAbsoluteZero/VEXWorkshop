@@ -2,10 +2,7 @@ cbuffer cbPerFrame : register(b0)
 {
 	float4x4 matVP;
 	float4x4 matModel;
-	float4 color1;
-	float4 color2;
-	float4 color3;
-	float4 color4; 
+	float4 color1; 
 };
 
 /* vertex attributes go here to input to the vertex shader */

@@ -78,6 +78,8 @@ endif()
 add_subdirectory("third_party/SDL2")
 add_subdirectory("third_party/spdlog")  
 add_subdirectory("third_party/glm")  
+
+add_subdirectory("third_party/rapidobj") 
 # -------------------------------------------------------------------------------------------------
 # configure include paths & source files
 # -------------------------------------------------------------------------------------------------
@@ -120,7 +122,8 @@ file(GLOB_RECURSE VEX_GLM_HEADERS
 file(GLOB_RECURSE VEX_IMGUI_HEADERS 
     CONFIGURE_DEPENDS 
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/*.h"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/*.h")
+    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/*.h"
+    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/gizmo/*.h")
 
 add_library(imgui STATIC
     # Main Imgui files
@@ -129,7 +132,10 @@ add_library(imgui STATIC
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_tables.cpp"
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_demo.cpp"
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_widgets.cpp"
-    # SDL2+OpenGL-specific files
+    # addons ImGuizmo/ImCurveEdit 
+    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/gizmo/ImGuizmo.cpp"
+    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/gizmo/ImCurveEdit.cpp"
+    # SDL2+dx11-specific files
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_sdl.cpp" 
     "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_dx11.cpp" ${VEX_IMGUI_HEADERS})
      
@@ -176,6 +182,7 @@ message("compiler path: ${CMAKE_CXX_COMPILER}")
 
 set(VEX_MSVC_CLANG NO)
 if (MSVC)
+	set(ORIGINAL_CMAKE_LINK_LFAGS "${CMAKE_EXE_LINKER_FLAGS}")
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS ")
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         message(STATUS "(dbg) cpp compiler identified : CLANG-CL")
@@ -188,13 +195,11 @@ endif()
 # -------------------------------------------------------------------------------------------------
 # add to targets
 # -------------------------------------------------------------------------------------------------
+add_compile_definitions(GLM_FORCE_LEFT_HANDED=1 GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
+
 set(EXECUTABLE_OUTPUT_PATH  ${VEXGameOfLife_SOURCE_DIR}/build/) 
 
-add_executable(VEXGameOfLife ${VEX_ALLSRC})
-
-add_subdirectory("third_party/rapidobj")
-
-target_link_libraries(VEXGameOfLife PRIVATE rapidobj::rapidobj)
+add_executable(VEXGameOfLife ${VEX_ALLSRC}) 
 
 target_precompile_headers(VEXGameOfLife PRIVATE 
     "${VEXGameOfLife_SOURCE_DIR}/third_party/glm/glm_common.h"
@@ -222,6 +227,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     endif()
 endif() 
 
+target_link_libraries(VEXGameOfLife PRIVATE rapidobj::rapidobj)
 target_link_libraries(VEXGameOfLife PRIVATE imgui)
 target_link_libraries(VEXGameOfLife PRIVATE SDL2main SDL2-static) 
 
@@ -246,4 +252,19 @@ endif ()
 target_link_libraries(VEXGameOfLife PRIVATE d3d11)
 target_link_libraries(VEXGameOfLife PRIVATE dxgi)
 
+# -------------------------------------------------------------------------------------------------
+# Test target
+# -------------------------------------------------------------------------------------------------
+file(GLOB_RECURSE VEX_TST_SRC 
+    CONFIGURE_DEPENDS 
+    "${VEXGameOfLife_SOURCE_DIR}/test/*.cpp" "${VEXGameOfLife_SOURCE_DIR}/test/*.h"
+    "${VEXGameOfLife_SOURCE_DIR}/test/vex/*.cpp"
+) 
+
+
+set(SNITCH_DEFINE_MAIN OFF)
+add_subdirectory("third_party/snitch")
+set(CMAKE_EXE_LINKER_FLAGS "${ORIGINAL_CMAKE_LINK_LFAGS}")
+add_executable(VexTests ${VEX_TST_SRC}  ${VEX_SRC})
+target_link_libraries(VexTests PRIVATE snitch::snitch)
   
