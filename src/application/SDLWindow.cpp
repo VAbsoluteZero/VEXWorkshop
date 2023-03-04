@@ -9,12 +9,14 @@ std::unique_ptr<SDLWindow> vp::SDLWindow::create(const WindowParams& params)
 	uint32_t mode = SDL_WindowFlags::SDL_WINDOW_SHOWN;
 
 	if (params.m == EWindowMode::BorderlessFullscreen)
-	{
 		mode |= SDL_WindowFlags::SDL_WINDOW_BORDERLESS;
-	}
+	if (params.resizable)
+		mode |= SDL_WindowFlags::SDL_WINDOW_RESIZABLE;
 
-	SDL_Window* window = SDL_CreateWindow(params.name.c_str(), SDL_WINDOWPOS_UNDEFINED,
-		SDL_WINDOWPOS_UNDEFINED, params.w, params.h, mode);
+	auto x = params.x > 0 ? (u32)params.x : SDL_WINDOWPOS_UNDEFINED;
+	auto y = params.y > 0 ? (u32)params.y : SDL_WINDOWPOS_UNDEFINED;
+
+	SDL_Window* window = SDL_CreateWindow(params.name.c_str(), x, y, params.w, params.h, mode);
 
 	if (nullptr == window)
 	{
@@ -46,4 +48,11 @@ std::unique_ptr<SDLWindow> vp::SDLWindow::create(const WindowParams& params)
 	return nullptr;
 }
 
-vp::SDLWindow::~SDLWindow() { SDL_DestroyWindow(sdl_window); } 
+v2u32 vp::SDLWindow::windowSize()
+{
+	v2i32 size;
+	SDL_GetWindowSize(sdl_window, &size.x, &size.y);
+	return {(u32)size.x, (u32)size.y};
+}
+
+vp::SDLWindow::~SDLWindow() { SDL_DestroyWindow(sdl_window); }

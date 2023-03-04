@@ -6,7 +6,7 @@
 
 namespace vp
 {
-	struct Grid : vex::IComp<Grid>
+	struct Grid : vex::BaseComp<Grid>
 	{
 		f32 ResUnits = 1;
 		i32 LineWidthPX = 2;

@@ -2,8 +2,8 @@
 
 #include <VFramework/VEXBase.h>
 
-#include "Platfrom.h"
-
+#include "application/Platfrom.h"
+struct TempPrimitiveGeometryBatch; 
 namespace vp
 {
 	class Application;
@@ -27,6 +27,7 @@ namespace vp
 		void demoRoom();
 	private:
 		struct SdlDx11Impl* impl = nullptr;
+		TempPrimitiveGeometryBatch* tempgeom = nullptr;
 		bool valid = false;
 	};
 } // namespace vp

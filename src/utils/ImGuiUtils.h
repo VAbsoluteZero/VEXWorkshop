@@ -15,13 +15,13 @@ namespace vp
 	static v2f g_cvs_sz{1920, 1080};
 	static inline float g_imgui_sz_scale = 1.0f;
 
-	struct ImguiVec2
-	{
-		float x = 0;
-		float y = 0;
+	//struct ImguiVec2
+	//{
+	//	float x = 0;
+	//	float y = 0;
 
-		operator ImVec2() const { return ImVec2{x * g_imgui_sz_scale, y * g_imgui_sz_scale}; }
-	};
+	//	operator ImVec2() const { return ImVec2{x * g_imgui_sz_scale, y * g_imgui_sz_scale}; }
+	//};
 	struct ImguiVec2Rel
 	{
 		float x = 0;
@@ -61,7 +61,7 @@ namespace vp
 		// cleared each frame !
 		std::vector<ImGuiDrawFn> delayed_gui_drawcalls;
 
-		float override_alpha = 1.0f;
+		// float override_alpha = 1.0f;
 		bool enabled = true;
 	};
 
@@ -71,6 +71,17 @@ namespace vp
 		ImVisLib visuals;
 
 		vex::Dict<const char*, ImView> views;
+
+		template<typename TCallable>
+		inline bool tryPushCall(const char* key, TCallable&& callback)
+		{
+			auto view = views.tryGet(key);
+			if (view)
+			{
+				view->delayed_gui_drawcalls.push_back(callback);
+			}
+			return view != nullptr;
+		}
 	};
 
 	inline ImViewHub g_view_hub {};

@@ -10,7 +10,7 @@
 			"name": "DefaultCfg",
 			"displayName": "Default Config",
 			"generator": "Visual Studio 17 2022",
-			"binaryDir": "${sourceDir}/cmake_out/${presetName}",
+			"binaryDir": "${sourceDir}/cmake_output/${presetName}",
 			"hidden": true,
 			"architecture": {
 				"value": "x64",
@@ -31,11 +31,31 @@
 			"displayName": "Clang Release",
 			"inherits": "DefaultCfg",
 			"generator": "Ninja",
-			"description": "Default build options for Clang", 
+			"description": "Default build options for Clang",
 			"cacheVariables": {
+				"VEX_MSVC_CLANG" : true,
+				"CMAKE_BUILD_TYPE": "Release",
 				"CMAKE_CXX_COMPILER": "clang-cl",
 				"CMAKE_C_COMPILER": "clang-cl"
-			},  
+			},
+			"vendor": {
+				"microsoft.com/VisualStudioSettings/CMake/1.0": {
+					"intelliSenseMode": "windows-clang-x64"
+				}
+			}
+		},
+		{
+			"name": "clang_win_rdbg",
+			"displayName": "Clang ReleaseDbgInfo",
+			"inherits": "DefaultCfg",
+			"generator": "Ninja",
+			"description": "Default build options for Clang",
+			"cacheVariables": {
+				"VEX_MSVC_CLANG": true,
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo",
+				"CMAKE_CXX_COMPILER": "clang-cl",
+				"CMAKE_C_COMPILER": "clang-cl"
+			},
 			"vendor": {
 				"microsoft.com/VisualStudioSettings/CMake/1.0": {
 					"intelliSenseMode": "windows-clang-x64"
@@ -47,8 +67,9 @@
 			"displayName": "Clang Debug",
 			"inherits": "DefaultCfg",
 			"generator": "Ninja",
-			"description": "Default build options for Clang", 
+			"description": "Default build options for Clang",
 			"cacheVariables": {
+				"VEX_MSVC_CLANG": true,
 				"CMAKE_CXX_COMPILER": "clang-cl",
 				"CMAKE_C_COMPILER": "clang-cl",
 				"CMAKE_BUILD_TYPE": "Debug",
@@ -67,13 +88,14 @@
 			"description": "Build options for MSVC",
 			"inherits": "DefaultCfg",
 			"cacheVariables": {
+				"VEX_MSVC_CLANG": false,
 				"CMAKE_CXX_COMPILER": "MSVC"
 			}
 		},
 		{
 			"name": "MSVCDebug",
 			"displayName": "MSVC Debug",
-			"inherits": "MSVC", 
+			"inherits": "MSVC",
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Debug",
 				"VEX_DEBUG_CMAKE": true
@@ -82,10 +104,10 @@
 		{
 			"name": "MSVCRelease",
 			"displayName": "MSVC Release",
-			"inherits": "MSVC", 
+			"inherits": "MSVC",
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
-				"VEX_DEBUG_CMAKE": true
+				"VEX_DEBUG_CMAKE": false
 			}
 		}
 	]

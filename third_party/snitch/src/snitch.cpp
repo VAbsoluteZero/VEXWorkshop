@@ -1610,15 +1610,15 @@ bool registry::run_tests(const cli::input& args) noexcept {
 // Main entry point.
 // -----------------
 
-int main(int argc, char* argv[]) {
-    std::optional<snitch::cli::input> args = snitch::cli::parse_arguments(argc, argv);
-    if (!args) {
-        return 1;
-    }
-
-    snitch::tests.configure(*args);
-
-    return snitch::tests.run_tests(*args) ? 0 : 1;
-}
+//int main(int argc, char* argv[]) {
+//    std::optional<snitch::cli::input> args = snitch::cli::parse_arguments(argc, argv);
+//    if (!args) {
+//        return 1;
+//    }
+//
+//    snitch::tests.configure(*args);
+//
+//    return snitch::tests.run_tests(*args) ? 0 : 1;
+//}
 
 #endif
