@@ -18,7 +18,7 @@
 			},
 			"cacheVariables": {
 				"CMAKE_CONFIGURATION_TYPES": "Debug;Release;RELWITHDEBINFO",
-				"VEX_DEBUG_CMAKE": true,
+				"VEX_DEBUG_CMAKE": false,
 				"SDL_SSE2": "ON",
 				"SDL_SSE3": "ON",
 				"SDL_SSEMATH": "ON",
@@ -27,58 +27,90 @@
 			}
 		},
 		{
-			"name": "clang_win",
-			"displayName": "Clang Release",
+			"name": "clang_base",
+			"displayName": "Clang default",
 			"inherits": "DefaultCfg",
+			"hidden": true,
 			"generator": "Ninja",
-			"description": "Default build options for Clang",
 			"cacheVariables": {
-				"VEX_MSVC_CLANG" : true,
-				"CMAKE_BUILD_TYPE": "Release",
+				"VEX_MSVC_CLANG": true,
 				"CMAKE_CXX_COMPILER": "clang-cl",
-				"CMAKE_C_COMPILER": "clang-cl"
+				"CMAKE_C_COMPILER": "clang-cl",
+				"VEX_USE_DX11": true
 			},
 			"vendor": {
 				"microsoft.com/VisualStudioSettings/CMake/1.0": {
 					"intelliSenseMode": "windows-clang-x64"
 				}
+			}
+		},
+		{
+			"name": "clang_win",
+			"displayName": "Clang Release",
+			"inherits": "clang_base",
+			"generator": "Ninja",
+			"description": "Default build options for Clang",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release"
 			}
 		},
 		{
 			"name": "clang_win_rdbg",
 			"displayName": "Clang ReleaseDbgInfo",
-			"inherits": "DefaultCfg",
+			"inherits": "clang_base",
 			"generator": "Ninja",
 			"description": "Default build options for Clang",
 			"cacheVariables": {
-				"VEX_MSVC_CLANG": true,
-				"CMAKE_BUILD_TYPE": "RelWithDebInfo",
-				"CMAKE_CXX_COMPILER": "clang-cl",
-				"CMAKE_C_COMPILER": "clang-cl"
-			},
-			"vendor": {
-				"microsoft.com/VisualStudioSettings/CMake/1.0": {
-					"intelliSenseMode": "windows-clang-x64"
-				}
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo"
 			}
 		},
 		{
 			"name": "clang_win_dbg",
 			"displayName": "Clang Debug",
-			"inherits": "DefaultCfg",
+			"inherits": "clang_base",
 			"generator": "Ninja",
 			"description": "Default build options for Clang",
 			"cacheVariables": {
-				"VEX_MSVC_CLANG": true,
-				"CMAKE_CXX_COMPILER": "clang-cl",
-				"CMAKE_C_COMPILER": "clang-cl",
+				"CMAKE_BUILD_TYPE": "Debug"
+			}
+		},
+		{
+			"name": "clang_win_rdbg_wgpu",
+			"displayName": "ClangWGPU ReleaseDbgInfo",
+			"inherits": "clang_base",
+			"generator": "Ninja",
+			"description": "Default build options for Clang",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo",
+				"VEX_USE_WGPU": true,
+				"VEX_USE_DAWN": false,
+				"VEX_USE_DX11": false
+			}
+		},
+		{
+			"name": "clang_win_dbg_wgpu",
+			"displayName": "ClangWGPU Debug",
+			"inherits": "clang_base",
+			"generator": "Ninja",
+			"description": "Default build options for Clang",
+			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Debug",
-				"VEX_DEBUG_CMAKE": true
-			},
-			"vendor": {
-				"microsoft.com/VisualStudioSettings/CMake/1.0": {
-					"intelliSenseMode": "windows-clang-x64"
-				}
+				"VEX_USE_WGPU": true,
+				"VEX_USE_DAWN": false,
+				"VEX_USE_DX11": false
+			}
+		},
+		{
+			"name": "clang_win_dbg_dawn",
+			"displayName": "ClangDawn Debug",
+			"inherits": "clang_base",
+			"generator": "Ninja",
+			"description": "Default build options for Clang",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"VEX_USE_WGPU": false,
+				"VEX_USE_DAWN": true,
+				"VEX_USE_DX11": false
 			}
 		},
 		{
@@ -88,26 +120,25 @@
 			"description": "Build options for MSVC",
 			"inherits": "DefaultCfg",
 			"cacheVariables": {
-				"VEX_MSVC_CLANG": false,
-				"CMAKE_CXX_COMPILER": "MSVC"
+				"VEX_MSVC_CLANG": false, 
+				"CMAKE_CXX_COMPILER": "MSVC",
+				"VEX_USE_DX11": true
 			}
 		},
 		{
-			"name": "MSVCDebug",
+			"name": "MSVCDebugDx11",
 			"displayName": "MSVC Debug",
 			"inherits": "MSVC",
 			"cacheVariables": {
-				"CMAKE_BUILD_TYPE": "Debug",
-				"VEX_DEBUG_CMAKE": true
+				"CMAKE_BUILD_TYPE": "Debug"
 			}
 		},
 		{
-			"name": "MSVCRelease",
+			"name": "MSVCReleaseDx11",
 			"displayName": "MSVC Release",
 			"inherits": "MSVC",
 			"cacheVariables": {
-				"CMAKE_BUILD_TYPE": "Release",
-				"VEX_DEBUG_CMAKE": false
+				"CMAKE_BUILD_TYPE": "Release"
 			}
 		}
 	]

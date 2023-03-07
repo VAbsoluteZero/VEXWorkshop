@@ -3,7 +3,7 @@
 #include <VCore/Utils/VMath.h>
 #include <VFramework/VEXBase.h>
 
-#include "Platfrom.h"
+#include "Platfrom.h" 
 #include <render/legacyDx11.h>
 
 namespace vp
@@ -77,7 +77,7 @@ namespace vp
         inline bool isRunning() const { return running; }
         inline void quit() { pending_stop = true; }
         inline void setMaxFps(i32 target) { framerate.target_framerate = target; }
-        inline i32 getMaxFps(i32 target) { return framerate.desiredFramerate(); }
+        inline i32 getMaxFps() { return framerate.desiredFramerate(); }
         inline tWindow* getMainWindow() const { return main_window.get(); }
         inline SettingsContainer& getSettings() { return settings; }
         inline const FrameTime& getTime() { return ftime; }

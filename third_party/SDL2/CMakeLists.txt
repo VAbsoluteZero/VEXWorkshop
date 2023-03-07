@@ -25,7 +25,7 @@ endif()
 
 # Build in parallel under Visual Studio. Not enabled by default.
 if(MSVC)
-  if(NOT CLANG)
+  if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(sdl-build-options INTERFACE "/MP")
   endif()
 endif(MSVC)

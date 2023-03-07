@@ -11,7 +11,7 @@
 
 namespace flags
 {
-	class args;
+	struct args;
 }
 
 namespace vp::console

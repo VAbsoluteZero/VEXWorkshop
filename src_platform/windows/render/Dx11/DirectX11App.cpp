@@ -184,9 +184,7 @@ struct Dx11RenderInterface
             {
                 checkLethal(false, "D3D11CreateDeviceAndSwapChain failed to create objects.");
                 return 1;
-            }
-            auto lvl1 = globals.d3d_device->GetFeatureLevel();
-            bool last = lvl1 == D3D_FEATURE_LEVEL_11_1;
+            } 
         }
 
         int wnd_x = 128;
@@ -406,7 +404,7 @@ void vp::DirectX11App::postFrame(vp::Application& owner)
     impl->postFrame(owner);
     // ImGui pass 
     ImGuiIO& io = ImGui::GetIO();
-    auto nav_old = io.ConfigWindowsMoveFromTitleBarOnly;
+    // auto nav_old = io.ConfigWindowsMoveFromTitleBarOnly;
     defer_ { io.ConfigWindowsMoveFromTitleBarOnly = true; };
     // add to menu
     if (ImGui::BeginMainMenuBar())

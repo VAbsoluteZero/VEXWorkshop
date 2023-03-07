@@ -5,6 +5,9 @@ cmake_out/
 Inter/
 Intermediate/
 Build/
+CompileScoreSettings*
+compileData*
+!thrid_party_bin/*
 # Build results
 [Dd]ebugBuild/
 [Rr]eleaseBuild/

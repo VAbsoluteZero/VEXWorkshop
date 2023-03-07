@@ -2,6 +2,7 @@
 #include <VFramework/VEXBase.h>
 #include "SDLWindow.h"  
 
+#define ENABLE_IMGUI 1
 namespace vp
 {
 	using tWindow = SDLWindow;

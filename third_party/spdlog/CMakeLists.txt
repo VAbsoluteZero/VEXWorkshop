@@ -32,7 +32,9 @@ endif()
 
 # make sure __cplusplus is defined when using msvc and enable parallel build
 if(MSVC)
+  if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     string(APPEND CMAKE_CXX_FLAGS " /Zc:__cplusplus /MP")
+  endif()
 endif()
 
 set(CMAKE_CXX_EXTENSIONS OFF)

@@ -17,7 +17,11 @@
 #include <thread>
 //
 #include <VCore/Containers/Ring.h>
+#ifdef VEX_RENDER_DX11
 #include <render/Dx11/DirectX11App.h>
+#else
+#include <webgpu/render/WgpuApp.h>
+#endif
 #include <utils/CLI.h>
 #include <utils/ImGuiUtils.h>
 
@@ -28,7 +32,7 @@ namespace vexgui
 {
     static auto setupImGuiForDrawPass(vp::Application& app) -> void;
 
-    static std::unique_ptr<class ConsoleWindow> g_console;
+    static std::unique_ptr<struct ConsoleWindow> g_console;
 
     static void createConsole();
     static void showConsoleWindow(bool* p_open);
@@ -104,29 +108,36 @@ vp::Application& vp::Application::init(const StartupConfig& in_config)
 
     self.framerate.target_framerate = config.target_framerate;
 
-    Sleep(10);
+    using namespace std::literals::chrono_literals;
+    std::this_thread::sleep_for(10ms);
+
+#if ENABLE_IMGUI // Init ImGui related stuff
+    [[maybe_unused]] auto c = ImGui::CreateContext();
+    g_view_hub.onFirstPaintCall(self.main_window->windowSize(), self.main_window->display_size.y);
+    ImGui::GetStyle() = g_view_hub.visuals.styles[EImGuiStyle::DeepDark];
+#endif
     if (!self.app_impl)
     {
-        // self.setApplicationType<SdlDx11Application>(true);
+#ifdef VEX_RENDER_DX11
+        //self.setApplicationType<SdlDx11Application>(true);
         self.setApplicationType<DirectX11App>(true);
+#else
+        self.setApplicationType<WgpuApp>(true);
+#endif
     }
-    setupSettings(self);
+    setupSettings(self); 
 
     return self;
 }
 
 i32 vp::Application::runLoop()
 {
+    if (nullptr == app_impl)
+        return 1;
     spdlog::stopwatch g_frame_sw;
     running = true;
     if (pending_stop)
-        return 0;
-
-    // Init ImGui related stuff
-    {
-        g_view_hub.onFirstPaintCall(main_window->windowSize(), main_window->display_size.y);
-        ImGui::GetStyle() = g_view_hub.visuals.styles[EImGuiStyle::DeepDark];
-    }
+        return 0; 
 
     do
     {
@@ -134,7 +145,9 @@ i32 vp::Application::runLoop()
         SDL_Event sdl_event = {};
         while (SDL_PollEvent(&sdl_event) != 0)
         {
+#if ENABLE_IMGUI
             ImGui_ImplSDL2_ProcessEvent(&sdl_event);
+#endif
             switch (sdl_event.type)
             {
                 case SDL_QUIT:
@@ -150,8 +163,8 @@ i32 vp::Application::runLoop()
                         v2u32 size = main_window->windowSize();
                         this->app_impl->handleWindowResize(*this, size);
                     }
+                    break;
                 }
-                break;
 
                 default: break;
             }
@@ -170,6 +183,8 @@ i32 vp::Application::runLoop()
         // imgui draw callbacks
         {
             settings.changed_this_tick = false;
+
+#if ENABLE_IMGUI
             vexgui::setupImGuiForDrawPass(*this);
 
             for (auto& [view_name, view] : g_view_hub.views)
@@ -181,6 +196,7 @@ i32 vp::Application::runLoop()
                 }
                 view.delayed_gui_drawcalls.clear();
             }
+#endif
         }
         //-----------------------------------------------------------------------------
         // post frame
@@ -352,14 +368,14 @@ namespace vexgui
     static PedningEntries g_pending_console_lines;
 
     // Portable helpers
-    static char* Strdup(const char* s)
-    {
-        IM_ASSERT(s);
-        size_t len = strlen(s) + 1;
-        void* buf = malloc(len);
-        IM_ASSERT(buf);
-        return (char*)memcpy(buf, (const void*)s, len);
-    }
+    // static char* Strdup(const char* s)
+    //{
+    //    IM_ASSERT(s);
+    //    size_t len = strlen(s) + 1;
+    //    void* buf = malloc(len);
+    //    IM_ASSERT(buf);
+    //    return (char*)memcpy(buf, (const void*)s, len);
+    //}
     static void Strtrim(char* s)
     {
         char* str_end = s + strlen(s);
@@ -715,7 +731,7 @@ namespace vexgui
                     else if (data->EventKey == ImGuiKey_DownArrow)
                     {
                         if (history_pos != -1)
-                            if (++history_pos >= history_buf.size())
+                            if (++history_pos >= (i32)history_buf.size())
                                 history_pos = -1;
                     }
                     // A better implementation would preserve the data on the current input line
@@ -723,7 +739,7 @@ namespace vexgui
                     if (prev_history_pos != history_pos)
                     {
                         const char* history_str = (history_pos >= 0)
-                                                      ? history_buf[history_pos].c_str()
+                                                      ? history_buf[(u32)history_pos].c_str()
                                                       : "";
                         data->DeleteChars(0, data->BufTextLen);
                         data->InsertChars(0, history_str);
@@ -791,7 +807,7 @@ static void setupLoggers()
 
 void setupSettings(vp::Application& app)
 {
-    auto& settings_container = app.getSettings();
+    // auto& settings_container = app.getSettings();
 
     // settings_container.addSetting("gfx.wireframe", false);
     // settings_container.addSetting("gfx.cullmode", 1);

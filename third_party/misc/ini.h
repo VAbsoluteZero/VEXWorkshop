@@ -81,9 +81,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifndef MINI_INI_H_
-#define MINI_INI_H_
-
-#include <sys/stat.h>
+#define MINI_INI_H_ 
 
 #include <algorithm>
 #include <cctype>

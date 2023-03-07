@@ -1232,7 +1232,7 @@ void vp::SdlDx11Application::helloTriangles()
 		data.col = {0.7f, 0.0f, 0, 1.f};
 
 		D3D11_MAPPED_SUBRESOURCE mapped_res{};
-		HRESULT hr = ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_res);
+		ctx->Map(impl->cb_generic, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_res);
 		CopyMemory(mapped_res.pData, &data, sizeof(CBGeneric));
 		ctx->Unmap(impl->cb_generic, 0);
 

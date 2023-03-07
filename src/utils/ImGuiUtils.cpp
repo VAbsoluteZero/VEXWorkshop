@@ -6,7 +6,7 @@
 auto colorFromBytes(uint8_t r, uint8_t g, uint8_t b)
 {
 	return ImVec4((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 1.0f);
-};
+}; 
 
 void vp::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
 {
@@ -29,7 +29,7 @@ void vp::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigDockingWithShift = false;
 	{
-		ImGuiStyle& style = ImGui::GetStyle();
+		//ImGuiStyle& style = ImGui::GetStyle();
 
 		auto sz = io.DisplaySize;
 
