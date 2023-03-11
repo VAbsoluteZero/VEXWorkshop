@@ -17,7 +17,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(rapidobj INTERFACE $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>)
 endif()
 
-write_basic_package_version_file(RapidObjConfigVersion.cmake VERSION ${VERSION} COMPATIBILITY AnyNewerVersion)
+# write_basic_package_version_file(RapidObjConfigVersion.cmake VERSION ${VERSION} COMPATIBILITY AnyNewerVersion)
 
 set(DESTINATION_CMAKE_DIR "${RAPIDOBJ_CMAKE_DIR}/RapidObj")
 set(DESTINATION_INCLUDE_DIR "${RAPIDOBJ_INCLUDE_DIR}/rapidobj") 

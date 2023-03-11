@@ -30,12 +30,12 @@
 #include "imgui_impl_wgpu.h"
 
 #include <limits.h>
-#ifdef VEX_WGPU_DAWN
-#include <dawn/webgpu.h>
-#else
-#include <wgpu/webgpu.h>
-#include <wgpu/wgpu.h>
-#endif
+//#ifdef VEX_GFX_WEBGPU_DAWN
+//#include <webgpu.h>
+//#else
+//#include <wgpu/webgpu.h>
+//#include <wgpu/wgpu.h>
+//#endif
 
 #include <stdio.h>
 
@@ -292,7 +292,7 @@ static void SafeRelease(ImDrawVert*& res)
         delete[] res;
     res = nullptr;
 }
-#ifdef VEX_WGPU_DAWN
+#ifdef VEX_GFX_WEBGPU_DAWN
 #define WGPU_REL(x, a) x##Release(a)
 #else
 #define WGPU_REL(x, a) x##Drop
@@ -672,7 +672,7 @@ WGPUShaderModule wgpu_create_shader_module_from_wgsl(WGPUDevice device, const ch
             {
                 .sType = WGPUSType_ShaderModuleWGSLDescriptor,
             },
-#if VEX_WGPU_DAWN
+#if VEX_GFX_WEBGPU_DAWN
         .source = source,
 #else
         .code = source,
@@ -787,57 +787,6 @@ bool ImGui_ImplWGPU_CreateDeviceObjects()
     fragment_state.targets = &color_state;
 
     graphics_pipeline_desc.fragment = &fragment_state;
-
-    if (false)
-    { // ============================= old shader code
-        // Create the vertex shader
-        WGPUProgrammableStageDescriptor vertex_shader_desc = ImGui_ImplWGPU_CreateShaderModule(
-            __glsl_shader_vert_spv, sizeof(__glsl_shader_vert_spv) / sizeof(uint32_t));
-        graphics_pipeline_desc.vertex.module = vertex_shader_desc.module;
-        graphics_pipeline_desc.vertex.entryPoint = vertex_shader_desc.entryPoint;
-
-        // Vertex input configuration
-        WGPUVertexAttribute attribute_desc[] = {
-            {WGPUVertexFormat_Float32x2, (uint64_t)IM_OFFSETOF(ImDrawVert, pos), 0},
-            {WGPUVertexFormat_Float32x2, (uint64_t)IM_OFFSETOF(ImDrawVert, uv), 1},
-            {WGPUVertexFormat_Unorm8x4, (uint64_t)IM_OFFSETOF(ImDrawVert, col), 2},
-        };
-
-        WGPUVertexBufferLayout buffer_layouts[1];
-        buffer_layouts[0].arrayStride = sizeof(ImDrawVert);
-        buffer_layouts[0].stepMode = WGPUVertexStepMode_Vertex;
-        buffer_layouts[0].attributeCount = 3;
-        buffer_layouts[0].attributes = attribute_desc;
-
-        graphics_pipeline_desc.vertex.bufferCount = 1;
-        graphics_pipeline_desc.vertex.buffers = buffer_layouts;
-
-        // Create the pixel shader
-        WGPUProgrammableStageDescriptor pixel_shader_desc = ImGui_ImplWGPU_CreateShaderModule(
-            __glsl_shader_frag_spv, sizeof(__glsl_shader_frag_spv) / sizeof(uint32_t));
-
-        // Create the blending setup
-        WGPUBlendState blend_state = {};
-        blend_state.alpha.operation = WGPUBlendOperation_Add;
-        blend_state.alpha.srcFactor = WGPUBlendFactor_One;
-        blend_state.alpha.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-        blend_state.color.operation = WGPUBlendOperation_Add;
-        blend_state.color.srcFactor = WGPUBlendFactor_SrcAlpha;
-        blend_state.color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-
-        WGPUColorTargetState color_state = {};
-        color_state.format = g_renderTargetFormat;
-        color_state.blend = &blend_state;
-        color_state.writeMask = WGPUColorWriteMask_All;
-
-        WGPUFragmentState fragment_state = {};
-        fragment_state.module = pixel_shader_desc.module;
-        fragment_state.entryPoint = pixel_shader_desc.entryPoint;
-        fragment_state.targetCount = 1;
-        fragment_state.targets = &color_state;
-
-        graphics_pipeline_desc.fragment = &fragment_state;
-    }
     // Create depth-stencil State
     WGPUDepthStencilState depth_stencil_state = {};
     depth_stencil_state.format = g_depthStencilFormat;

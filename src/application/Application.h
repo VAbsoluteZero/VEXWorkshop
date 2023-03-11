@@ -4,7 +4,6 @@
 #include <VFramework/VEXBase.h>
 
 #include "Platfrom.h" 
-#include <render/legacyDx11.h>
 
 namespace vp
 {

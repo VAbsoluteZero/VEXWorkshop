@@ -7,6 +7,7 @@
 #include <imgui_internal.h>
 #include <ini.h>
 #include <misc/cpp/imgui_stdlib.h>
+#include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
@@ -19,9 +20,15 @@
 #include <VCore/Containers/Ring.h>
 #ifdef VEX_RENDER_DX11
 #include <render/Dx11/DirectX11App.h>
+#include <render/legacyDx11.h>
 #else
 #include <webgpu/render/WgpuApp.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 #include <utils/CLI.h>
 #include <utils/ImGuiUtils.h>
 
@@ -119,13 +126,13 @@ vp::Application& vp::Application::init(const StartupConfig& in_config)
     if (!self.app_impl)
     {
 #ifdef VEX_RENDER_DX11
-        //self.setApplicationType<SdlDx11Application>(true);
+        // self.setApplicationType<SdlDx11Application>(true);
         self.setApplicationType<DirectX11App>(true);
 #else
         self.setApplicationType<WgpuApp>(true);
 #endif
     }
-    setupSettings(self); 
+    setupSettings(self);
 
     return self;
 }
@@ -137,7 +144,7 @@ i32 vp::Application::runLoop()
     spdlog::stopwatch g_frame_sw;
     running = true;
     if (pending_stop)
-        return 0; 
+        return 0;
 
     do
     {
@@ -213,6 +220,10 @@ i32 vp::Application::runLoop()
 
             g_frame_sw.reset();
         }
+#if __EMSCRIPTEN__
+        SDL_Delay(1); 
+#endif
+
     } while (running && !pending_stop);
 
     if (app_impl)
@@ -313,6 +324,7 @@ void vexgui::setupImGuiForDrawPass(vp::Application& app)
 
         ImGui::DockBuilderDockWindow("Console", dock_id_down);
         ImGui::DockBuilderDockWindow("Details", dock_id_left);
+        ImGui::DockBuilderDockWindow("Viewport 1", dockspace_id);
         ImGui::DockBuilderFinish(main_dockspace);
     }
 
@@ -320,9 +332,6 @@ void vexgui::setupImGuiForDrawPass(vp::Application& app)
     ImGui::Text("Inspector/toolbar placeholder");
     ImGui::End();
 
-    // ImGui::Begin("Details");
-    // ImGui::Text("Details/Console placeholder");
-    // ImGui::End();
     if (g_console_open)
         vexgui::showConsoleWindow(&g_console_open);
 }
@@ -797,10 +806,14 @@ namespace spdlog::sinks
 
 static void setupLoggers()
 {
-    auto vs_output = std::make_shared<spdlog::sinks::msvc_sink_st>();
     auto cls_output = std::make_shared<spdlog::sinks::console_buf_sink>();
-
+#ifndef __EMSCRIPTEN__
+    auto vs_output = std::make_shared<spdlog::sinks::msvc_sink_st>();
     spdlog::sinks_init_list sink_list = {vs_output, cls_output};
+#else
+    spdlog::sinks_init_list sink_list = {cls_output};
+#endif // ! __EMSCRIPTEN__
+
 
     spdlog::set_default_logger(std::make_shared<spdlog::logger>("vex", sink_list));
 }

@@ -11,8 +11,10 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <stb/stb_image.h>
+#include <stb/stb_image_write.h>
 #include <tinyobj/tiny_obj_loader.h>
 #ifdef VEX_WGPU_DAWN
 #include <dawn/webgpu.h>

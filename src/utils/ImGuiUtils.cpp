@@ -25,7 +25,10 @@ void vp::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
 
 	// =================================
 	// fonts
-	auto& io = ImGui::GetIO();
+    auto& io = ImGui::GetIO();
+#ifndef __EMSCRIPTEN__
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#endif
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigDockingWithShift = false;
 	{
