@@ -29,12 +29,11 @@ message("compiler path: ${CMAKE_CXX_COMPILER}")
 include(FindGIT) 
 include(FetchContent)   
 find_package(Git QUIET)
-  
-# set variables 
+   
 set(VEX_ROOTDIR "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib")
-set(VEX_INCLUDE_DIRS "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib") 
-
+set(VEX_INCLUDE_DIRS "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib")  
 set(SIZEOF_VOIDP ${CMAKE_SIZEOF_VOID_P}) # Check for 64 or 32 bit
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(ARCH_64 TRUE)
     set(PROCESSOR_ARCH "x64")
@@ -47,10 +46,7 @@ if (MSVC_VERSION GREATER 1921 AND MSVC_TOOLSET_VERSION GREATER 141)
 	set(MSVC_TOOLSET_VERSION 143)
     message(STATUS "MSVC_TOOLSET_VERSION set: ${MSVC_TOOLSET_VERSION}")
 endif()
-
-set(SDL_CMAKE_DEBUG_POSTFIX "d"
-    CACHE STRING "Name suffix for debug builds")
-
+ 
 # -------------------------------------------------------------------------------------------------
 # For now VEX is distributed as SRC as there isn't much to justify lib
 # -------------------------------------------------------------------------------------------------
@@ -78,7 +74,7 @@ if(NOT EXISTS "${VEX_ROOTDIR}/VCore")
     message(FATAL_ERROR "Couldn't find VEX lib or fetch submodules. VEX_FETCH either off or failed.")
 endif() 
 # -------------------------------------------------------------------------------------------------
-# SUBDIRECTORY (for every platfrom)
+# SUBDIRECTORY (for every platfrom) 
 # -------------------------------------------------------------------------------------------------
 add_subdirectory("third_party/spdlog")  
 add_subdirectory("third_party/glm")   
@@ -153,6 +149,7 @@ if (EMSCRIPTEN)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${EM_EXTRA_LINK_FLAGS}")
     message(STATUS "info : emscripten linker flags: ${CMAKE_EXE_LINKER_FLAGS}") 
 elseif (WIN32)   
+    set(SDL_CMAKE_DEBUG_POSTFIX "d"  CACHE STRING "Name suffix for debug builds")
     message(STATUS " info PLATFORM : WIN32/64")  
     add_subdirectory("third_party/SDL2") 
     include_directories("${VEXGameOfLife_SOURCE_DIR}/src_platform/windows/")

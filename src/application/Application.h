@@ -25,8 +25,7 @@ namespace vp
         {
             return glm::clamp<i32>(desiredFramerate(), Min, Max);
         }
-    };
-
+    }; 
     /*
      * Scaled time exists for situations when whole simulation runs with time multiplier.
      * It is not to meant to handle any game logic, only naive cases and debug.
@@ -36,8 +35,7 @@ namespace vp
         double unscaled_runtime = 0;
 
         double unscaled_dt = 0;
-        double dt = 0;
-        // cached f32 version so there is no need to cast.
+        double dt = 0; 
         float unscalled_dt_f32 = 0;
         float delta_time_f32 = 0;
 
@@ -64,7 +62,7 @@ namespace vp
     class Application
     {
     public:
-        static Application& init(const StartupConfig& config);
+        static Application& init(const StartupConfig& config, DemoSamples&& samples);
 
         static inline Application& get()
         {
@@ -82,8 +80,9 @@ namespace vp
         inline const FrameTime& getTime() { return ftime; }
 
         template <typename T>
-        void setApplicationType(bool init);
+        void setGraphicsBackend(bool init);
 
+        bool activateDemo(const char* id);
         i32 runLoop();  
 
     private:
@@ -94,7 +93,9 @@ namespace vp
         }
         Application() = default;
 
-        std::unique_ptr<IGraphicsImpl> app_impl;
+        DemoSamples all_demos;
+        std::unique_ptr<IDemoImpl> active_demo;
+        std::unique_ptr<IGraphicsImpl> gfx_backend;
         std::unique_ptr<tWindow> main_window;
         SettingsContainer settings;
 
@@ -104,19 +105,22 @@ namespace vp
         bool running = false;
         bool pending_stop = false;
         bool created = false;
+
+        // #todo move out/rewrite
+        void showDemoSelection();
     };
 
     template <typename T>
-    inline void Application::setApplicationType(bool init)
+    inline void Application::setGraphicsBackend(bool init)
     {
-        if (app_impl)
+        if (gfx_backend)
         {
-            app_impl->teardown(*this);
+            gfx_backend->teardown(*this);
         }
-        app_impl.reset(new T());
+        gfx_backend.reset(new T());
         if (init)
         {
-            app_impl->init(*this);
+            gfx_backend->init(*this);
         }
     }
 

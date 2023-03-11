@@ -294,8 +294,7 @@ struct WgpuRenderInterface
 
             vp.frame_data.encoder = wgpuDeviceCreateCommandEncoder(
                 globals.device, &vp.encoder_desc);
-
-            auto encoder = vp.frame_data.encoder;
+             
             WGPURenderPassDescriptor pass{
                 .colorAttachmentCount = 1,
                 .colorAttachments = &vp.color_attachment,
@@ -314,6 +313,7 @@ struct WgpuRenderInterface
             WGPUCommandBuffer command = wgpuCommandEncoderFinish(vp.frame_data.encoder, &cmd_desc);
             wgpuQueueSubmit(globals.queue, 1, &command);
         }
+        // check error messages and callbacks
         wgpuDeviceTick(globals.device);
     }
     auto postFrame(vp::Application& owner) -> void {}
@@ -364,7 +364,7 @@ struct WgpuRenderInterface
         for (auto& vp : viewports)
         {
             if (vp.uid == id)
-                return &vp;
+                return vp.isValid() ? &vp : nullptr;
         }
         return nullptr;
     }
@@ -444,13 +444,11 @@ void vp::WgpuApp::frame(vp::Application& owner)
 }
 void vp::WgpuApp::postFrame(vp::Application& owner)
 {
-    // clear screen buffer
-    ImGuiIO& io2 = ImGui::GetIO(); 
+    // clear screen buffer 
     impl->postFrame(owner);
 
     // ----------------------------------------------------------------
-    // ImGui pass
-
+    // ImGui pass 
 #if ENABLE_IMGUI
     ImGuiIO& io = ImGui::GetIO();
     auto nav_old = io.ConfigWindowsMoveFromTitleBarOnly;
@@ -519,9 +517,6 @@ void vp::WgpuApp::postFrame(vp::Application& owner)
             (void*)(uintptr_t)native_vp->view, deltas, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
         ImGui::SetCursorPos({20, 40});
-        if (ImGui::Checkbox("pause", &vp.paused))
-        {
-        }
         ImGui::Separator();
     }
      

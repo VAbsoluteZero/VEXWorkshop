@@ -1,99 +1,130 @@
 #pragma once
 #include <VFramework/VEXBase.h>
-#include "SDLWindow.h"  
+#include <VCore/Containers/Dict.h>
+#include "SDLWindow.h"
 
 #define ENABLE_IMGUI 1
 namespace vp
 {
-	using tWindow = SDLWindow;
-	struct StartupConfig
-	{
-		WindowParams WindowArgs;
-		i32 target_framerate = -1;
-	}; 
+    class Application;
+    using tWindow = SDLWindow;
+    struct StartupConfig
+    {
+        WindowParams WindowArgs;
+        i32 target_framerate = -1;
+    };
 
-	enum class LayersBaseOrder : u64
-	{
-		Earliest = 1000,
-		Ealry = 2000,
-		PreDefault = 3000,
-		Default = 6000,
-		PostDefault = 9000,
-		Late = 12000,
-		Latest = 14000
-	};
-	  
-	struct IGraphicsImpl
-	{
-		virtual i32 init(class Application& owner) = 0;
+    enum class LayersBaseOrder : u64
+    {
+        Earliest = 1000,
+        Ealry = 2000,
+        PreDefault = 3000,
+        Default = 6000,
+        PostDefault = 9000,
+        Late = 12000,
+        Latest = 14000
+    };
+    using DynVal = vex::Union<i32, f32, bool, v3f, v2i32, const char*, std::string>;
+    using OptNumValue = vex::Union<i32, f32, bool>;
 
-		virtual void preFrame(class Application& owner) {}
-		virtual void frame(class Application& owner) {}
-		virtual void postFrame(class Application& owner) {}
+    struct IGraphicsImpl
+    {
+        virtual i32 init(Application& owner) = 0;
+        virtual void preFrame(Application& owner) {}
+        virtual void frame(Application& owner) {}
+        virtual void postFrame(Application& owner) {}
+        virtual void teardown(Application& owner) {}
+        virtual void handleWindowResize(Application& owner, v2u32 size){};
 
-		virtual void teardown(class Application& owner) {} 
+        virtual ~IGraphicsImpl() {}
+    };
 
-		virtual void handleWindowResize(class Application& owner, v2u32 size){};
+    struct IDemoImpl
+    {
+        virtual void runloop(Application& owner) = 0;
+        virtual void drawUI(Application& owner) {}
+        virtual ~IDemoImpl() {}
+    };
 
-		virtual ~IGraphicsImpl(){}
-	};
+    // for config parsing/serialization
+    struct SettingsContainer
+    {
+        vex::Dict<std::string, OptNumValue> settings;
+        vex::Dict<std::string, std::function<void(OptNumValue)>> on_changed;
+        bool changed_this_tick = true;
 
-	// for config parsing/serialization
-	using DynVal = vex::Union<i32, f32, bool, v3f, v2i32, const char*, std::string>;
+        template <typename T>
+        bool setValue(std::string key, T val)
+        {
+            if (checkAlways(on_changed.contains(key), "Entry does not exist in app settings"))
+            {
+                return false;
+            }
+            OptNumValue& opt_val = settings[key];
+            if (T* stored_val = opt_val.find<std::decay_t<T>>(); nullptr != stored_val)
+            {
+                *stored_val = val;
+                if (std::function<void(OptNumValue)>* cb = on_changed.tryGet(key); nullptr != cb)
+                {
+                    (*cb)(val);
+                    return true;
+                }
+            }
+            return false;
+        }
 
-	using OptNumValue = vex::Union<i32, f32, bool>;
+        template <typename T>
+        void addSetting(std::string key, T default_val)
+        {
+            constexpr bool v_is_supported = std::is_same_v<T, i32> || std::is_same_v<T, f32> ||
+                                            std::is_same_v<T, bool>;
+            static_assert(v_is_supported, "type is not supported");
 
-	struct SettingsContainer
-	{
-		vex::Dict<std::string, OptNumValue> settings;
-		vex::Dict<std::string, std::function<void(OptNumValue)>> on_changed;
-		bool changed_this_tick = true;
+            OptNumValue v = default_val;
+            settings.emplace(std::move(key), std::move(v));
+        }
+        template <typename T>
+        void addSetting(std::string key, T default_val, std::function<void(OptNumValue)> cb_changed)
+        {
+            addSetting(key, default_val);
 
-		template <typename T>
-		bool setValue(std::string key, T val)
-		{
-			if (checkAlways(on_changed.contains(key), "Entry does not exist in app settings"))
-			{
-				return false;
-			}
-			OptNumValue& opt_val = settings[key];
-			if (T* stored_val = opt_val.find<std::decay_t<T>>(); nullptr != stored_val)
-			{
-				*stored_val = val;
-				if (std::function<void(OptNumValue)>* cb = on_changed.tryGet(key); nullptr != cb)
-				{
-					(*cb)(val);
-					return true;
-				}
-			}
-			return false;
-		}
+            checkAlways(!on_changed.contains(key),
+                "Warning: overriding 'on_changed' callback in app settings");
 
-		template <typename T>
-		void addSetting(std::string key, T default_val)
-		{
-			constexpr bool v_is_supported = std::is_same_v<T, i32> || std::is_same_v<T, f32> ||
-											std::is_same_v<T, bool>;
-			static_assert(v_is_supported, "type is not supported");
+            on_changed.emplace(std::move(key), cb_changed);
+        }
 
-			OptNumValue v = default_val;
-			settings.emplace(std::move(key), std::move(v));
-		}
-		template <typename T>
-		void addSetting(std::string key, T default_val, std::function<void(OptNumValue)> cb_changed)
-		{
-			addSetting(key, default_val);
+        void removeSetting(std::string key)
+        {
+            settings.remove(key);
+            on_changed.remove(key);
+        }
+    };
 
-			checkAlways(!on_changed.contains(key),
-				"Warning: overriding 'on_changed' callback in app settings");
+    struct DemoSamples
+    {
+        typedef IDemoImpl* (*CreateDemoCallback)(Application& owner); 
+        struct Entry
+        {
+            const char* readable_name;
+            const char* description;
+            CreateDemoCallback callback;
+        };
+        vex::Dict<const char*, Entry> demos;
 
-			on_changed.emplace(std::move(key), cb_changed);
-		}
+        template <typename Func>
+        void add(const char* k, const char* name, const char* desc, Func&& t)
+        {
+            static auto callback = t;
+            static auto callback_proxy = [](Application& owner) -> vp::IDemoImpl*
+            {
+                return callback(owner);
+            };
+            demos.emplace(k, Entry{name, desc, callback});
+        }
+    };
 
-		void removeSetting(std::string key)
-		{
-			settings.remove(key);
-			on_changed.remove(key);
-		}
-	};
 } // namespace vp
+
+// #define VEX_register_demo(x, y) static inline vp::AddDemo vpint_COMBINE(reg_demo_anon_,
+// __LINE__)(x, y);
