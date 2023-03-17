@@ -20,7 +20,7 @@ namespace vp
 	struct DirectX11App : public IGraphicsImpl
 	{
 	public:
-		DirectX11App(){};
+        DirectX11App() { id = GfxBackendID::Dx11; }
 		~DirectX11App();
 
 		i32 init(vp::Application& owner) override;

@@ -3,7 +3,7 @@
 #include <SDL.h>
 #include <flags.h>
 #include <imgui.h>
-#include <imgui_impl_sdl.h> 
+#include <imgui_impl_sdl.h>
 #include <ini.h>
 #include <misc/cpp/imgui_stdlib.h>
 #include <spdlog/sinks/base_sink.h>
@@ -17,14 +17,14 @@
 #include <thread>
 //
 #ifdef VEX_RENDER_DX11
-#include <render/Dx11/DirectX11App.h>
-#include <render/legacyDx11.h>
+    #include <render/Dx11/DirectX11App.h>
+    #include <render/legacyDx11.h>
 #else
-#include <webgpu/render/WgpuApp.h>
+    #include <webgpu/render/WgpuApp.h>
 #endif
 #ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#include <emscripten/html5.h>
+    #include <emscripten.h>
+    #include <emscripten/html5.h>
 #endif
 
 #include <utils/CLI.h>
@@ -33,12 +33,12 @@
 using namespace std::literals::string_view_literals;
 
 static void setupLoggers();
-static void setupSettings(vp::Application& app);
+static void setupSettings(vex::Application& app);
 
-vp::Application& vp::Application::init(const StartupConfig& in_config, DemoSamples&& samples)
+vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSamples&& samples)
 {
     setupLoggers();
-    vp::console::createConsole();
+    vex::console::createConsole();
 
     auto config = in_config;
     { // #fixme
@@ -71,20 +71,20 @@ vp::Application& vp::Application::init(const StartupConfig& in_config, DemoSampl
         }
     }
 
-    vp::console::makeAndRegisterCmd("app.quit", "Exit application.\n", true,
-        [](const vp::console::CmdCtx& ctx)
+    vex::console::makeAndRegisterCmd("app.quit", "Exit application.\n", true,
+        [](const vex::console::CmdCtx& ctx)
         {
-            vp::Application::get().quit();
+            vex::Application::get().quit();
             return true;
         });
-    vp::console::makeAndRegisterCmd("app.set_fps", "Limit fps\n", true,
-        [](const vp::console::CmdCtx& ctx)
+    vex::console::makeAndRegisterCmd("app.set_fps", "Limit fps\n", true,
+        [](const vex::console::CmdCtx& ctx)
         {
             auto opt_int = ctx.parsed_args->get<int>(0);
             if (opt_int)
             {
                 i32 v = opt_int.value_or(-1);
-                vp::Application::get().setMaxFps(v);
+                vex::Application::get().setMaxFps(v);
                 SPDLOG_WARN("# try to limit fps to {}", v);
                 return true;
             }
@@ -93,7 +93,6 @@ vp::Application& vp::Application::init(const StartupConfig& in_config, DemoSampl
 
     Application& self = staticSelf();
 
-    self.all_demos = samples;
     self.created = true;
     self.main_window = tWindow::create(config.WindowArgs);
 
@@ -113,24 +112,25 @@ vp::Application& vp::Application::init(const StartupConfig& in_config, DemoSampl
         // self.setGraphicsBackend<SdlDx11Application>(true);
         self.setGraphicsBackend<DirectX11App>(true);
 #else
-        self.setGraphicsBackend<WgpuApp>(true);
+        self.setGraphicsBackend<WebGpuBackend>(true);
 #endif
     }
     setupSettings(self);
+    self.all_demos = samples;
 
     return self;
 }
 
-bool vp::Application::activateDemo(const char* id)
+bool vex::Application::activateDemo(const char* id)
 {
     if (auto* entry = all_demos.demos.find(id); entry)
     {
         active_demo.reset(entry->callback(*this));
-    } 
+    }
     return false;
 }
 
-i32 vp::Application::runLoop()
+i32 vex::Application::runLoop()
 {
     if (nullptr == gfx_backend)
         return 1;
@@ -139,61 +139,44 @@ i32 vp::Application::runLoop()
     if (pending_stop)
         return 0;
 
+    input.global.quit_delegate = [&]()
+    {
+        SPDLOG_INFO("* quit pressed");
+        pending_stop = true;
+    };
+    input.global.resize_delegate = [&]()
+    {
+        v2u32 size = main_window->windowSize();
+        this->gfx_backend->handleWindowResize(*this, size);
+        ImGuiSizes::g_cvs_sz = size;
+    };
+
     do
     {
-        // Handle events on queue
-        SDL_Event sdl_event = {};
-        while (SDL_PollEvent(&sdl_event) != 0)
-        {
-#if ENABLE_IMGUI
-            ImGui_ImplSDL2_ProcessEvent(&sdl_event);
-#endif
-            switch (sdl_event.type)
-            {
-                case SDL_QUIT:
-                {
-                    spdlog::info("Received SDL_QUIT, now app is pending stop.");
-                    pending_stop = true;
-                    break;
-                }
-                case SDL_WINDOWEVENT:
-                {
-                    if (sdl_event.window.event == SDL_WINDOWEVENT_RESIZED)
-                    {
-                        v2u32 size = main_window->windowSize();
-                        this->gfx_backend->handleWindowResize(*this, size);
-                    }
-                    break;
-                }
-
-                default: break;
-            }
-        }
         //-----------------------------------------------------------------------------
         // prepare frame
         {
-            gfx_backend->preFrame(*this);
+            gfx_backend->startFrame(*this);
         }
         //-----------------------------------------------------------------------------
         // frame
         {
+            input.poll(ftime.unscalled_dt_f32);
+            input.updateTriggers();
             if (active_demo)
             {
-                active_demo->runloop(*this);
+                active_demo->update(*this);
             }
             gfx_backend->frame(*this);
         }
         //-----------------------------------------------------------------------------
         // imgui draw callbacks
         {
-            settings.changed_this_tick = false;
-
 #if ENABLE_IMGUI
-            // setupImGuiForDrawPass(*this);
-            if (active_demo) 
-                active_demo->drawUI(*this); 
-            else 
-                showDemoSelection(); 
+            if (active_demo)
+                active_demo->drawUI(*this);
+            else
+                showDemoSelection();
 
             for (auto& [view_name, view] : g_view_hub.views)
             {
@@ -210,8 +193,10 @@ i32 vp::Application::runLoop()
         // post frame
         {
             gfx_backend->postFrame(*this);
+            if (active_demo)
+                active_demo->postFrame(*this);
+            input.onFrameEnd();
         }
-
         // time & fps
         {
             using namespace std::chrono_literals;
@@ -259,10 +244,10 @@ i32 vp::Application::runLoop()
 //-----------------------------------------------------------------------------
 // [SECTION] ImGUI
 //-----------------------------------------------------------------------------
-void vp::Application::showDemoSelection()
+void vex::Application::showDemoSelection()
 {
     if (!ImGui::IsPopupOpen("Select demo"))
-        ImGui::OpenPopup("Select demo"); 
+        ImGui::OpenPopup("Select demo");
     if (ImGui::BeginPopupModal("Select demo", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::Text("Available code samples:\n");
@@ -279,7 +264,7 @@ void vp::Application::showDemoSelection()
             {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
-                ImGui::Text(entry.description);
+                ImGui::Text("%s", entry.description);
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
@@ -305,7 +290,7 @@ namespace spdlog::sinks
             // pass unformatted, considered to be 'raw message'
             if ((msg.payload.size() > 2) && (msg.payload[0] == '#' || msg.payload[0] == '*'))
             {
-                vp::console::ConsoleWindow::g_pending_console_lines.push(
+                vex::console::ConsoleWindow::g_pending_console_lines.push(
                     msg.payload.data(), msg.payload.size());
                 return;
             }
@@ -313,7 +298,7 @@ namespace spdlog::sinks
             spdlog::sinks::base_sink<spdlog::details::null_mutex>::formatter_->format(
                 msg, formatted);
 
-            vp::console::ConsoleWindow::g_pending_console_lines.push(
+            vex::console::ConsoleWindow::g_pending_console_lines.push(
                 formatted.data(), formatted.size());
 
             formatted.clear();
@@ -339,16 +324,16 @@ static void setupLoggers()
     spdlog::set_default_logger(std::make_shared<spdlog::logger>("vex", sink_list));
 }
 
-void setupSettings(vp::Application& app)
+void setupSettings(vex::Application& app)
 {
     // auto& settings_container = app.getSettings();
 
     // settings_container.addSetting("gfx.wireframe", false);
     // settings_container.addSetting("gfx.cullmode", 1);
 
-    vp::console::makeAndRegisterCmd("app.set",
+    vex::console::makeAndRegisterCmd("app.set",
         "Change application settings. Type 'list' to list all. \n", true,
-        [](const vp::console::CmdCtx& ctx)
+        [](const vex::console::CmdCtx& ctx)
         {
             std::optional<std::string_view> cmd_key = ctx.parsed_args->get<std::string_view>(0);
             if (!cmd_key)
@@ -356,7 +341,7 @@ void setupSettings(vp::Application& app)
 
             std::string option{cmd_key.value()};
 
-            auto& settings_dict = vp::Application::get().getSettings().settings;
+            auto& settings_dict = vex::Application::get().getSettings().settings;
 
             if (option == "list")
             {
@@ -385,7 +370,7 @@ void setupSettings(vp::Application& app)
                 }
                 return true;
             }
-            vp::OptNumValue* entry = settings_dict.tryGet(option);
+            vex::OptNumValue* entry = settings_dict.tryGet(option);
 
             if (nullptr == entry)
                 return false;
@@ -414,7 +399,7 @@ void setupSettings(vp::Application& app)
                         v = cmd_value.value();
                 });
 
-            vp::Application::get().getSettings().changed_this_tick = true;
+            vex::Application::get().getSettings().changed_this_tick = true;
             // SPDLOG_WARN("# could not set value to setting");
             return matched;
         });

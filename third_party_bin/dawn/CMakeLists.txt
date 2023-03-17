@@ -14,7 +14,7 @@ else (EMSCRIPTEN)
 	include(cmake/FetchDawn.cmake) 
 	make_dawn_available()
 
-	target_link_libraries(webgpu INTERFACE webgpu_dawn)
+	target_link_libraries(webgpu INTERFACE webgpu_dawn libtint)
 	target_include_directories(webgpu INTERFACE
 		"${CMAKE_BINARY_DIR}/_deps/dawn-src/include"
 	)

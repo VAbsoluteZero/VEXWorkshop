@@ -893,7 +893,7 @@ i32 vp::SdlDx11Application::init(vp::Application& owner)
 
 	valid = true;
 
-	vp::g_view_hub.views.emplace(g_view_name, vp::ImView{g_view_name});
+	vp::g_view_hub.views.emplace(g_view_name, vp::ImGuiDrawQueue{g_view_name});
 	g_demo = loadModel(this->impl, "content/models/cc_demo/viking_room_obj");
 	g_demo.tex_view =
 		createTextureImageView(this->impl->d3d_device, "content/models/cc_demo/viking_room.png");
@@ -961,7 +961,7 @@ void vp::SdlDx11Application::preFrame(vp::Application& owner)
 	impl->d3d_device_ctx->RSSetViewports(1, &vp);
 
 	// #fixme
-	vp::ImView* view = vp::g_view_hub.views.tryGet(g_view_name);
+	auto* view = vp::g_view_hub.views.tryGet(g_view_name);
 	if (view)
 	{
 		view->delayed_gui_drawcalls.push_back([&](ArgsImViewUpd args)
@@ -1033,8 +1033,7 @@ TmpMeshBuilder buildPlane(vex::Allocator al, u32 tiles, v2f uv_min, v2f uv_max)
 	const u32 v_cnt = 4 * tiles * tiles; // with duplication
 
 	TmpMeshBuilder mesh{al, i_cnt, v_cnt};
-	const float tile_width = 2.0f / tiles;
-
+	const float tile_width = 2.0f / tiles; 
 	// we will creeate quads from -1 to +1 x & y
 	// with avg UV in the middle
 	v2f uv_step = (uv_max - uv_min) * (1.0f / tiles);
@@ -1054,8 +1053,7 @@ TmpMeshBuilder buildPlane(vex::Allocator al, u32 tiles, v2f uv_min, v2f uv_max)
 			const float x1 = x0 + tile_width;
 
 			const float u0 = uv_cur.x;
-			const float u1 = uv_cur.x + uv_step.x;
-
+			const float u1 = uv_cur.x + uv_step.x; 
 			//  pos | normals : -z, towards viewport | uv
 			mesh.addVertex({v3f(x0, y0, 0), v3f(0, 0, -1), v2f(u0, v0)}); // top left
 			mesh.addVertex({v3f(x0, y1, 0), v3f(0, 0, -1), v2f(u0, v1)});
@@ -1146,7 +1144,7 @@ void vp::SdlDx11Application::frame(vp::Application& owner)
 		}
 		acc = acc / frametime.size();
 
-		vp::ImView* view = vp::g_view_hub.views.tryGet(g_view_name);
+		auto* view = vp::g_view_hub.views.tryGet(g_view_name);
 		if (view)
 		{
 			view->delayed_gui_drawcalls.push_back(

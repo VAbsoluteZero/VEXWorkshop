@@ -1,6 +1,6 @@
 #include "WgpuApp.h"
 
-// wgpu
+// wgfx
 
 // #include <wgpu/webgpu.hpp>
 //  sdl / imgui / third party
@@ -16,117 +16,187 @@
 #include <stb/stb_image_write.h>
 #include <utils/ImGuiUtils.h>
 
-#include "WgpuTypes.h"
-
 using namespace std::literals::chrono_literals;
 
-void WgpuViewport::initialize(WgpuGlobals& globals, const ViewportInitArgs& args)
+void wgfx::Viewport::initialize(WGPUDevice device, const vex::ViewportOptions& args)
 {
-    initial_args = args;
-    WGPUTextureDescriptor tex_desc{
-        .label = "viewport texture",
-        .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_RenderAttachment |
-                 WGPUTextureUsage_CopySrc,
-        .dimension = WGPUTextureDimension_2D,
-        .size =
-            (WGPUExtent3D){
-                .width = args.size.x,
-                .height = args.size.y,
-                .depthOrArrayLayers = 1,
-            },
-        .format = WGPUTextureFormat_RGBA8Unorm,
-        .mipLevelCount = 1,
-        .sampleCount = 1,
-    };
-    texture = wgpuDeviceCreateTexture(globals.device, &tex_desc);
+    options = args;
+    {
+        WGPUTextureDescriptor tex_desc{
+            .label = "viewport texture",
+            .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_RenderAttachment |
+                     WGPUTextureUsage_CopySrc,
+            .dimension = WGPUTextureDimension_2D,
+            .size =
+                {
+                    .width = args.size.x,
+                    .height = args.size.y,
+                    .depthOrArrayLayers = 1,
+                },
+            .format = WGPUTextureFormat_RGBA8Unorm,
+            .mipLevelCount = 1,
+            .sampleCount = 1,
+        };
+        texture = wgpuDeviceCreateTexture(device, &tex_desc);
 
-    WGPUTextureViewDescriptor view_desc{.label = "viewport texture view",
-        .format = tex_desc.format,
-        .dimension = WGPUTextureViewDimension_2D,
-        .baseMipLevel = 0,
-        .mipLevelCount = 1,
-        .baseArrayLayer = 0,
-        .arrayLayerCount = 1,
-        .aspect = WGPUTextureAspect_All};
-    view = wgpuTextureCreateView(texture, &view_desc);
-    color_attachment.view = view;
+        WGPUTextureViewDescriptor view_desc{
+            .label = "viewport texture view",
+            .format = tex_desc.format,
+            .dimension = WGPUTextureViewDimension_2D,
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+            .aspect = WGPUTextureAspect_All,
+        };
+        view = wgpuTextureCreateView(texture, &view_desc);
+        color_attachment.view = view;
+    }
+    // depth
+    if (options.depth_enabled)
+    {
+        WGPUTextureFormat format = WGPUTextureFormat_Depth24PlusStencil8;
+        u32 sample_count = 1;
+
+        WGPUTextureDescriptor depth_texture_desc = {
+            .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
+            .dimension = WGPUTextureDimension_2D,
+            .size =
+                {
+                    .width = args.size.x,
+                    .height = args.size.y,
+                    .depthOrArrayLayers = 1,
+                },
+            .format = format,
+            .mipLevelCount = 1,
+            .sampleCount = sample_count,
+        };
+        depth_texture = wgpuDeviceCreateTexture(device, &depth_texture_desc);
+
+        WGPUTextureViewDescriptor view_desc = {
+            .format = depth_texture_desc.format,
+            .dimension = WGPUTextureViewDimension_2D,
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+            .aspect = WGPUTextureAspect_All,
+        };
+        depth_view = wgpuTextureCreateView(depth_texture, &view_desc);
+        depth_attachment.view = depth_view;
+    }
 }
+
+wgfx::Context& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
+{
+    auto encoder = wgpuDeviceCreateCommandEncoder(globals.device, &this->encoder_desc);
+
+    this->color_attachment.view = view;
+    this->depth_attachment.view = depth_view;
+    WGPURenderPassDescriptor pass{
+        .label = "viewport render pass",
+        .colorAttachmentCount = 1,
+        .colorAttachments = &this->color_attachment,
+        .depthStencilAttachment = depth_view ? &this->depth_attachment : nullptr,
+    };
+    auto render_pass_encoder = wgpuCommandEncoderBeginRenderPass(encoder, &pass);
+    //wgpuRenderPassEncoderSetViewport(
+    //    render_pass_encoder, 0.0f, 0.0f, options.size.x, options.size.y, 0.0f, 1.0f);
+    //wgpuRenderPassEncoderSetScissorRect(
+    //    render_pass_encoder, 0u, 0u, options.size.x, options.size.y);
+
+    context = wgfx::Context{
+        .device = globals.device,
+        .encoder = encoder,
+        .queue = globals.queue,
+        .render_pass = render_pass_encoder,
+        .cur_tex_view = view,
+    };
+    return context;
+}
+
+// void wgfx::Viewport::submit(const wgfx::Context& globals)
+//{
+//     WGPUCommandBufferDescriptor cmd_desc{};
+//     cmd_desc.label = "Command buffer";
+//     WGPUCommandBuffer command = wgpuCommandEncoderFinish(frame_data.encoder, &cmd_desc);
+//     wgpuQueueSubmit(globals.queue, 1, &command);
+// }
 
 struct WgpuRenderInterface
 {
-    static constexpr i32 k_max_viewports = 8;
-    WgpuGlobals globals;
-    // WgpuWindow window;
-    WgpuFrameResources frame_data;
+    // static constexpr i32 k_max_viewports = 8;
+    wgfx::Globals globals;
+    wgfx::Context frame_data;
+    WGPUSupportedLimits limits;
 
-    std::vector<WgpuViewport> viewports;
+    // std::vector<wgfx::Viewport> viewports;
 
     bool initialized = false;
     WgpuRenderInterface() = default;
     WgpuRenderInterface(const WgpuRenderInterface&) = delete;
     ~WgpuRenderInterface() { release(); }
 
-    auto init(vp::Application& owner) -> i32
+    auto init(vex::Application& owner) -> i32
     {
         SDL_Window* sdl_window = owner.getMainWindow()->getRawWindow();
-        viewports.reserve(k_max_viewports + 1);
+        // viewports.reserve(k_max_viewports + 1);
         int wnd_x = 128;
         int wnd_y = 128;
         SDL_GetWindowSize(sdl_window, &wnd_x, &wnd_y);
 
-        // initialize globals
+        // initialize adapte, device, chain & surface
         {
             WGPUInstanceDescriptor desc{.nextInChain = nullptr};
-            globals.instance = wgpu::createInstance(desc);
+            globals.instance = wgfx::createInstance(desc);
 
-            if (!wgpu::k_using_emscripten) // emscripten REQUIRES instance to be NULL
+            if (!wgfx::k_using_emscripten) // emscripten REQUIRES instance to be NULL
                 checkLethal(globals.instance, "wgpu initialization failed.");
 
-            globals.surface = wgpu::getWGPUSurface(globals.instance, sdl_window);
+            globals.surface = wgfx::getWGPUSurface(globals.instance, sdl_window);
 
             WGPURequestAdapterOptions req_opts = {.nextInChain = nullptr,
                 .compatibleSurface = globals.surface,
                 .powerPreference = WGPUPowerPreference_Undefined,
                 .forceFallbackAdapter = false};
-            wgpu::requestAdapter(globals, req_opts);
+            wgfx::requestAdapter(globals, req_opts);
 
+            wgpuAdapterGetLimits(globals.adapter, &limits);
+
+            // WGPURequiredLimits required{.limits = limits.limits};
             WGPUDeviceDescriptor deviceDesc{
                 .label = "wgpu device",
+                //.requiredLimits = &required,
                 .defaultQueue = {.label = "The default queue"},
             };
-            wgpu::requestDevice(globals, &deviceDesc);
+            wgfx::requestDevice(globals, &deviceDesc);
 
             auto onDeviceError = [](WGPUErrorType type, char const* message, void*)
             {
-                if (message)
-                    SPDLOG_ERROR(" wgpu error: {} ", message);
-                checkAlways_(false);
-            };
+                SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
+
+                //checkAlways_(false);
+            };  
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
-        }
-        //
-        {
+
             globals.main_texture_fmt =
 #if defined(VEX_GFX_WEBGPU_DAWN) || defined(__EMSCRIPTEN__)
                 WGPUTextureFormat_BGRA8Unorm;
 #else
                 wgpuSurfaceGetPreferredFormat(globals.surface, globals.adapter);
 #endif
-
+             
             WGPUSwapChainDescriptor desc_swap_chain{
-                .nextInChain = nullptr,
+                .nextInChain = nullptr, 
                 .label = "chain",
                 .usage = WGPUTextureUsage_RenderAttachment,
                 .format = globals.main_texture_fmt,
                 .width = (u32)wnd_x,
-                .height = (u32)wnd_y,
+                .height = (u32)wnd_y, 
                 .presentMode = WGPUPresentMode_Immediate,
-            };
+            }; 
 
             globals.swap_chain = wgpuDeviceCreateSwapChain(
                 globals.device, globals.surface, &desc_swap_chain);
         }
+        // default pipelines
         {
             const char* shaderSource = R"(
         @vertex
@@ -233,7 +303,7 @@ struct WgpuRenderInterface
         return valid ? 0 : 1;
     }
 
-    auto resizeWindow(vp::Application& owner, u32 w, u32 h) -> void
+    auto resizeWindow(vex::Application& owner, u32 w, u32 h) -> void
     { //
         WGPUSwapChainDescriptor desc_swap_chain{
             .nextInChain = nullptr,
@@ -253,7 +323,7 @@ struct WgpuRenderInterface
             (void*)globals.swap_chain);
     }
 
-    auto preFrame(vp::Application& owner) -> void
+    auto startFrame(vex::Application& owner) -> void
     {
         WGPUCommandEncoderDescriptor encoder_desc = {
             .nextInChain = nullptr,
@@ -272,56 +342,23 @@ struct WgpuRenderInterface
             .colorAttachments = &color_attachment,
             .depthStencilAttachment = nullptr};
 
-        frame_data.render_pass_encoder = wgpuCommandEncoderBeginRenderPass(
-            frame_data.encoder, &pass);
+        frame_data.render_pass = wgpuCommandEncoderBeginRenderPass(frame_data.encoder, &pass);
         // base
         {
-            wgpuRenderPassEncoderSetPipeline(
-                frame_data.render_pass_encoder, globals.debug_pipeline);
-            wgpuRenderPassEncoderDraw(frame_data.render_pass_encoder, 3, 1, 0, 0);
+            wgpuRenderPassEncoderSetPipeline(frame_data.render_pass, globals.debug_pipeline);
+            wgpuRenderPassEncoderDraw(frame_data.render_pass, 3, 1, 0, 0);
             wgpuQueueSubmit(globals.queue, 0, nullptr);
         }
         wgpuDeviceTick(globals.device);
     }
 
-    auto frame(vp::Application& owner) -> void
-    {
-        // viewports
-        for (auto& vp : viewports)
-        {
-            if (!vp.isValid())
-                continue;
-
-            vp.frame_data.encoder = wgpuDeviceCreateCommandEncoder(
-                globals.device, &vp.encoder_desc);
-             
-            WGPURenderPassDescriptor pass{
-                .colorAttachmentCount = 1,
-                .colorAttachments = &vp.color_attachment,
-                .depthStencilAttachment = nullptr,
-            };
-            vp.frame_data.render_pass_encoder = wgpuCommandEncoderBeginRenderPass(
-                vp.frame_data.encoder, &pass);
-
-            wgpuRenderPassEncoderSetPipeline(
-                vp.frame_data.render_pass_encoder, globals.debug_pipeline2);
-            wgpuRenderPassEncoderDraw(vp.frame_data.render_pass_encoder, 3, 1, 0, 0);
-            wgpuRenderPassEncoderEnd(vp.frame_data.render_pass_encoder);
-
-            WGPUCommandBufferDescriptor cmd_desc{};
-            cmd_desc.label = "Command buffer";
-            WGPUCommandBuffer command = wgpuCommandEncoderFinish(vp.frame_data.encoder, &cmd_desc);
-            wgpuQueueSubmit(globals.queue, 1, &command);
-        }
-        // check error messages and callbacks
-        wgpuDeviceTick(globals.device);
-    }
-    auto postFrame(vp::Application& owner) -> void {}
+    auto frame(vex::Application& owner) -> void { wgpuDeviceTick(globals.device); }
+    auto postFrame(vex::Application& owner) -> void {}
     auto present() -> void
     {
         // window
         {
-            wgpuRenderPassEncoderEnd(frame_data.render_pass_encoder);
+            wgpuRenderPassEncoderEnd(frame_data.render_pass);
             // Present
             WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
             cmdBufferDescriptor.nextInChain = nullptr;
@@ -330,15 +367,8 @@ struct WgpuRenderInterface
                 frame_data.encoder, &cmdBufferDescriptor);
             wgpuQueueSubmit(globals.queue, 1, &command);
 
-            wgpu::swapchainPresent(globals.swap_chain);
+            wgfx::swapchainPresent(globals.swap_chain);
 
-            frame_data.release();
-        }
-        // viewports
-        for (auto& vp : viewports)
-        {
-            if (!vp.isValid())
-                continue;
             frame_data.release();
         }
         wgpuDeviceTick(globals.device);
@@ -348,48 +378,9 @@ struct WgpuRenderInterface
         initialized = false;
         globals.release();
     }
-
-    auto canAddViewport() const -> bool { return viewports.size() <= k_max_viewports; }
-    auto addViewport(const ViewportInitArgs& args) -> u32
-    {
-        if (viewports.size() >= k_max_viewports)
-            return 0;
-        WgpuViewport vp;
-        vp.initialize(globals, args);
-        viewports.emplace_back(std::move(vp));
-        return vp.uid;
-    }
-    auto findViewport(u32 id) -> WgpuViewport*
-    {
-        for (auto& vp : viewports)
-        {
-            if (vp.uid == id)
-                return vp.isValid() ? &vp : nullptr;
-        }
-        return nullptr;
-    }
-    auto resetViewport(u32 id, const ViewportInitArgs& args) -> bool
-    { //
-        if (WgpuViewport* vp = findViewport(id); vp && vp->isValid())
-        {
-            vp->release();
-            vp->initialize(globals, args);
-            return true;
-        }
-        return false;
-    }
-    auto removeViewport(u32 id) -> bool
-    {
-        if (WgpuViewport* vp = findViewport(id); vp && vp->isValid())
-        {
-            vp->release();
-            return true;
-        }
-        return false;
-    }
 };
 //----------------------------------------------------------------------
-vp::WgpuApp::~WgpuApp()
+vex::WebGpuBackend::~WebGpuBackend()
 {
     if (impl)
     {
@@ -397,7 +388,17 @@ vp::WgpuApp::~WgpuApp()
         delete impl;
     }
 }
-i32 vp::WgpuApp::init(vp::Application& owner)
+wgfx::Globals& vex::WebGpuBackend::getGlobalResources()
+{
+    checkLethal(impl != nullptr, "unexpected null in vex::WebGpuBackend::startFrame");
+    return (impl->globals);
+}
+void vex::WebGpuBackend::pollEvents()
+{
+    if (impl)
+        wgpuDeviceTick(impl->globals.device);
+}
+i32 vex::WebGpuBackend::init(vex::Application& owner)
 {
     if (!checkAlways(impl == nullptr, "must not call init more than once"))
         return 1;
@@ -421,105 +422,35 @@ i32 vp::WgpuApp::init(vp::Application& owner)
         checkLethal(false, "wgpu demo - initialization failed");
     }
 
-    ViewportInitArgs args;
-    u32 id = impl->addViewport(args);
-    imgui_views.push_back({true, false, id});
+    text_shad_lib.build("content/shaders/wgsl/");
 
     return err;
 }
-static bool br_ch = false;
-void vp::WgpuApp::preFrame(vp::Application& owner)
+
+void vex::WebGpuBackend::startFrame(vex::Application& owner)
 {
-    checkLethal(impl != nullptr, "unexpected null in vp::WgpuApp::preFrame");
-    impl->preFrame(owner);
+    checkLethal(impl != nullptr, "unexpected null in vex::WebGpuBackend::startFrame");
+    impl->startFrame(owner);
 #if ENABLE_IMGUI
-    ImGui_ImplWGPU_NewFrame(); // compiles shaders when called first time 
+    ImGui_ImplWGPU_NewFrame(); // compiles shaders when called first time
     ImGui_ImplSDL2_NewFrame(); // window & inputs related frame init specific for SDL
-    ImGui::NewFrame(); 
-#endif 
+    ImGui::NewFrame();
+#endif
 }
-void vp::WgpuApp::frame(vp::Application& owner)
+void vex::WebGpuBackend::frame(vex::Application& owner) { impl->frame(owner); }
+void vex::WebGpuBackend::postFrame(vex::Application& owner)
 {
-    impl->frame(owner); 
-}
-void vp::WgpuApp::postFrame(vp::Application& owner)
-{
-    // clear screen buffer 
+    // clear screen buffer
     impl->postFrame(owner);
 
     // ----------------------------------------------------------------
-    // ImGui pass 
+    // ImGui pass
 #if ENABLE_IMGUI
     ImGuiIO& io = ImGui::GetIO();
     auto nav_old = io.ConfigWindowsMoveFromTitleBarOnly;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     defer_ { io.ConfigWindowsMoveFromTitleBarOnly = nav_old; };
-    // add to menu
-    if (ImGui::BeginMainMenuBar())
-    {
-        defer_ { ImGui::EndMainMenuBar(); };
-        // imgui stuff
-        if (ImGui::BeginMenu("Viewports"))
-        {
-            defer_ { ImGui::EndMenu(); };
 
-            if (impl->canAddViewport() && ImGui::Button("Add Viewport"))
-            {
-                ViewportInitArgs args;
-                u32 id = impl->addViewport(args);
-                imgui_views.push_back({true, false, id});
-            }
-            for (ImViewport& vp : imgui_views)
-            {
-                auto s = fmt::format("Viewport {}", vp.native_vp_id);
-                if (ImGui::MenuItem(s.data(), nullptr, vp.visible))
-                {
-                    vp.visible = !vp.visible;
-                }
-                if (!vp.visible)
-                    continue;
-            }
-        }
-
-        ImGui::Bullet();
-        ImGui::Text(" perf: %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
-            ImGui::GetIO().Framerate);
-    }
-
-    // draw enabled viewports
-    for (ImViewport& vp : imgui_views)
-    {
-        auto s = fmt::format("Viewport {}", vp.native_vp_id);
-        if (!vp.visible)
-            continue;
-
-        bool visible = ImGui::Begin(s.data());
-        defer_ { ImGui::End(); };
-
-        ImVec2 vmin = ImGui::GetWindowContentRegionMin();
-        ImVec2 vmax = ImGui::GetWindowContentRegionMax();
-        auto deltas = ImVec2{vmax.x - vmin.x, vmax.y - vmin.y};
-        v2i32 cur_size = {deltas.x > 0 ? deltas.x : 32, deltas.y > 0 ? deltas.y : 32};
-
-        WgpuViewport* native_vp = impl->findViewport(vp.native_vp_id);
-
-        if (!visible || native_vp == nullptr || !native_vp->isValid())
-            continue;
-
-        if (cur_size != vp.last_seen_size)
-        {
-            ViewportInitArgs args = native_vp->initial_args;
-            args.size = cur_size;
-            impl->resetViewport(vp.native_vp_id, args);
-        }
-        vp.last_seen_size = cur_size;
-        ImGui::Image(
-            (void*)(uintptr_t)native_vp->view, deltas, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-
-        ImGui::SetCursorPos({20, 40});
-        ImGui::Separator();
-    }
-     
     // ImGuizmo::BeginFrame();
     ImGui::Render();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -527,21 +458,20 @@ void vp::WgpuApp::postFrame(vp::Application& owner)
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault();
     }
-    auto draw_data = ImGui::GetDrawData();  
-    ImGui_ImplWGPU_RenderDrawData(draw_data, impl->frame_data.render_pass_encoder);
+    auto draw_data = ImGui::GetDrawData();
+    ImGui_ImplWGPU_RenderDrawData(draw_data, impl->frame_data.render_pass);
     wgpuDeviceTick(impl->globals.device);
 #endif
     // ----------------------------------------------------------------
     impl->present();
 }
-void vp::WgpuApp::teardown(vp::Application& owner)
+void vex::WebGpuBackend::teardown(vex::Application& owner)
 {
     impl->release();
     delete impl;
     impl = nullptr;
 }
-void vp::WgpuApp::handleWindowResize(vp::Application& owner, v2u32 size)
-{ //
-    br_ch = true;
+void vex::WebGpuBackend::handleWindowResize(vex::Application& owner, v2u32 size)
+{ // 
     impl->resizeWindow(owner, size.x, size.y);
 }

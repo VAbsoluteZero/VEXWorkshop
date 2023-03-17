@@ -16,7 +16,7 @@ namespace flags
     struct args;
 }
 
-namespace vp::console
+namespace vex::console
 {
     // struct with params
     struct CmdCtx
@@ -65,9 +65,9 @@ namespace vp::console
         CmdRunner();
         vex::Dict<const char*, ClCommand> commands;
     };
-} // namespace vp::console
+} // namespace vex::console
 
-namespace vp::console
+namespace vex::console
 {
     template <typename Callable>
     inline bool makeAndRegisterCmd(
@@ -83,10 +83,10 @@ namespace vp::console
     }
     inline void removeCmd(const char* key) { CmdRunner::global().remove(key); }
     inline ClCommand* findCmd(const char* key) { return CmdRunner::global().commands.tryGet(key); }
-}; // namespace vp::console
+}; // namespace vex::console
 
 
-namespace vp::console
+namespace vex::console
 { 
     struct PedningEntries
     {
@@ -163,4 +163,4 @@ namespace vp::console
     {
         window->Draw("Console");
     }
-} // namespace vp::console
+} // namespace vex::console

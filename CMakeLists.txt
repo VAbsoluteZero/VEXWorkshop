@@ -24,12 +24,11 @@ option(VEX_FETCH "Enable fetching VEX" NO)
 message("c compiler id : ${CMAKE_C_COMPILER_ID}")
 message("cxx compiler id : ${CMAKE_CXX_COMPILER_ID}")
 message("compiler path: ${CMAKE_CXX_COMPILER}") 
-
 # include cmakemodules
-include(FindGIT) 
+include(FindGIT)  
 include(FetchContent)   
 find_package(Git QUIET)
-   
+
 set(VEX_ROOTDIR "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib")
 set(VEX_INCLUDE_DIRS "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib")  
 set(SIZEOF_VOIDP ${CMAKE_SIZEOF_VOID_P}) # Check for 64 or 32 bit
@@ -76,7 +75,7 @@ endif()
 # -------------------------------------------------------------------------------------------------
 # SUBDIRECTORY (for every platfrom) 
 # -------------------------------------------------------------------------------------------------
-add_subdirectory("third_party/spdlog")  
+add_subdirectory("third_party/spdlog")   
 add_subdirectory("third_party/glm")   
 add_subdirectory("third_party/rapidobj")  
 # -------------------------------------------------------------------------------------------------
@@ -87,7 +86,7 @@ include_directories(${VEX_INCLUDE_DIRS})
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/SDL2/include/") 
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/spdlog/include/")
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/glm/")
-include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/") 
+include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/")  
 include_directories("${VEXGameOfLife_SOURCE_DIR}/src")  
 include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party_bin") 
 include_directories("${VEXGameOfLife_SOURCE_DIR}/src_platform") 
@@ -118,7 +117,7 @@ if (VEX_USE_DAWN)
     message(STATUS "info: BACKEND = DAWN") 
     add_subdirectory("third_party_bin/dawn") 
     include_directories(${CMAKE_BINARY_DIR}/_deps/dawn-build/gen/include/dawn)
-    include_directories(${CMAKE_BINARY_DIR}/_deps/dawn-src/include/)  
+    #include_directories(${CMAKE_BINARY_DIR}/_deps/dawn-src/include/)  
     # get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)  
 endif()
 
@@ -151,6 +150,7 @@ if (EMSCRIPTEN)
 elseif (WIN32)   
     set(SDL_CMAKE_DEBUG_POSTFIX "d"  CACHE STRING "Name suffix for debug builds")
     message(STATUS " info PLATFORM : WIN32/64")  
+    set(SDL_SHARED TRUE)
     add_subdirectory("third_party/SDL2") 
     include_directories("${VEXGameOfLife_SOURCE_DIR}/src_platform/windows/")
 endif() 
@@ -264,12 +264,14 @@ endif()
 add_compile_definitions(GLM_FORCE_LEFT_HANDED=1 GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
 add_compile_definitions(VEXCORE_DEFINE_STRHASH=1 FMT_EXCEPTIONS=0 SPDLOG_NO_EXCEPTIONS=1)
 
+add_compile_definitions( SPDLOG_COMPILED_LIB)
 set(EXECUTABLE_OUTPUT_PATH  ${VEXGameOfLife_SOURCE_DIR}/build/)  
 ######################################################################################################
 add_executable(VEXGameOfLife ${VEX_ALLSRC}) # VEXGameOfLife target
 # libs
 target_link_libraries(VEXGameOfLife PRIVATE rapidobj::rapidobj)
 target_link_libraries(VEXGameOfLife PRIVATE imgui) 
+target_link_libraries(VEXGameOfLife PRIVATE spdlog) 
 
 if (NOT VEX_USE_BIN_DIR)
     set_target_properties(VEXGameOfLife
@@ -348,11 +350,11 @@ if (NOT EMSCRIPTEN)
         "${VEXGameOfLife_SOURCE_DIR}/src_test/vex/*.cpp"
     ) 
    
-    set(SNITCH_DEFINE_MAIN OFF)
+    set(SNITCH_DEFINE_MAIN OFF) 
     add_subdirectory("third_party/snitch")
     set(CMAKE_EXE_LINKER_FLAGS "${ORIGINAL_CMAKE_LINK_LFAGS}")
     add_executable(VexTests ${VEX_TST_SRC}  ${VEX_SRC}) # <=============== VexTests target
-    target_link_libraries(VexTests PRIVATE snitch::snitch)
+    target_link_libraries(VexTests PRIVATE snitch::snitch spdlog::spdlog)
     # -------------------------------------------------------------------------------------------------
     # Bench target
     # -------------------------------------------------------------------------------------------------
@@ -362,8 +364,8 @@ if (NOT EMSCRIPTEN)
         "${VEXGameOfLife_SOURCE_DIR}/src_bench/vex/*.cpp"
     ) 
 
-    add_executable(VexBench ${VEX_BENCH_SRC} "src_bench/misc/bittests.cpp")  # <=============== VexBench target
-    target_link_libraries(VexBench PRIVATE snitch::snitch)
+    add_executable(VexBench ${VEX_BENCH_SRC} ${VEX_SRC} "src_bench/misc/bittests.cpp")  # <=============== VexBench target
+    target_link_libraries(VexBench PRIVATE snitch::snitch spdlog::spdlog)
     set_target_properties(VexBench
         PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/bench/"
@@ -375,7 +377,7 @@ if (NOT EMSCRIPTEN)
     # POST BUILD 
     add_custom_command ( TARGET VEXGameOfLife POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXGameOfLife>
+         $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXGameOfLife>
     )  
     add_custom_command(TARGET VEXGameOfLife POST_BUILD
        COMMAND ${CMAKE_COMMAND} -E copy_directory 
@@ -389,3 +391,8 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang") 
     target_compile_options(VEXGameOfLife PRIVATE -Wno-class-conversion)
 endif() 
+get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+message(STATUS "  include dirs:  ")
+foreach(dir ${dirs})
+    message(STATUS " '${dir}' ")
+endforeach()

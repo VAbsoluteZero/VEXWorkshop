@@ -2885,6 +2885,7 @@ if(IOS OR TVOS)
 endif()
 
 if(SDL_SHARED)
+message(STATUS "info : ============================================================")
   add_library(SDL2 SHARED ${SOURCE_FILES} ${VERSION_SOURCES})
   # alias target for in-tree builds
   add_library(SDL2::SDL2 ALIAS SDL2)

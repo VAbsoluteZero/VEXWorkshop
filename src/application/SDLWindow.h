@@ -7,7 +7,7 @@
 
 struct SDL_Window;
 struct SDL_Renderer;
-namespace vp
+namespace vex
 {
 	enum class EWindowMode : unsigned char
 	{
@@ -49,4 +49,4 @@ namespace vp
 		WindowParams params;
 		tWindowHandle* sdl_window = nullptr; 
 	};
-} // namespace vp
+} // namespace vex

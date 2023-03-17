@@ -3,9 +3,11 @@
 #include <VCore/Utils/VMath.h>
 #include <VFramework/VEXBase.h>
 
-#include "Platfrom.h" 
+#include <io/InputSystem.h>
 
-namespace vp
+#include "Platfrom.h"
+
+namespace vex
 {
     struct FramerateArgs
     {
@@ -25,7 +27,7 @@ namespace vp
         {
             return glm::clamp<i32>(desiredFramerate(), Min, Max);
         }
-    }; 
+    };
     /*
      * Scaled time exists for situations when whole simulation runs with time multiplier.
      * It is not to meant to handle any game logic, only naive cases and debug.
@@ -35,7 +37,7 @@ namespace vp
         double unscaled_runtime = 0;
 
         double unscaled_dt = 0;
-        double dt = 0; 
+        double dt = 0;
         float unscalled_dt_f32 = 0;
         float delta_time_f32 = 0;
 
@@ -58,7 +60,7 @@ namespace vp
     private:
         double mult = 1.0f;
     };
-
+     
     class Application
     {
     public:
@@ -81,9 +83,12 @@ namespace vp
 
         template <typename T>
         void setGraphicsBackend(bool init);
+        AGraphicsBackend* getGraphicsBackend() { return gfx_backend.get(); }
 
         bool activateDemo(const char* id);
-        i32 runLoop();  
+        i32 runLoop(); 
+
+        input::InputSystem input;
 
     private:
         static Application& staticSelf()
@@ -95,7 +100,7 @@ namespace vp
 
         DemoSamples all_demos;
         std::unique_ptr<IDemoImpl> active_demo;
-        std::unique_ptr<IGraphicsImpl> gfx_backend;
+        std::unique_ptr<AGraphicsBackend> gfx_backend;
         std::unique_ptr<tWindow> main_window;
         SettingsContainer settings;
 
@@ -128,4 +133,4 @@ namespace vp
     // variables
     inline FrameTime g_time = {};
 
-} // namespace vp
+} // namespace vex

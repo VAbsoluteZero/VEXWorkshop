@@ -3,37 +3,43 @@
 #include <VFramework/VEXBase.h>
 #include <application/Platfrom.h>
 
-struct WgpuRenderInterface; 
-struct ImViewport
-{
-    bool visible = false;
-    bool paused = false;
-    u32 native_vp_id = 0;
-    v2i32 last_seen_size{0, 0};
-};
+#include <webgpu/render/WgpuTypes.h> 
+#include <gfx/GfxUtils.h>
 
-namespace vp
+/*===================================
+#FIXME - once familiar with WEBGPU api
+rewrite to not expose it and work through 
+abstraction layer 
+====================================*/
+
+struct WgpuRenderInterface; 
+
+namespace vex
 {
     class Application;
 
-    struct WgpuApp : public IGraphicsImpl
+    struct WebGpuBackend : public AGraphicsBackend
     { 
-        WgpuApp(){};
-        ~WgpuApp();
+        WebGpuBackend(){id =  GfxBackendID::Webgpu;}
+        ~WebGpuBackend();
 
-        i32 init(vp::Application& owner) override;
+        wgfx::Globals& getGlobalResources();
+        void pollEvents();
 
-        void preFrame(vp::Application& owner) override;
-        void frame(vp::Application& owner) override;
-        void postFrame(vp::Application& owner) override;
+        i32 init(vex::Application& owner) override;
 
-        void teardown(vp::Application& owner) override;
+        void startFrame(vex::Application& owner) override;
+        void frame(vex::Application& owner) override;
+        void postFrame(vex::Application& owner) override;
 
-        void handleWindowResize(vp::Application& owner, v2u32 size) override;
+        void teardown(vex::Application& owner) override;  
 
-        std::vector<ImViewport> imgui_views; 
+        void handleWindowResize(vex::Application& owner, v2u32 size) override;
+
+        TextShaderLib text_shad_lib;
+        //vex::Dict<std::string, WGPUShaderModule> modules; 
         // this exists in order to limit header pollution with Dx/Windows specific stuff
         WgpuRenderInterface* impl = nullptr;
     };
 
-} // namespace vp
+} // namespace vex

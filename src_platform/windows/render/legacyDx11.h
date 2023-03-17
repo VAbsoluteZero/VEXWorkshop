@@ -12,7 +12,7 @@ namespace vp
 	struct SdlDx11Application : public IGraphicsImpl
 	{
 	public:
-		SdlDx11Application() = default;
+        SdlDx11Application() { id = GfxBackendID::Dx11_legacy; }
 		~SdlDx11Application() {   }
 
 		i32 init(vp::Application& owner) override;

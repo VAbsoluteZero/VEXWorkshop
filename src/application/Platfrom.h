@@ -1,10 +1,11 @@
 #pragma once
-#include <VFramework/VEXBase.h>
 #include <VCore/Containers/Dict.h>
+#include <VFramework/VEXBase.h>
+
 #include "SDLWindow.h"
 
 #define ENABLE_IMGUI 1
-namespace vp
+namespace vex
 {
     class Application;
     using tWindow = SDLWindow;
@@ -27,21 +28,33 @@ namespace vp
     using DynVal = vex::Union<i32, f32, bool, v3f, v2i32, const char*, std::string>;
     using OptNumValue = vex::Union<i32, f32, bool>;
 
-    struct IGraphicsImpl
+    enum class GfxBackendID : u8
     {
+        Invalid = 0,
+        Dx11_legacy,
+        Dx11,
+        Webgpu,
+        // Dx12
+    };
+
+    struct AGraphicsBackend
+    {
+        GfxBackendID id;
+
         virtual i32 init(Application& owner) = 0;
-        virtual void preFrame(Application& owner) {}
+        virtual void startFrame(Application& owner) {}
         virtual void frame(Application& owner) {}
         virtual void postFrame(Application& owner) {}
         virtual void teardown(Application& owner) {}
         virtual void handleWindowResize(Application& owner, v2u32 size){};
 
-        virtual ~IGraphicsImpl() {}
+        virtual ~AGraphicsBackend() {}
     };
 
     struct IDemoImpl
     {
-        virtual void runloop(Application& owner) = 0;
+        virtual void update(Application& owner) = 0;
+        virtual void postFrame(Application& owner) {}
         virtual void drawUI(Application& owner) {}
         virtual ~IDemoImpl() {}
     };
@@ -103,7 +116,7 @@ namespace vp
 
     struct DemoSamples
     {
-        typedef IDemoImpl* (*CreateDemoCallback)(Application& owner); 
+        typedef IDemoImpl* (*CreateDemoCallback)(Application& owner);
         struct Entry
         {
             const char* readable_name;
@@ -116,15 +129,11 @@ namespace vp
         void add(const char* k, const char* name, const char* desc, Func&& t)
         {
             static auto callback = t;
-            static auto callback_proxy = [](Application& owner) -> vp::IDemoImpl*
-            {
-                return callback(owner);
-            };
             demos.emplace(k, Entry{name, desc, callback});
         }
     };
 
-} // namespace vp
+} // namespace vex
 
-// #define VEX_register_demo(x, y) static inline vp::AddDemo vpint_COMBINE(reg_demo_anon_,
+// #define VEX_register_demo(x, y) static inline vex::AddDemo vpint_COMBINE(reg_demo_anon_,
 // __LINE__)(x, y);

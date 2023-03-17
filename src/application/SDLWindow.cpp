@@ -2,9 +2,9 @@
 
 #include <SDL.h>
 #include <spdlog/spdlog.h>
-using namespace vp;
+using namespace vex;
 
-std::unique_ptr<SDLWindow> vp::SDLWindow::create(const WindowParams& params)
+std::unique_ptr<SDLWindow> vex::SDLWindow::create(const WindowParams& params)
 {
 	uint32_t mode = SDL_WindowFlags::SDL_WINDOW_SHOWN;
 
@@ -48,11 +48,11 @@ std::unique_ptr<SDLWindow> vp::SDLWindow::create(const WindowParams& params)
 	return nullptr;
 }
 
-v2u32 vp::SDLWindow::windowSize()
+v2u32 vex::SDLWindow::windowSize()
 {
 	v2i32 size;
 	SDL_GetWindowSize(sdl_window, &size.x, &size.y);
 	return {(u32)size.x, (u32)size.y};
 }
 
-vp::SDLWindow::~SDLWindow() { SDL_DestroyWindow(sdl_window); }
+vex::SDLWindow::~SDLWindow() { SDL_DestroyWindow(sdl_window); }

@@ -5,9 +5,9 @@
 #include "ImGuiUtils.h"
  
 
-vp::console::CmdCtx::~CmdCtx() {}
+vex::console::CmdCtx::~CmdCtx() {}
 
-void vp::console::tokenize(const std::string& args_as_text, std::vector<std::string_view>& out_args)
+void vex::console::tokenize(const std::string& args_as_text, std::vector<std::string_view>& out_args)
 {
     auto eptr = args_as_text.c_str() + args_as_text.size();
 
@@ -38,7 +38,7 @@ void vp::console::tokenize(const std::string& args_as_text, std::vector<std::str
 }
 
 
-vp::console::CmdRunner::CmdRunner()
+vex::console::CmdRunner::CmdRunner()
 {
     auto list_all = [&](const CmdCtx& ctx)
     {
@@ -76,7 +76,7 @@ vp::console::CmdRunner::CmdRunner()
 }
 
 
-bool vp::console::ClCommand::trigger(std::string args_as_text)
+bool vex::console::ClCommand::trigger(std::string args_as_text)
 {
     if (command)
     {
@@ -97,7 +97,7 @@ bool vp::console::ClCommand::trigger(std::string args_as_text)
     return false;
 }
 
-vp::console::ConsoleWindow::ConsoleWindow()
+vex::console::ConsoleWindow::ConsoleWindow()
 {
     memset(input_buf, 0, sizeof(input_buf));
     history_pos = -1;
@@ -113,7 +113,7 @@ inline void Strtrim(char* s)
     *str_end = 0;
 }
 
-void vp::console::ConsoleWindow::Draw(const char* title)
+void vex::console::ConsoleWindow::Draw(const char* title)
 {
     fetch_cooldown++;
     if (fetch_cooldown == 0)
@@ -129,7 +129,7 @@ void vp::console::ConsoleWindow::Draw(const char* title)
     }
     defer_ { ImGui::End(); };
 
-    ImGui::PushFont(vp::g_view_hub.visuals.fnt_log);
+    ImGui::PushFont(vex::g_view_hub.visuals.fnt_log);
     defer_ { ImGui::PopFont(); };
 
     // As a specific feature guaranteed by the library, after calling Begin() the last Item
@@ -237,27 +237,27 @@ void vp::console::ConsoleWindow::Draw(const char* title)
         ImGui::SetKeyboardFocusHere(-1); // Auto focus previous widget
 }
 
-void vp::console::ConsoleWindow::ExecCommand(const char* command_line)
+void vex::console::ConsoleWindow::ExecCommand(const char* command_line)
 {
     static bool tst = false;
     if (!tst)
     {
         tst = true;
-        vp::console::makeAndRegisterCmd("test", "blah blah", true,
-            [](const vp::console::CmdCtx& ctx)
+        vex::console::makeAndRegisterCmd("test", "blah blah", true,
+            [](const vex::console::CmdCtx& ctx)
             {
                 return true;
             });
 
-        vp::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
-            [](const vp::console::CmdCtx& ctx)
+        vex::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
+            [](const vex::console::CmdCtx& ctx)
             {
                 // tst
                 SPDLOG_INFO("# other stuff: {}\n", ctx.parsed_args->get<int>("id", -1));
                 return true;
             });
-        vp::console::makeAndRegisterCmd("cmd_2", " I am cmd!\n desc desc.\n", true,
-            [](const vp::console::CmdCtx& ctx)
+        vex::console::makeAndRegisterCmd("cmd_2", " I am cmd!\n desc desc.\n", true,
+            [](const vex::console::CmdCtx& ctx)
             {
                 // tst
                 return ctx.parsed_args->get<int>("id", -1) == 42;
@@ -299,7 +299,7 @@ void vp::console::ConsoleWindow::ExecCommand(const char* command_line)
 
     // trigger
     {
-        vp::console::ClCommand* cmd = vp::console::findCmd(cmd_part.c_str());
+        vex::console::ClCommand* cmd = vex::console::findCmd(cmd_part.c_str());
 
         if (nullptr == cmd)
         {
@@ -317,7 +317,7 @@ void vp::console::ConsoleWindow::ExecCommand(const char* command_line)
 }
  
 
-int vp::console::ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
+int vex::console::ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
 {
     switch (data->EventFlag)
     {
@@ -335,8 +335,8 @@ int vp::console::ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* dat
                 word_start--;
             }
 
-            using CmdMap = vex::Dict<const char*, vp::console::ClCommand>;
-            const CmdMap& cmd_dict = vp::console::CmdRunner::global().commands;
+            using CmdMap = vex::Dict<const char*, vex::console::ClCommand>;
+            const CmdMap& cmd_dict = vex::console::CmdRunner::global().commands;
 
             // Build a list of candidates
             // #fixme : frame allocator

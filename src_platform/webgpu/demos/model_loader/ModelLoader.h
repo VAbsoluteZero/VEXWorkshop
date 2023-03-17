@@ -4,12 +4,12 @@
 #include <application/Platfrom.h>
 #include <application/Application.h>
 
-namespace vp
+namespace vex
 {
     struct ModelLoader : public IDemoImpl
     {
         static ModelLoader* createDemo();
-        void runloop(Application& owner) override;
+        void update(Application& owner) override;
         void drawUI(Application& owner) override;
         virtual ~ModelLoader() {}
     };

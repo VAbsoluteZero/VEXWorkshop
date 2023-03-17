@@ -1,7 +1,7 @@
 #include "JobThread.h"
 #include <assert.h>
 
-void vp::JobThread::Start(JobThreadConfig config)
+void vex::JobThread::Start(JobThreadConfig config)
 {
 	static bool gGuard = false;
 
@@ -17,16 +17,16 @@ void vp::JobThread::Start(JobThreadConfig config)
 	//_threadHandle.detach();
 }
 
-vp::JobThread::JobThread() : _threadHandle() // to explicitly show the intent
+vex::JobThread::JobThread() : _threadHandle() // to explicitly show the intent
 {
 }
 
-vp::JobThread::~JobThread()
+vex::JobThread::~JobThread()
 { 
 	if (_threadHandle.joinable())
 		_threadHandle.join();
 }
 
-void vp::JobThread::runLoop()
+void vex::JobThread::runLoop()
 {
 }
