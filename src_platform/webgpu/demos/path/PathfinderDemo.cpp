@@ -51,7 +51,7 @@ struct UBOCamera
 {
     mtx4 projection;
     mtx4 model_view;
-   // mtx4 view_pos;
+    // mtx4 view_pos;
 };
 
 static inline WGPUCommandEncoderDescriptor ctx_desc{nullptr, "PathfinderDemo cmd descriptor"};
@@ -64,11 +64,6 @@ void vex::PathfinderDemo::init(Application& owner, InitArgs args)
 
     ViewportOptions options;
     wgfx::Viewport vex;
-    // wgfx::Context ctx = {
-    //     .device = globals.device,
-    //     .encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc),
-    //     .queue = globals.queue,
-    // };
     vex.initialize(globals.device, options);
     imgui_views.push_back({
         .args = {.name = "Demo"},
@@ -91,7 +86,7 @@ void vex::PathfinderDemo::update(Application& owner)
     vex::InlineBufferAllocator<32 * 1024> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
-    return; 
+    return;
 }
 
 void vex::PathfinderDemo::drawUI(Application& owner)

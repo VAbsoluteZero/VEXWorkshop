@@ -1,10 +1,15 @@
 #pragma once
 #include <VCore/Containers/Dict.h>
+#include <VCore/Utils/VMath.h>
+#include <VFramework/Misc/Color.h>
 #include <VFramework/VEXBase.h>
+
+#include <span>
 
 namespace vex
 {
-    // #todo move it where it make sense
+    static constexpr float default_cam_height = 10;
+    // #todo move it where it makeDefault sense
     enum class ShaderSourceType : u8
     {
         WGSL,
@@ -44,28 +49,49 @@ namespace vex
         bool operator!=(const PosNormUv&) const = default;
     };
 
+    struct PosNormColor
+    {
+        v3f pos = v3f_zero;
+        v3f norm = v3f_zero;
+        v4f color = v4f_zero;
+
+        bool operator==(const PosNormColor&) const = default;
+        bool operator!=(const PosNormColor&) const = default;
+    };
+
     template <typename VertType, typename IndType = u32>
     struct DynMeshBuilder
     {
         DynMeshBuilder(vex::Allocator al, u32 reserve_indices = 128, u32 reserve_vertices = 64)
-            : vertices(al, reserve_vertices), indices(al, reserve_indices)
+        : vertices(al, reserve_vertices), indices(al, reserve_indices)
         {
         }
         vex::Buffer<VertType> vertices;
         vex::Buffer<IndType> indices;
 
-        static constexpr u32 size_of_vertex_t = sizeof(VertType); 
+        static constexpr u32 size_of_vertex_t = sizeof(VertType);
         static constexpr u32 size_of_index_t = sizeof(IndType);
 
-        constexpr auto vertBufSize() -> u32 { return vertices.size() * sizeof(VertType); }
-        constexpr auto indBufSize() -> u32 { return indices.size() * sizeof(IndType); }
+        constexpr auto vtxBufSize() -> u32 { return vertices.size() * sizeof(VertType); }
+        constexpr auto idxBufSize() -> u32 { return indices.size() * sizeof(IndType); }
 
-        void addVertex(VertType&& v) { vertices.add(v); }
-        void makeTriangle(IndType a, IndType b, IndType c)
+        FORCE_INLINE void ensureHasSpaceFor(u32 num_vert, u32 num_ind)
+        {
+            vertices.reserve(vertices.size() + num_vert);
+            indices.reserve(indices.size() + num_ind);
+        }
+
+        FORCE_INLINE void addVertex(VertType&& v) { vertices.add(v); }
+        FORCE_INLINE void makeTriangle(IndType a, IndType b, IndType c)
         {
             indices.add(a);
             indices.add(b);
             indices.add(c);
+        }
+        FORCE_INLINE void clear()
+        {
+            vertices.len = 0;
+            indices.len = 0;
         }
     };
     template <typename VertType>
@@ -112,23 +138,47 @@ namespace vex
         }
         return mesh;
     }
-    template <typename VertType>
-    auto makeQuad(vex::Allocator al, float w, float h)
+
+    auto makeQuadUV(vex::Allocator al, float w, float h, v3f origin = {0, 0, 0})
+        -> DynMeshBuilder<PosNormUv>;
+
+    struct QuadColors
     {
-        DynMeshBuilder<VertType> mesh{al, 6, 4};
-        v3f tl{-w / 2, +h / 2, 0.1f};
-        v3f tr{+w / 2, +h / 2, 0.1f};
-        v3f br{+w / 2, -h / 2, 0.1f};
-        v3f bl{-w / 2, -h / 2, 0.1f};
-        mesh.addVertex({bl, v3f(0, 0, -1), v2f(0, 1)});
-        mesh.addVertex({br, v3f(0, 0, -1), v2f(1, 1)});
-        mesh.addVertex({tr, v3f(0, 0, -1), v2f(1, 0)});
-        mesh.addVertex({tl, v3f(0, 0, -1), v2f(0, 0)});
-        u32 zero = 0;
-        mesh.makeTriangle(zero, zero + 1, zero + 2);
-        mesh.makeTriangle(zero, zero + 2, zero + 3);
-        return mesh;
-    }
+        union
+        {
+            Color clr[4];
+            v4f tl;
+            v4f tr;
+            v4f br;
+            v4f bl;
+        };
+        QuadColors(Color one = Color::red()) : clr{one, one, one, one} {}
+        QuadColors(const QuadColors&) = default;
+        ~QuadColors() = default;
+    };
+
+    struct PolyLine
+    {
+        enum class Corners : u8
+        {
+            None = 0,
+            CloseTri = 2,
+            // Fan
+        };
+        struct Args
+        {
+            v3f* points = nullptr;
+            i32 len = 0;
+            v4f color;
+            Corners corner_type = Corners::None;
+            float thickness = 1;
+            bool closed = true;
+        };
+        static void buildPolyXY(DynMeshBuilder<PosNormColor>& out_builder, PolyLine::Args args);
+
+        static void buildSegmentXY(DynMeshBuilder<PosNormColor>& out_builder, PolyLine::Args args);
+    };
+
 } // namespace vex
 
 namespace std
@@ -137,5 +187,10 @@ namespace std
     struct hash<vex::PosNormUv>
     {
         size_t operator()(vex::PosNormUv const& v) const { return vex::util::fnv1a_obj(v); }
+    };
+    template <>
+    struct hash<vex::PosNormColor>
+    {
+        size_t operator()(vex::PosNormColor const& v) const { return vex::util::fnv1a_obj(v); }
     };
 } // namespace std

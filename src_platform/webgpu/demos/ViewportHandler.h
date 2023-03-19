@@ -14,6 +14,7 @@ namespace wgfx::ui
         vex::ViewportOptions args;
         bool visible = true;
         v2i32 last_seen_size{0, 0};
+        v2i32 viewport_origin{0, 0};
         wgfx::Viewport render_target;
         bool changed_last_frame = false;
     };

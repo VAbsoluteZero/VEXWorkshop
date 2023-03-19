@@ -1,7 +1,9 @@
 #include "TexturedQuad.h"
 
 #include <VCore/Containers/Tuple.h>
+#include <application/Environment.h>
 #include <utils/CLI.h>
+#include <webgpu/render/LayoutManagement.h>
 
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -15,12 +17,52 @@ using namespace std::literals::string_view_literals;
 
 static inline WGPUCommandEncoderDescriptor ctx_desc{nullptr, "TexturedQuadDemo cmd descriptor"};
 static inline WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "TexturedQuadDemo cmd buf finish"};
+
+
+struct UBOMvp
+{
+    mtx4 model_view_proj = mtx4_identity;
+};
 struct UBOCamera
 {
-    mtx4 projection;
-    mtx4 model_view;
-    mtx4 view_pos;
+    mtx4 projection = mtx4_identity;
+    mtx4 model_view = mtx4_identity;
+    mtx4 view_pos = mtx4_identity;
 };
+
+namespace pl_init_data
+{
+    constexpr auto primitive_state = makeDefault<WGPUPrimitiveState>();
+    constexpr auto color_target_state = makeDefault<WGPUColorTargetState>({
+        .format = WGPUTextureFormat_RGBA8Unorm,
+    });
+    constexpr auto depth_stencil_state = makeDefault<WGPUDepthStencilState>();
+    constexpr const WGPUVertexBufferLayout vbl = VertLayout<vex::PosNormUv>::buffer_layout;
+    constexpr WGPUMultisampleState multisample_state = makeDefault<WGPUMultisampleState>();
+
+    auto vert_state = makeVertexState(nullptr, //
+        VertShaderDesc{
+            .from = ShaderOrigin::Undefined,
+            .label = "quad shader plain",
+            .buffer_count = 1,
+            .buffers = &vbl,
+        });
+
+    auto frag_state = makeFragmentState(nullptr, //
+        FragShaderDesc{.from = ShaderOrigin::Undefined,
+            .label = "quad shader plain",
+            .target_count = 1,
+            .targets = &color_target_state});
+
+    WGPURenderPipelineDescriptor pipeline_desc = {
+        .label = "quad render pipeline",
+        .vertex = vert_state,
+        .primitive = primitive_state,
+        .depthStencil = &depth_stencil_state,
+        .multisample = multisample_state,
+        .fragment = &frag_state,
+    };
+} // namespace pl_init_data
 
 static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
     const Context& context, u32 unibuf_size)
@@ -36,7 +78,6 @@ static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
                     .hasDynamicOffset = false,
                     .minBindingSize = unibuf_size,
                 },
-            .sampler = {},
         },
         // Texture view (Fragment shader)
         {
@@ -48,14 +89,12 @@ static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
                     .viewDimension = WGPUTextureViewDimension_2D,
                     .multisampled = false,
                 },
-            .storageTexture = {},
         },
         //  Sampler (Fragment shader)
         {
             .binding = 2,
             .visibility = WGPUShaderStage_Fragment,
             .sampler = {.type = WGPUSamplerBindingType_Filtering},
-            .texture = {},
         },
     };
 
@@ -78,63 +117,15 @@ static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
 static WGPUBindGroup createBindGroups(const Context& context, WGPUBindGroupLayout bind_group_layout,
     const GpuBuffer& unibuf, const TextureView& tex_view)
 {
-    WGPUBindGroupEntry bg_entries[3] = {
-        {
-            .binding = 0,
-            .buffer = unibuf.buffer,
-            .offset = 0,
-            .size = unibuf.desc.size,
-        },
-        {
-            .binding = 1,
-            .textureView = tex_view.view,
-        },
-        {
-            .binding = 2,
-            .sampler = tex_view.sampler,
-        },
-    };
-    WGPUBindGroupDescriptor bg_desc{
-        .layout = bind_group_layout,
-        .entryCount = (u32)std::size(bg_entries),
-        .entries = bg_entries,
-    };
-    auto out_bind_group = wgpuDeviceCreateBindGroup(context.device, &bg_desc);
+    WGPUBindGroup out_bind_group = BGBuilder{} //
+                                       .add(unibuf)
+                                       .add(tex_view.view)
+                                       .add(tex_view.sampler)
+                                       .createBindGroup(context.device, bind_group_layout);
+
     check_(out_bind_group);
     return out_bind_group;
 }
-
-namespace pl_init_data
-{
-    constexpr auto primitive_state = make<WGPUPrimitiveState>();
-    constexpr auto color_target_state = make<WGPUColorTargetState>({
-        .format = WGPUTextureFormat_RGBA8Unorm,
-    });
-    constexpr auto depth_stencil_state = make<WGPUDepthStencilState>();
-    constexpr const WGPUVertexBufferLayout vbl = VertLayout<vex::PosNormUv>::buffer_layout;
-    constexpr WGPUMultisampleState multisample_state = make<WGPUMultisampleState>();
-
-    auto vert_state = makeVertexState(nullptr, //
-        VertShaderDesc{
-            .from = ShaderOrigin::Undefined,
-            .label = "quad shader plain",
-            .buffer_count = 1,
-            .buffers = &vbl,
-        });
-    auto frag_state = makeFragmentState(nullptr, //
-        FragShaderDesc{.from = ShaderOrigin::Undefined,
-            .label = "quad shader plain",
-            .target_count = 1,
-            .targets = &color_target_state});
-    WGPURenderPipelineDescriptor pipeline_desc = {
-        .label = "quad render pipeline",
-        .vertex = vert_state,
-        .primitive = primitive_state,
-        .depthStencil = &depth_stencil_state,
-        .multisample = multisample_state,
-        .fragment = &frag_state, // ??? why ref (webgpu weirdness)
-    };
-} // namespace pl_init_data
 
 static WGPURenderPipeline createPipeline(
     const TextShaderLib& shader_lib, const Context& context, WGPUPipelineLayout pipeline_layout)
@@ -143,6 +134,7 @@ static WGPURenderPipeline createPipeline(
     auto* src = shader_lib.shad_src.find("content/shaders/wgsl/basic_unlit.wgsl"sv);
     if (!check(src, "shader not found"))
         return {};
+
     WGPUShaderModule shad_vert_frag = shaderFromSrc(context.device, src->text.c_str());
     vert_state.module = shad_vert_frag;
     frag_state.module = shad_vert_frag;
@@ -158,21 +150,20 @@ static WGPURenderPipeline realoadShaders(
 {
     shader_lib.reload();
 #ifdef VEX_GFX_WEBGPU_DAWN
+    #ifndef NDEBUG
     std::string f = "content/shaders/wgsl/basic_unlit.wgsl";
     std::string cont = shader_lib.shad_src.find("content/shaders/wgsl/basic_unlit.wgsl")->text;
     auto source = std::make_unique<tint::Source::File>(f, cont);
     auto reparsed_program = tint::reader::wgsl::Parse(source.get());
     if (!reparsed_program.IsValid())
     {
-        auto diag_printer = tint::diag::Printer::create(stderr, true);
         for (auto& it : reparsed_program.Diagnostics())
         {
             SPDLOG_INFO("tint error: {}", it.message);
         }
-        tint::diag::Formatter diag_formatter;
-        diag_formatter.format(reparsed_program.Diagnostics(), diag_printer.get());
         return nullptr;
     }
+    #endif
 #endif
     using namespace pl_init_data;
 
@@ -180,6 +171,31 @@ static WGPURenderPipeline realoadShaders(
     if (!check(src, "shader not found"))
         return {};
     WGPUShaderModule shad_vert_frag = shaderFromSrc(context.device, src->text.c_str());
+
+    std::atomic_bool sync_ready = ATOMIC_VAR_INIT(false);
+    bool success = false;
+    wgpuRequest(
+        wgpuShaderModuleGetCompilationInfo,
+        [&](WGPUCompilationInfoRequestStatus status, WGPUCompilationInfo const* compilationInfo,
+            void*)
+        {
+            if (compilationInfo)
+            {
+                for (auto it : vex::Range(compilationInfo->messageCount))
+                {
+                    WGPUCompilationMessage message = compilationInfo->messages[it];
+                    SPDLOG_WARN("Error (line: {}, pos: {}): {}", message.lineNum, message.linePos,
+                        message.message);
+                }
+            }
+            success = (status == WGPUCompilationInfoRequestStatus_Success);
+            sync_ready = true;
+        },
+        shad_vert_frag);
+    wgpuPollWait(context, sync_ready, 1000);
+    if (!success)
+        return nullptr;
+
     vert_state.module = shad_vert_frag;
     frag_state.module = shad_vert_frag;
     pipeline_desc.vertex = vert_state;
@@ -189,9 +205,10 @@ static WGPURenderPipeline realoadShaders(
     return pipeline;
 }
 
-static void updateUniform(wgfx::Context& context, GpuBuffer& unibuf, UBOCamera ubo_transforms)
+template <typename UBO>
+static void updateUniform(wgfx::Context& context, GpuBuffer& unibuf, UBO ubo_transforms)
 {
-    wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBOCamera));
+    wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBO));
 }
 
 void TexturedQuadDemo::init(Application& owner, InitArgs args)
@@ -200,29 +217,24 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
     checkLethal(backend->id == GfxBackendID::Webgpu, "unsupported gfx backend");
     this->wgpu_backend = static_cast<WebGpuBackend*>(backend);
     auto& globals = wgpu_backend->getGlobalResources();
+
+    vex::InlineBufferAllocator<32 * 1024> temp_alloc_resource;
+    auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
+    Context ctx = {
+        .device = globals.device,
+        .encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc),
+        .queue = globals.queue,
+    };
+    ViewportOptions options{.name = "Textured Quad Demo", .size = {800, 600}};
+    viewports.add(ctx, options);
+    scene.camera = BasicCamera::makeOrtho(
+        {0.f, 0.f, -2.0}, {default_cam_height * 1.333f, default_cam_height}, -10, 10);
     // init wgpu state
     {
-        auto st = make<WGPUColorTargetState>({
-            .writeMask = WGPUColorWriteMask_All,
-        });
-
-        Context ctx = {
-            .device = globals.device,
-            .encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc),
-            .queue = globals.queue,
-        };
-        ViewportOptions options{.name = "Textured Quad Demo", .size = {800, 600}};
-        viewports.add(ctx, options);
-
-        scene.camera = BasicCamera::makeOrtho({0.f, 0.f, -2.0}, {2, 2}, -10, 10);
-
-        vex::InlineBufferAllocator<32 * 1024> temp_alloc_resource;
-        auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
-
         // quad
         bg_quad = [&]() -> QuadGpuData
         {
-            auto tmp_mesh = makeQuad<PosNormUv>(tmp_alloc, 0.4f, 0.4f);
+            auto tmp_mesh = makeQuadUV(tmp_alloc, 4, 4);
 
             auto texture = loadImage("content/sprites/quad_demo/gobi.png");
             defer_ { texture.release(); };
@@ -238,19 +250,19 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
                 {
                     .label = "bg quad ver buf",
                     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-                    .size = tmp_mesh.vertBufSize(),
+                    .size = tmp_mesh.vtxBufSize(),
                     .count = (u32)tmp_mesh.vertices.size(),
                 },
-                (u8*)tmp_mesh.vertices.data(), tmp_mesh.vertBufSize());
+                (u8*)tmp_mesh.vertices.data(), tmp_mesh.vtxBufSize());
 
             auto ind_buf = GpuBuffer::create(ctx.device,
                 {
                     .label = "bg quad idx buf",
                     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-                    .size = tmp_mesh.indBufSize(),
+                    .size = tmp_mesh.idxBufSize(),
                     .count = (u32)tmp_mesh.indices.size(),
                 },
-                (u8*)tmp_mesh.indices.data(), tmp_mesh.indBufSize());
+                (u8*)tmp_mesh.indices.data(), tmp_mesh.idxBufSize());
 
             check_(ind_buf.isValid());
             check_(vert_buf.isValid());
@@ -288,133 +300,267 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
             gpu_data.pipe_layout = pipeline_layout;
         }
         wgpuDeviceTick(ctx.device);
-        WGPU_REL(wgpuCommandEncoder, ctx.encoder);
-    } // end wgpu init
+        WGPU_REL(CommandEncoder, ctx.encoder);
+        temp_alloc_resource.reset();
+    } // end quad pipeline init
+    // init temp geometry stuff
+    {
+        using namespace pl_init_data;
+        auto* src = wgpu_backend->text_shad_lib.shad_src.find(
+            "content/shaders/wgsl/gizmo_color.wgsl"sv);
+        if (!check(src, "shader not found"))
+            return;
+        WGPUShaderModule shad = shaderFromSrc(globals.device, src->text.c_str());
+
+        temp_geom.uniform_buf = [&]() -> GpuBuffer
+        {
+            UBOMvp ubo_transforms;
+            ubo_transforms.model_view_proj = scene.camera.mtx.projection * scene.camera.mtx.view;
+            auto out = GpuBuffer::create(ctx.device,
+                {
+                    .label = "bg quad idx buf",
+                    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+                    .size = sizeof(UBOMvp),
+                },
+                (u8*)&ubo_transforms, sizeof(UBOMvp));
+            return out;
+        }();
+        temp_geom.vtx_buf = GpuBuffer::create(
+            ctx.device, {
+                            .label = "bg quad ver buf",
+                            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+                            .size = temp_geom.max_vtx_buff_size,
+                        });
+
+        temp_geom.idx_buf = GpuBuffer::create(
+            ctx.device, {
+                            .label = "bg quad idx buf",
+                            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+                            .size = temp_geom.max_idx_buff_size,
+                        });
+
+        auto [layout, binding] = BGLCombinedBuilder{.al = tmp_alloc} //
+                                     .addUniform(sizeof(UBOMvp), temp_geom.uniform_buf)
+                                     .createLayoutAndGroup(ctx.device);
+
+        BasicPipeline<PosNormColor> pl_builder;
+        pl_builder.setShader(shad);
+        temp_geom.pipeline = pl_builder.createPipeline(ctx, layout);
+        temp_geom.bind_group = binding;
+        check(temp_geom.isValid(), "temp_geometry initialization failed");
+    }
     // register input
     {
         using namespace input;
-        owner.input.addTrigger("ReloadShaders"_trig,
+        owner.input.addTrigger("ClearPoints"_trig,
             Trigger{
                 .fn_logic =
                     [](Trigger& self, const InputState& state)
                 {
-                    if (state.this_frame[(u8)(SignalId::KeySpace)].state == SignalState::Started)
-                    {
-                        return true;
-                    }
-
-                    return false;
+                    const auto code = (u8)(SignalId::KeySpace);
+                    return state.this_frame[code].state == SignalState::Started;
                 },
             });
     }
 }
 
-
 void TexturedQuadDemo::update(Application& owner)
 {
     auto& globals = wgpu_backend->getGlobalResources();
+    DynMeshBuilder<PosNormColor> mesh_data = {alloc, 512, 256};
+    if (viewports.imgui_views.size() < 1)
+        return;
+    auto& main_view = viewports.imgui_views[0];
 
-    vex::InlineBufferAllocator<32 * 1024> temp_alloc_resource;
-    auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
+    // input update
+    {
+        using namespace input; 
 
+        const v2i32 pos = owner.input.global.mouse_pos_window;
+        const v2i32 origin = main_view.viewport_origin;
+        const v2i32 pos_wnd = pos - origin;
+        const v2f view_size = v2f{main_view.last_seen_size};
+        v3f pos_cam_space = v3f{(pos_wnd.x / view_size.x) - 0.5f, (pos_wnd.y / view_size.y) - 0.5f,
+                                0.0f} *
+                            2.0f;
+        // const auto cam_size = scene.camera.orthoSize();
+        // v3f world_loc = scene.camera.pos + pos_cam_space * v3f{cam_size * 0.5f, 0};
+        auto i_mvp = glm::inverse(scene.camera.mtx.projection * scene.camera.mtx.view);
+        v3f world_loc = i_mvp * v4f{pos_cam_space, 1};
+
+        owner.input.if_triggered("ClearPoints"_trig,
+            [&](const input::Trigger& self)
+            {
+                mouse_points.points.clear();
+                return true;
+            });
+        owner.input.if_triggered("MouseRightDown"_trig,
+            [&](const input::Trigger& self)
+            {
+                // SPDLOG_INFO(" clicked at {} => {}, adding point", pos_cam_space, world_loc);
+                mouse_points.points.push(Point{world_loc, mouse_points.color});
+                return true;
+            });
+        owner.input.if_triggered("MouseMidMove"_trig,
+            [&](const input::Trigger& self)
+            {
+                return true;
+            });
+    }
     // wgpu update
     {
-        if (viewports.imgui_views.size() < 1)
-            return;
-
-        UBOCamera ubo_transforms;
-        ubo_transforms.model_view = scene.camera.mtx.view;
-        ubo_transforms.projection = scene.camera.mtx.projection;
-
-        Viewport& viewport = viewports.imgui_views[0].render_target;
-
+        Viewport& viewport = main_view.render_target;
         auto& wgpu_ctx = viewport.setupForDrawing(globals);
-        updateUniform(wgpu_ctx, gpu_data.uniform_buf, ubo_transforms);
+
+        // scene.camera.height = viewport.options.size.y;
+        {
+            scene.camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
+            scene.camera.update();
+
+            UBOCamera ubo_transforms;
+            ubo_transforms.model_view = scene.camera.mtx.view;
+            ubo_transforms.projection = scene.camera.mtx.projection;
+            updateUniform(wgpu_ctx, gpu_data.uniform_buf, ubo_transforms);
+
+            UBOMvp ubo_temp_geo;
+            ubo_temp_geo.model_view_proj = scene.camera.mtx.projection * scene.camera.mtx.view;
+            updateUniform(wgpu_ctx, temp_geom.uniform_buf, ubo_temp_geo);
+        }
+        // create temp geometry
+        {
+            const float geom_scale = 1.5f;
+            vex::Buffer<v3f> lines{alloc, MouseDraw::max_points};
+            vex::Buffer<v4f> colors{alloc, MouseDraw::max_points};
+            for (auto& p : mouse_points.points.reverseEnum())
+            {
+                lines.add(p.pos);
+                // lines.addList({
+            }
+            //     v3f{1, 2, 0} * geom_scale,
+            //     v3f{2, 2, 0} * geom_scale,
+            //     v3f{2, 1, 0} * geom_scale,
+            //     v3f{2, 0, 0} * geom_scale,
+            //     v3f{1, 0, 0} * geom_scale,
+            // });
+            vex::PolyLine::buildPolyXY(mesh_data, //
+                PolyLine::Args{
+                    .points = lines.data(),
+                    .len = lines.size(),
+                    .corner_type = PolyLine::Corners::CloseTri,
+                    .thickness = mouse_points.width,
+                    .color = mouse_points.color,
+                    .closed = mouse_points.loop,
+                });
+
+            auto& verts = mesh_data.vertices;
+            auto& indices = mesh_data.indices;
+
+            wgpuQueueWriteBuffer(wgpu_ctx.queue, temp_geom.vtx_buf.buffer, 0, (u8*)verts.data(),
+                mesh_data.vtxBufSize());
+            wgpuQueueWriteBuffer(wgpu_ctx.queue, temp_geom.idx_buf.buffer, 0, (u8*)indices.data(),
+                mesh_data.idxBufSize());
+        }
 
         wgpuDeviceTick(wgpu_ctx.device);
 
         auto cmd_buf = [&]() -> WGPUCommandBuffer
         {
             auto rpass_enc = wgpu_ctx.render_pass;
-            wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "quad1 setup");
-            wgpuRenderPassEncoderSetPipeline(rpass_enc, gpu_data.pipeline);
-            wgpuRenderPassEncoderSetBindGroup(rpass_enc, 0, gpu_data.bind_group, 0, 0);
+            // quad
+            {
+                wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "quad1 setup");
+                wgpuRenderPassEncoderSetPipeline(rpass_enc, gpu_data.pipeline);
+                wgpuRenderPassEncoderSetBindGroup(rpass_enc, 0, gpu_data.bind_group, 0, 0);
 
-            wgpuRenderPassEncoderSetVertexBuffer(
-                rpass_enc, 0, bg_quad.vtx_buf.buffer, 0, bg_quad.vtx_buf.desc.size);
-            wgpuRenderPassEncoderSetIndexBuffer(rpass_enc, bg_quad.idx_buf.buffer,
-                WGPUIndexFormat_Uint32, 0, bg_quad.idx_buf.desc.size);
-            wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
+                wgpuRenderPassEncoderSetVertexBuffer(
+                    rpass_enc, 0, bg_quad.vtx_buf.buffer, 0, bg_quad.vtx_buf.desc.size);
+                wgpuRenderPassEncoderSetIndexBuffer(rpass_enc, bg_quad.idx_buf.buffer,
+                    WGPUIndexFormat_Uint32, 0, bg_quad.idx_buf.desc.size);
+                wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
 
-            wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "quad1");
-            wgpuRenderPassEncoderDrawIndexed(rpass_enc, bg_quad.idx_buf.desc.count, 1, 0, 0, 0);
-            wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
+                wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "quad1");
+                wgpuRenderPassEncoderDrawIndexed(rpass_enc, bg_quad.idx_buf.desc.count, 1, 0, 0, 0);
+                wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
+            }
+            // temp geometry
+            {
+                auto& indices = mesh_data.indices;
+
+                wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "temp geometry setup");
+                wgpuRenderPassEncoderSetPipeline(rpass_enc, temp_geom.pipeline);
+                wgpuRenderPassEncoderSetBindGroup(rpass_enc, 0, temp_geom.bind_group, 0, 0);
+
+                wgpuRenderPassEncoderSetVertexBuffer(
+                    rpass_enc, 0, temp_geom.vtx_buf.buffer, 0, mesh_data.vtxBufSize());
+                wgpuRenderPassEncoderSetIndexBuffer(rpass_enc, temp_geom.idx_buf.buffer,
+                    WGPUIndexFormat_Uint32, 0, mesh_data.idxBufSize());
+                wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
+
+                wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "lines");
+                wgpuRenderPassEncoderDrawIndexed(rpass_enc, indices.size(), 1, 0, 0, 0);
+                wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
+            }
 
             wgpuRenderPassEncoderEnd(rpass_enc);
 
             return wgpuCommandEncoderFinish(wgpu_ctx.encoder, &ctx_desc_fin);
         }();
         wgpuQueueSubmit(wgpu_ctx.queue, 1, &cmd_buf);
-        WGPU_REL(wgpuCommandBuffer, cmd_buf);
-        WGPU_REL(wgpuCommandEncoder, wgpu_ctx.encoder);
+        WGPU_REL(CommandBuffer, cmd_buf);
+        WGPU_REL(CommandEncoder, wgpu_ctx.encoder);
         wgpu_ctx.encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc);
 
         wgpuDeviceTick(wgpu_ctx.device);
     }
-    // input update
-    {
-        using namespace input;
-        owner.input.if_triggered("ReloadShaders"_trig,
-            [&](const input::Trigger& self)
-            {
-                Context ctx = {
-                    .device = globals.device,
-                    .encoder = nullptr,
-                    .queue = globals.queue,
-                };
-                auto new_pipeline = realoadShaders(
-                    wgpu_backend->text_shad_lib, ctx, gpu_data.pipe_layout);
-                if (new_pipeline)
-                {
-                    WGPU_REL(wgpuRenderPipeline, gpu_data.pipeline);
-                    gpu_data.pipeline = new_pipeline;
-                    SPDLOG_INFO("New webgpu pipeline created.");
-                }
-                else
-                {
-                    SPDLOG_INFO("Failed to create webgpu pipeline.");
-                }
-                return true;
-            });
-    }
 }
 
 void TexturedQuadDemo::drawUI(Application& owner)
-{ //
+{
     ui.drawStandardUI(owner, &viewports);
-    ImGui::Begin("Textured Quad Demo");
-    if (ImGui::Button("reload shaders"))
     {
-        auto& globals = wgpu_backend->getGlobalResources();
+        ImGui::Begin("Textured Quad Demo");
 
-        Context ctx = {
-            .device = globals.device,
-            .encoder = nullptr,
-            .queue = globals.queue,
-        };
-        auto new_pipeline = realoadShaders(wgpu_backend->text_shad_lib, ctx, gpu_data.pipe_layout);
-        if (new_pipeline)
+        ImGui::Checkbox("  Closed loop", &mouse_points.loop);
+        ImGui::SameLine();
+        ImGui::Bullet();
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(64);
+        ImGui::SliderFloat("Line width", &mouse_points.width, 0.1f, 2.f);
+        ImGui::Text("  Press [right mouse button] to add points ot temp geometry. (%d/ %d)",
+            mouse_points.points.size(), mouse_points.max_points);
+        ImGui::Text("  Press [space] to clear dynamic geometry."); 
+
+        if (ImGui::Button("reload shaders"))
         {
-            WGPU_REL(wgpuRenderPipeline, gpu_data.pipeline);
-            gpu_data.pipeline = new_pipeline;
-            SPDLOG_INFO("New webgpu pipeline created.");
+            auto& globals = wgpu_backend->getGlobalResources();
+
+            Context ctx = {
+                .device = globals.device,
+                .encoder = nullptr,
+                .queue = globals.queue,
+            };
+            auto new_pipeline = realoadShaders(
+                wgpu_backend->text_shad_lib, ctx, gpu_data.pipe_layout);
+            if (new_pipeline)
+            {
+                WGPU_REL(RenderPipeline, gpu_data.pipeline);
+                gpu_data.pipeline = new_pipeline;
+                SPDLOG_INFO("New webgpu pipeline created.");
+            }
+            else
+            {
+                SPDLOG_INFO("Failed to create webgpu pipeline.");
+            }
         }
-        else
-        {
-            SPDLOG_INFO("Failed to create webgpu pipeline.");
-        }
+        ImGui::End();
     }
-    ImGui::End();
+    {
+        ImGui::Begin("Color picker");
+
+        ImGui::SetNextItemWidth(256);
+        ImGui::ColorPicker3("Color", (float*)&mouse_points.color.x);
+        ImGui::End();
+    }
 }
 
 void vex::TexturedQuadDemo::postFrame(Application& owner)
@@ -429,4 +575,5 @@ void vex::TexturedQuadDemo::postFrame(Application& owner)
             vex.render_target.initialize(vex.render_target.context.device, vex.args);
         }
     }
+    frame_alloc.reset();
 }

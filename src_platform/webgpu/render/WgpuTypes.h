@@ -7,7 +7,7 @@
     #include <webgpu.h>
     #define WGPU_REL(x, a) \
         if (a)             \
-        x##Release(a)
+        wgpu##x##Release(a)
 #else
     #include <wgpu/webgpu.h>
     #include <wgpu/wgpu.h>
@@ -51,7 +51,9 @@ namespace wgfx
     }
 
     void wgpuWait(std::atomic_bool& flag);
-    void wgpuPollWait(WGPUQueue queue, std::atomic_bool& flag);
+    // microsec_timeout < 0 => no timeout
+    void wgpuPollWait(
+        const struct Context& context, std::atomic_bool& flag, double microsec_timeout = -1);
     WGPUInstance createInstance(WGPUInstanceDescriptor desc);
     void requestDevice(Globals& globals, WGPUDeviceDescriptor const* descriptor);
     void requestAdapter(Globals& globals, WGPURequestAdapterOptions& options);
@@ -88,9 +90,9 @@ namespace wgfx
         void release(bool release_view = false)
         {
             if (release_view)
-                WGPU_REL(wgpuTextureView, cur_tex_view);
-            WGPU_REL(wgpuRenderPassEncoder, render_pass);
-            WGPU_REL(wgpuCommandEncoder, encoder);
+                WGPU_REL(TextureView, cur_tex_view);
+            WGPU_REL(RenderPassEncoder, render_pass);
+            WGPU_REL(CommandEncoder, encoder);
         };
     };
 
@@ -135,10 +137,10 @@ namespace wgfx
 
         void release()
         {
-            WGPU_REL(wgpuTexture, texture);
-            WGPU_REL(wgpuTextureView, view);
-            WGPU_REL(wgpuTexture, depth_texture);
-            WGPU_REL(wgpuTextureView, depth_view);
+            WGPU_REL(Texture, texture);
+            WGPU_REL(TextureView, view);
+            WGPU_REL(Texture, depth_texture);
+            WGPU_REL(TextureView, depth_view);
             context.release();
         }
     };
@@ -170,7 +172,7 @@ namespace wgfx
         static GpuBuffer create(
             WGPUDevice device, GpuBuffer::Desc desc, u8* data, u32 data_len_bytes);
         void copyViaStaging(CpyArgs args);
-        void release() { WGPU_REL(wgpuBuffer, buffer); }
+        void release() { WGPU_REL(Buffer, buffer); }
     };
 
     struct CopyBuffToTexArgs
@@ -232,9 +234,9 @@ namespace wgfx
         bool isValid() const { return texture && view && sampler; }
         void release()
         {
-            WGPU_REL(wgpuSampler, sampler);
-            WGPU_REL(wgpuTextureView, view);
-            WGPU_REL(wgpuTexture, texture);
+            WGPU_REL(Sampler, sampler);
+            WGPU_REL(TextureView, view);
+            WGPU_REL(Texture, texture);
         }
         typedef struct CreationArgs
         {
@@ -301,7 +303,7 @@ namespace wgfx
             mtx4 projection;
             mtx4 view;
         } mtx;
-        u8 invert_y: 1 = 1u;
+        u8 invert_y : 1 = 1u;
 
         inline v2f orthoSize() const { return {height * aspect, height}; }
 
@@ -430,55 +432,14 @@ namespace wgfx
     };
     // creates WGPU type T that is inititalized with sensible defaults
     template <typename T>
-    FORCE_INLINE constexpr auto make(Def<T> var = {})
+    FORCE_INLINE constexpr auto makeDefault(Def<T> var = {})
     {
         return var.toWgpu();
     };
-
-    template <typename T>
-    struct VertLayout;
-    template <>
-    struct VertLayout<vex::PosNormUv>
-    {
-        using Vert = vex::PosNormUv;
-        static constexpr WGPUVertexAttribute attributes[3] = {
-            {
-                .format = WGPUVertexFormat_Float32x3,
-                .offset = offsetof(Vert, pos),
-                .shaderLocation = 0,
-            },
-            {
-                .format = WGPUVertexFormat_Float32x3,
-                .offset = offsetof(Vert, norm),
-                .shaderLocation = 1,
-            },
-            {
-                .format = WGPUVertexFormat_Float32x2,
-                .offset = offsetof(Vert, tex),
-                .shaderLocation = 2,
-            },
-        };
-        static constexpr WGPUVertexBufferLayout buffer_layout = {
-            .arrayStride = sizeof(Vert),
-            .stepMode = WGPUVertexStepMode_Vertex,
-            .attributeCount = std::size(attributes),
-            .attributes = attributes,
-        };
-    };
+    static constexpr auto def_primitive_state = makeDefault<WGPUPrimitiveState>();
+    static constexpr auto def_color_target_state = makeDefault<WGPUColorTargetState>({
+        .format = WGPUTextureFormat_RGBA8Unorm,
+    });
+    static constexpr auto def_depth_stencil_state24p8 = makeDefault<WGPUDepthStencilState>();
 } // namespace wgfx
-
-
-#define WGPU_VERTATTR_DESC(loc, fmt, offset)           \
-    {                                                  \
-        .format = f, .offset = o, .shaderLocation = l, \
-    }
-#define WGPU_VERTBUFFERLAYOUT_DESC(type, arr)  \
-    {                                          \
-        .arrayStride = sizeof(type),           \
-        .stepMode = WGPUVertexStepMode_Vertex, \
-        .attributeCount = std::size(arr),      \
-        .attributes = arr,                     \
-    };
-#define WGPU_VERTEX_BUFFER_LAYOUT(type, name, bind_size, ...) \
-    WGPUVertexAttribute name##_attributes[] = {__VA_ARGS__};  \
-    WGPUVertexBufferLayout name##_vdl = WGPU_VERTBUFFERLAYOUT_DESC(type, name##_attributes);
+ 

@@ -153,6 +153,8 @@ i32 vex::Application::runLoop()
 
     do
     {
+        input.poll(ftime.unscalled_dt_f32);
+        input.updateTriggers();
         //-----------------------------------------------------------------------------
         // prepare frame
         {
@@ -161,8 +163,6 @@ i32 vex::Application::runLoop()
         //-----------------------------------------------------------------------------
         // frame
         {
-            input.poll(ftime.unscalled_dt_f32);
-            input.updateTriggers();
             if (active_demo)
             {
                 active_demo->update(*this);

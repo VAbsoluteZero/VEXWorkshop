@@ -19,10 +19,10 @@ void wgfx::ui::ViewportHandler::add(const wgfx::Context& wgpu_ctx, vex::Viewport
 
 void wgfx::ui::ViewportHandler::draw()
 {
-    for (auto& vex : imgui_views)
+    for (auto& view : imgui_views)
     {
-        auto s = fmt::format("{}", vex.args.name);
-        if (!vex.visible)
+        auto s = fmt::format("{}", view.args.name);
+        if (!view.visible)
             continue;
 
         bool imgui_visible = ImGui::Begin(s.data());
@@ -33,19 +33,22 @@ void wgfx::ui::ViewportHandler::draw()
         auto deltas = ImVec2{vmax.x - vmin.x, vmax.y - vmin.y};
         v2i32 cur_size = {deltas.x > 0 ? deltas.x : 32, deltas.y > 0 ? deltas.y : 32};
 
-        wgfx::Viewport& render_target = vex.render_target;
+        auto wp = ImGui::GetWindowPos();
+        view.viewport_origin = v2i32{wp.x, wp.y} + v2i32{vmin.x, vmin.y}; 
+
+        wgfx::Viewport& render_target = view.render_target;
         if (!imgui_visible || !render_target.isValid())
             continue;
 
         ImGui::Image(
             (void*)(uintptr_t)render_target.view, deltas, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
-        if (cur_size != vex.last_seen_size)
+        if (cur_size != view.last_seen_size)
         {
-            vex.args.size = cur_size;
-            vex.changed_last_frame = true;
+            view.args.size = cur_size;
+            view.changed_last_frame = true;
         }
-        vex.last_seen_size = cur_size;
+        view.last_seen_size = cur_size;
 
         ImGui::SetCursorPos({20, 40});
         ImGui::Separator();

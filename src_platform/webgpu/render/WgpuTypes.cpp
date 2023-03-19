@@ -7,6 +7,7 @@
 #include <VCore/Utils/VUtilsBase.h>
 #include <stb/stb_image.h>
 
+#include <spdlog/stopwatch.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -30,12 +31,24 @@ void wgfx::wgpuWait(std::atomic_bool& flag)
     }
 }
 
-void wgfx::wgpuPollWait(WGPUQueue queue, std::atomic_bool& flag)
-{
+void wgfx::wgpuPollWait(const Context& context, std::atomic_bool& flag, double microsec_timeout)
+{ 
+    using namespace std::chrono_literals;
+    spdlog::stopwatch sw;
     while (!flag)
     { // #fixme - in dawn there is Tick to poll events, in wgfx this is workaround
-        wgpuQueueSubmit(queue, 0, nullptr);
-    }
+#ifdef VEX_GFX_WEBGPU_DAWN
+        wgpuDeviceTick(context.device);
+#else
+        wgpuQueueSubmit(context.queue, 0, nullptr);
+#endif
+        double mic_sec = sw.elapsed() / 1.0us;
+        if (microsec_timeout > 0 && mic_sec > microsec_timeout)
+        {
+            SPDLOG_ERROR(" wgpuPollWait timeout "); 
+            return;
+        }
+    } 
 }
 
 WGPUInstance wgfx::createInstance(WGPUInstanceDescriptor desc)
@@ -141,12 +154,12 @@ auto wgfx::Globals::isValid() const -> bool
 
 void wgfx::Globals::release()
 { //
-    WGPU_REL(wgpuSurface, surface);
-    WGPU_REL(wgpuSwapChain, swap_chain);
-    // WGPU_REL(wgpuDevice, device);
+    WGPU_REL(Surface, surface);
+    WGPU_REL(SwapChain, swap_chain);
+    // WGPU_REL(Device, device);
     wgpuDeviceDestroy(device);
-    WGPU_REL(wgpuAdapter, adapter);
-    WGPU_REL(wgpuInstance, instance);
+    WGPU_REL(Adapter, adapter);
+    WGPU_REL(Instance, instance);
 }
 
 wgfx::GpuBuffer wgfx::GpuBuffer::create(WGPUDevice device, GpuBuffer::Desc desc)
@@ -208,7 +221,7 @@ void wgfx::GpuBuffer::copyViaStaging(CpyArgs args)
     wgpuBufferUnmap(staging);
 
     wgpuCommandEncoderCopyBufferToBuffer(encoder, staging, 0, buffer, at_offset, buff_size);
-    WGPU_REL(wgpuBuffer, staging);
+    WGPU_REL(Buffer, staging);
 }
 
 WGPUCommandBuffer wgfx::copyBufferToTexture(wgfx::CopyBuffToTexArgs args)
@@ -217,7 +230,7 @@ WGPUCommandBuffer wgfx::copyBufferToTexture(wgfx::CopyBuffToTexArgs args)
     wgpuCommandEncoderCopyBufferToTexture(
         cmd_encoder, args.source_view, args.dest_view, &args.texture_size);
     WGPUCommandBuffer command_buffer = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
-    WGPU_REL(wgpuCommandEncoder, cmd_encoder);
+    WGPU_REL(CommandEncoder, cmd_encoder);
 
     return command_buffer;
 }
@@ -256,7 +269,7 @@ WGPUVertexState wgfx::makeVertexState(WGPUDevice device, const VertShaderDesc& d
     else if (desc.from != ShaderOrigin::Undefined)
     {
         check(false, "not implemented");
-    } 
+    }
     if (desc.from != ShaderOrigin::Undefined)
         check_(vertex_state.module);
 
@@ -436,7 +449,7 @@ void wgfx::BasicCamera::update()
     }
     else
     {
-        auto sz = orthoSize() / 2.0f;
+        auto sz = orthoSize() * 0.5f;
         i32 sign = invert_y ? -1 : 1;
         mtx.projection = glm::orthoLH_ZO(
             -sz.x, sz.x, sign * -sz.y, sign * sz.y, near_depth, far_depth);

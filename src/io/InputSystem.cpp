@@ -13,7 +13,7 @@ using namespace vex::input;
 
 inline SignalState processSignal(SignalData old, SignalData fresh)
 { // should map onto enum. higher bit - cur state, lower - old state
-    u8 v = ((fresh.isActive() << 1) | (u8)old.isActive());
+    u8 v = ((old.isActive() << 1) | (u8)fresh.isActive());
     static_assert(0x0 == (u8)SignalState::None);
     static_assert(0x1 == (u8)SignalState::Started);
     static_assert(0x2 == (u8)SignalState::Finished);
@@ -51,11 +51,35 @@ vex::input::InputSystem::InputSystem()
                 [](Trigger& self, const InputState& state)
             {
                 const auto moves = state.this_frame[sid(MouseMove)].state > SignalState::None;
-                if (state.this_frame[sid(MouseMID)].state == SignalState::Going && moves)
+                if ((state.this_frame[sid(MouseMID)].state == SignalState::Going) && moves)
                 {
                     return true;
                 }
 
+                return false;
+            },
+        });
+    addTrigger("MouseLeftDown"_trig,
+        Trigger{
+            .fn_logic =
+                [](Trigger& self, const InputState& state)
+            {
+                if (state.this_frame[sid(MouseLBK)].state == SignalState::Started)
+                {
+                    return true;
+                }
+                return false;
+            },
+        });
+    addTrigger("MouseRightDown"_trig,
+        Trigger{
+            .fn_logic =
+                [](Trigger& self, const InputState& state)
+            {
+                if (state.this_frame[sid(MouseRBK)].state == SignalState::Started)
+                {
+                    return true;
+                }
                 return false;
             },
         });
@@ -77,48 +101,35 @@ vex::input::InputSystem::InputSystem()
 void vex::input::InputSystem::poll(float dt)
 {
     SDL_Event sdl_event = {};
+    auto& st = state.this_frame;
     while (SDL_PollEvent(&sdl_event) != 0)
     {
-        auto& st = state.this_frame;
         switch (sdl_event.type)
         {
 #if ENABLE_IMGUI
             ImGui_ImplSDL2_ProcessEvent(&sdl_event);
 #endif
-            switch (sdl_event.type)
+            case SDL_QUIT:
             {
-                case SDL_QUIT:
-                {
-                    if (global.quit_delegate)
-                        global.quit_delegate();
-                    break;
-                }
-                case SDL_WINDOWEVENT:
-                {
-                    if (sdl_event.window.event == SDL_WINDOWEVENT_RESIZED)
-                    {
-                        if (global.resize_delegate)
-                            global.resize_delegate();
-                    }
-                    break;
-                }
-                default: break;
+                if (global.quit_delegate)
+                    global.quit_delegate();
+                break;
             }
-            case SDL_MOUSEBUTTONDOWN:
-                switch (sdl_event.button.button)
+            case SDL_WINDOWEVENT:
+            {
+                if (sdl_event.window.event == SDL_WINDOWEVENT_RESIZED)
                 {
-                    case SDL_BUTTON_LEFT: st[sid(MouseLBK)].value_raw.x = 1; break;
-                    case SDL_BUTTON_RIGHT: st[sid(MouseRBK)].value_raw.x = 1; break;
-                    case SDL_BUTTON_MIDDLE: st[sid(MouseMID)].value_raw.x = 1; break;
-                    default: break;
+                    if (global.resize_delegate)
+                        global.resize_delegate();
                 }
                 break;
+            }
             case SDL_MOUSEMOTION:
             {
-                global.mouse_delta.x += sdl_event.motion.x;
-                global.mouse_delta.y += sdl_event.motion.y;
+                global.mouse_delta.x = sdl_event.motion.x;
+                global.mouse_delta.y = sdl_event.motion.y;
                 SDL_GetMouseState(&global.mouse_pos_window.x, &global.mouse_pos_window.y);
-                SDL_GetGlobalMouseState(&global.mouse_pos_window.x, &global.mouse_pos_window.y);
+                SDL_GetGlobalMouseState(&global.mouse_pos_global.x, &global.mouse_pos_global.y);
                 st[sid(MouseMove)].value_raw = global.mouse_delta;
             }
             break;
@@ -137,6 +148,15 @@ void vex::input::InputSystem::poll(float dt)
             default: break;
         }
     }
+    // Uint8* keystate = SDL_GetKeyboardState(NULL);
+    {
+        int dx, dy;
+        auto mask = SDL_GetMouseState(&dx, &dy);
+        st[sid(MouseLBK)].value_raw.x = (mask & SDL_BUTTON_LMASK) != 0;
+        st[sid(MouseRBK)].value_raw.x = (mask & SDL_BUTTON_RMASK) != 0;
+        st[sid(MouseMID)].value_raw.x = (mask & SDL_BUTTON_MMASK) != 0;
+    } 
+
     static StaticRing<SignalState, 128> debug_history[sid(sMax)]{};
 
     const auto cnt = (u32)SignalId::sMax;
@@ -149,6 +169,8 @@ void vex::input::InputSystem::poll(float dt)
         cur.state = processSignal(prev, cur);
         debug_history[i].push(cur.state);
     }
+    //SPDLOG_INFO("{}  = {} | {} ", st[sid(MouseRBK)].value_raw, (u32)st[sid(MouseRBK)].flag,
+    //    (u32)st[sid(MouseRBK)].state);
 }
 
 void vex::input::InputSystem::updateTriggers()

@@ -13,6 +13,7 @@
 #include <imgui/gizmo/ImGuizmo.h>
 // vex
 #include <application/Application.h>
+#include <application/Environment.h>
 #include <stb/stb_image_write.h>
 #include <utils/ImGuiUtils.h>
 
@@ -96,10 +97,11 @@ wgfx::Context& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
         .depthStencilAttachment = depth_view ? &this->depth_attachment : nullptr,
     };
     auto render_pass_encoder = wgpuCommandEncoderBeginRenderPass(encoder, &pass);
-    //wgpuRenderPassEncoderSetViewport(
-    //    render_pass_encoder, 0.0f, 0.0f, options.size.x, options.size.y, 0.0f, 1.0f);
-    //wgpuRenderPassEncoderSetScissorRect(
-    //    render_pass_encoder, 0u, 0u, options.size.x, options.size.y);
+    // #fixme REVERSE DEPTH ORDER
+    wgpuRenderPassEncoderSetViewport(
+        render_pass_encoder, 0.0f, 0.0f, options.size.x, options.size.y, 0.0f, 1.0f);
+    wgpuRenderPassEncoderSetScissorRect(
+        render_pass_encoder, 0u, 0u, options.size.x, options.size.y);
 
     context = wgfx::Context{
         .device = globals.device,
@@ -171,8 +173,8 @@ struct WgpuRenderInterface
             {
                 SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
 
-                //checkAlways_(false);
-            };  
+                // checkAlways_(false);
+            };
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
 
@@ -182,16 +184,16 @@ struct WgpuRenderInterface
 #else
                 wgpuSurfaceGetPreferredFormat(globals.surface, globals.adapter);
 #endif
-             
+
             WGPUSwapChainDescriptor desc_swap_chain{
-                .nextInChain = nullptr, 
+                .nextInChain = nullptr,
                 .label = "chain",
                 .usage = WGPUTextureUsage_RenderAttachment,
                 .format = globals.main_texture_fmt,
                 .width = (u32)wnd_x,
-                .height = (u32)wnd_y, 
+                .height = (u32)wnd_y,
                 .presentMode = WGPUPresentMode_Immediate,
-            }; 
+            };
 
             globals.swap_chain = wgpuDeviceCreateSwapChain(
                 globals.device, globals.surface, &desc_swap_chain);
@@ -472,6 +474,6 @@ void vex::WebGpuBackend::teardown(vex::Application& owner)
     impl = nullptr;
 }
 void vex::WebGpuBackend::handleWindowResize(vex::Application& owner, v2u32 size)
-{ // 
+{ //
     impl->resizeWindow(owner, size.x, size.y);
 }
