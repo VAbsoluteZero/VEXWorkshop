@@ -16,104 +16,11 @@
 #include <application/Environment.h>
 #include <stb/stb_image_write.h>
 #include <utils/ImGuiUtils.h>
+#include <spdlog/stopwatch.h>
 
 using namespace std::literals::chrono_literals;
 
-void wgfx::Viewport::initialize(WGPUDevice device, const vex::ViewportOptions& args)
-{
-    options = args;
-    {
-        WGPUTextureDescriptor tex_desc{
-            .label = "viewport texture",
-            .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_RenderAttachment |
-                     WGPUTextureUsage_CopySrc,
-            .dimension = WGPUTextureDimension_2D,
-            .size =
-                {
-                    .width = args.size.x,
-                    .height = args.size.y,
-                    .depthOrArrayLayers = 1,
-                },
-            .format = WGPUTextureFormat_RGBA8Unorm,
-            .mipLevelCount = 1,
-            .sampleCount = 1,
-        };
-        texture = wgpuDeviceCreateTexture(device, &tex_desc);
-
-        WGPUTextureViewDescriptor view_desc{
-            .label = "viewport texture view",
-            .format = tex_desc.format,
-            .dimension = WGPUTextureViewDimension_2D,
-            .mipLevelCount = 1,
-            .arrayLayerCount = 1,
-            .aspect = WGPUTextureAspect_All,
-        };
-        view = wgpuTextureCreateView(texture, &view_desc);
-        color_attachment.view = view;
-    }
-    // depth
-    if (options.depth_enabled)
-    {
-        WGPUTextureFormat format = WGPUTextureFormat_Depth24PlusStencil8;
-        u32 sample_count = 1;
-
-        WGPUTextureDescriptor depth_texture_desc = {
-            .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
-            .dimension = WGPUTextureDimension_2D,
-            .size =
-                {
-                    .width = args.size.x,
-                    .height = args.size.y,
-                    .depthOrArrayLayers = 1,
-                },
-            .format = format,
-            .mipLevelCount = 1,
-            .sampleCount = sample_count,
-        };
-        depth_texture = wgpuDeviceCreateTexture(device, &depth_texture_desc);
-
-        WGPUTextureViewDescriptor view_desc = {
-            .format = depth_texture_desc.format,
-            .dimension = WGPUTextureViewDimension_2D,
-            .mipLevelCount = 1,
-            .arrayLayerCount = 1,
-            .aspect = WGPUTextureAspect_All,
-        };
-        depth_view = wgpuTextureCreateView(depth_texture, &view_desc);
-        depth_attachment.view = depth_view;
-    }
-}
-
-wgfx::Context& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
-{
-    auto encoder = wgpuDeviceCreateCommandEncoder(globals.device, &this->encoder_desc);
-
-    this->color_attachment.view = view;
-    this->depth_attachment.view = depth_view;
-    WGPURenderPassDescriptor pass{
-        .label = "viewport render pass",
-        .colorAttachmentCount = 1,
-        .colorAttachments = &this->color_attachment,
-        .depthStencilAttachment = depth_view ? &this->depth_attachment : nullptr,
-    };
-    auto render_pass_encoder = wgpuCommandEncoderBeginRenderPass(encoder, &pass);
-    // #fixme REVERSE DEPTH ORDER
-    wgpuRenderPassEncoderSetViewport(
-        render_pass_encoder, 0.0f, 0.0f, options.size.x, options.size.y, 0.0f, 1.0f);
-    wgpuRenderPassEncoderSetScissorRect(
-        render_pass_encoder, 0u, 0u, options.size.x, options.size.y);
-
-    context = wgfx::Context{
-        .device = globals.device,
-        .encoder = encoder,
-        .queue = globals.queue,
-        .render_pass = render_pass_encoder,
-        .cur_tex_view = view,
-    };
-    return context;
-}
-
-// void wgfx::Viewport::submit(const wgfx::Context& globals)
+// void wgfx::Viewport::submit(const wgfx::RenderContext& globals)
 //{
 //     WGPUCommandBufferDescriptor cmd_desc{};
 //     cmd_desc.label = "Command buffer";
@@ -123,12 +30,9 @@ wgfx::Context& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
 
 struct WgpuRenderInterface
 {
-    // static constexpr i32 k_max_viewports = 8;
     wgfx::Globals globals;
-    wgfx::Context frame_data;
+    wgfx::RenderContext frame_data;
     WGPUSupportedLimits limits;
-
-    // std::vector<wgfx::Viewport> viewports;
 
     bool initialized = false;
     WgpuRenderInterface() = default;
@@ -138,11 +42,9 @@ struct WgpuRenderInterface
     auto init(vex::Application& owner) -> i32
     {
         SDL_Window* sdl_window = owner.getMainWindow()->getRawWindow();
-        // viewports.reserve(k_max_viewports + 1);
         int wnd_x = 128;
         int wnd_y = 128;
         SDL_GetWindowSize(sdl_window, &wnd_x, &wnd_y);
-
         // initialize adapte, device, chain & surface
         {
             WGPUInstanceDescriptor desc{.nextInChain = nullptr};
@@ -172,8 +74,8 @@ struct WgpuRenderInterface
             auto onDeviceError = [](WGPUErrorType type, char const* message, void*)
             {
                 SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
-
-                // checkAlways_(false);
+                
+                check_(false); 
             };
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
@@ -200,23 +102,23 @@ struct WgpuRenderInterface
         }
         // default pipelines
         {
-            const char* shaderSource = R"(
-        @vertex
-        fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	        var p = vec2<f32>(0.0, 0.0);
-	        if (in_vertex_index == 0u) {
-		        p = vec2<f32>(-0.5, -0.5);
-	        } else if (in_vertex_index == 1u) {
-		        p = vec2<f32>(0.5, -0.5);
-	        } else {
-		        p = vec2<f32>(0.0, 0.5);
-	        }
-	        return vec4<f32>(p, 0.0, 1.0);
-        }
-        @fragment
-        fn fs_main() -> @location(0) vec4<f32> {
-            return vec4<f32>(0.5, 0.4, 4.0, 1.0);
-        }
+            const char* debug_shader = R"(
+            @vertex
+            fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
+	            var p = vec2<f32>(0.0, 0.0);
+	            if (in_vertex_index == 0u) {
+		            p = vec2<f32>(-0.5, -0.5);
+	            } else if (in_vertex_index == 1u) {
+		            p = vec2<f32>(0.5, -0.5);
+	            } else {
+		            p = vec2<f32>(0.0, 0.5);
+	            }
+	            return vec4<f32>(p, 0.0, 1.0);
+            }
+            @fragment
+            fn fs_main() -> @location(0) vec4<f32> {
+                return vec4<f32>(0.5, 0.4, 4.0, 1.0);
+            }
 )";
 
             WGPUShaderModuleDescriptor shaderDesc{};
@@ -226,9 +128,9 @@ struct WgpuRenderInterface
             shaderDesc.nextInChain = &shaderCodeDesc.chain;
 
 #ifdef VEX_GFX_WEBGPU_DAWN
-            shaderCodeDesc.source = shaderSource;
+            shaderCodeDesc.source = debug_shader;
 #else
-            shaderCodeDesc.code = shaderSource;
+            shaderCodeDesc.code = debug_shader;
 #endif
 
             WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(
@@ -296,9 +198,6 @@ struct WgpuRenderInterface
             pipelineDesc.layout = globals.debug_layout;
 
             globals.debug_pipeline = wgpuDeviceCreateRenderPipeline(globals.device, &pipelineDesc);
-
-            colorTarget.format = WGPUTextureFormat_RGBA8Unorm;
-            globals.debug_pipeline2 = wgpuDeviceCreateRenderPipeline(globals.device, &pipelineDesc);
         }
 
         bool valid = checkRel(globals.isValid(), "wgpu initialization failed");
@@ -338,19 +237,13 @@ struct WgpuRenderInterface
             .resolveTarget = nullptr,
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
-            .clearValue = WGPUColor{0.1, 0.9, 0.2, 1.0},
+            .clearValue = WGPUColor{0.21, 0.35, 0.25, 0.0},
         };
         WGPURenderPassDescriptor pass{.colorAttachmentCount = 1,
             .colorAttachments = &color_attachment,
             .depthStencilAttachment = nullptr};
 
         frame_data.render_pass = wgpuCommandEncoderBeginRenderPass(frame_data.encoder, &pass);
-        // base
-        {
-            wgpuRenderPassEncoderSetPipeline(frame_data.render_pass, globals.debug_pipeline);
-            wgpuRenderPassEncoderDraw(frame_data.render_pass, 3, 1, 0, 0);
-            wgpuQueueSubmit(globals.queue, 0, nullptr);
-        }
         wgpuDeviceTick(globals.device);
     }
 
@@ -402,7 +295,11 @@ void vex::WebGpuBackend::pollEvents()
 }
 i32 vex::WebGpuBackend::init(vex::Application& owner)
 {
-    if (!checkAlways(impl == nullptr, "must not call init more than once"))
+    spdlog::stopwatch sw;
+    defer_{ SPDLOG_WARN("Initializing GPU Backend took {} seconds", sw); };
+
+    already_initialized = true;
+    if (!checkAlways(already_initialized, "must not call init more than once"))
         return 1;
     auto tst = SDL_GetBasePath();
     spdlog::info("path base : {}", tst);
@@ -472,6 +369,12 @@ void vex::WebGpuBackend::teardown(vex::Application& owner)
     impl->release();
     delete impl;
     impl = nullptr;
+}
+void vex::WebGpuBackend::softReset(vex::Application& owner)
+{
+    ImGui_ImplSDL2_InitForSDLRenderer(owner.getMainWindow()->getRawWindow());
+    ImGui_ImplWGPU_Init(impl->globals.device, 1, impl->globals.main_texture_fmt);
+    ImGui_ImplWGPU_CreateDeviceObjects();
 }
 void vex::WebGpuBackend::handleWindowResize(vex::Application& owner, v2u32 size)
 { //

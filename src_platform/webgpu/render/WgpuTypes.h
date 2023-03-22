@@ -26,7 +26,10 @@
  * No RAII until I figure out API && object relationship (lifetimes) better.
  * To be rewritten
  */
-
+namespace vex
+{
+    struct TextShaderLib;
+}
 struct SDL_Window;
 namespace wgfx
 {
@@ -53,33 +56,15 @@ namespace wgfx
     void wgpuWait(std::atomic_bool& flag);
     // microsec_timeout < 0 => no timeout
     void wgpuPollWait(
-        const struct Context& context, std::atomic_bool& flag, double microsec_timeout = -1);
+        const struct RenderContext& context, std::atomic_bool& flag, double microsec_timeout = -1);
     WGPUInstance createInstance(WGPUInstanceDescriptor desc);
     void requestDevice(Globals& globals, WGPUDeviceDescriptor const* descriptor);
     void requestAdapter(Globals& globals, WGPURequestAdapterOptions& options);
     WGPUSurface getWGPUSurface(WGPUInstance instance, SDL_Window* sdl_window);
     void swapchainPresent(WGPUSwapChain swap_chain);
 
-    struct Globals
-    {
-        WGPUInstance instance = nullptr;
-        WGPUAdapter adapter = nullptr;
-        WGPUDevice device = nullptr;
-        WGPUQueue queue = nullptr;
-        WGPUSurface surface = nullptr;
 
-        WGPUSwapChain swap_chain = nullptr;
-        WGPUTextureFormat main_texture_fmt{};
-
-        WGPUPipelineLayout debug_layout = nullptr;
-        WGPURenderPipeline debug_pipeline = nullptr;
-        WGPURenderPipeline debug_pipeline2 = nullptr;
-
-        auto isValid() const -> bool;
-        void release();
-    };
-
-    struct Context
+    struct RenderContext
     {
         WGPUDevice device = nullptr;
         WGPUCommandEncoder encoder = nullptr;
@@ -94,6 +79,26 @@ namespace wgfx
             WGPU_REL(RenderPassEncoder, render_pass);
             WGPU_REL(CommandEncoder, encoder);
         };
+    };
+
+    struct Globals
+    {
+        WGPUInstance instance = nullptr;
+        WGPUAdapter adapter = nullptr;
+        WGPUDevice device = nullptr;
+        WGPUQueue queue = nullptr;
+        WGPUSurface surface = nullptr;
+
+        WGPUSwapChain swap_chain = nullptr;
+        WGPUTextureFormat main_texture_fmt{};
+
+        WGPUPipelineLayout debug_layout = nullptr;
+        WGPURenderPipeline debug_pipeline = nullptr;
+
+        auto isValid() const -> bool;
+        void release();
+
+        RenderContext asContext() const { return RenderContext{.device = device, .queue = queue}; }
     };
 
     struct Viewport
@@ -111,13 +116,13 @@ namespace wgfx
 
         WGPUTexture depth_texture = nullptr;
         WGPUTextureView depth_view = nullptr;
-        wgfx::Context context;
+        wgfx::RenderContext context;
 
         WGPURenderPassColorAttachment color_attachment{
             .resolveTarget = nullptr,
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
-            .clearValue = WGPUColor{0.1, 0.3, 0.43, 1.0},
+            .clearValue = WGPUColor{0.1, 0.21, 0.13, 1.0},
         };
         WGPURenderPassDepthStencilAttachment depth_attachment{
             .depthLoadOp = WGPULoadOp_Clear,
@@ -132,8 +137,16 @@ namespace wgfx
         auto isValid() const -> bool { return texture && view; }
 
         void initialize(WGPUDevice device, const vex::ViewportOptions& args);
-        wgfx::Context& setupForDrawing(const Globals& globals);
-        // void submit(const Context& globals);
+        wgfx::RenderContext& setupForDrawing(const Globals& globals);
+        void finishAndSubmit()
+        {
+            WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "viewport submit"};
+            check_(context.render_pass);
+            wgpuRenderPassEncoderEnd(context.render_pass);
+            auto cmd_buf = wgpuCommandEncoderFinish(context.encoder, &ctx_desc_fin);
+            wgpuQueueSubmit(context.queue, 1, &cmd_buf);
+            WGPU_REL(CommandBuffer, cmd_buf);
+        }
 
         void release()
         {
@@ -175,6 +188,13 @@ namespace wgfx
         void release() { WGPU_REL(Buffer, buffer); }
     };
 
+    template <typename UBO>
+    static void updateUniform(
+        const wgfx::RenderContext& context, GpuBuffer& unibuf, UBO ubo_transforms)
+    {
+        wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBO));
+    }
+
     struct CopyBuffToTexArgs
     {
         WGPUDevice device;
@@ -214,10 +234,12 @@ namespace wgfx
             bool flip_y = false;
         };
 
-        static Texture loadFormData(const Context& ctx, LoadImgResult& data, LoadArgs options);
-        static Texture loadFormFile(const Context& ctx, const char* filename, LoadArgs options);
-        static void copyImageToTexture(
-            const Context& ctx, WGPUTexture texture, void* pixels, WGPUExtent3D size, u32 channels);
+        static Texture loadFormData(
+            const RenderContext& ctx, LoadImgResult& data, LoadArgs options);
+        static Texture loadFormFile(
+            const RenderContext& ctx, const char* filename, LoadArgs options);
+        static void copyImageToTexture(const RenderContext& ctx, WGPUTexture texture, void* pixels,
+            WGPUExtent3D size, u32 channels);
     };
 
     inline constexpr bool is_power_of_2(int n) { return (n & (n - 1)) == 0; }
@@ -246,6 +268,9 @@ namespace wgfx
         static TextureView create(WGPUDevice device, const Texture& from_tex, CreationArgs options);
     };
     WGPUShaderModule shaderFromSrc(WGPUDevice device, const char* src);
+
+    WGPUShaderModule reloadShader(
+        vex::TextShaderLib& shader_lib, const RenderContext& context, const char* shader_name);
 
     enum class ShaderOrigin : u32
     {
@@ -281,42 +306,24 @@ namespace wgfx
     };
     WGPUFragmentState makeFragmentState(WGPUDevice device, const FragShaderDesc& desc);
 
-    struct BasicCamera
-    {
-        enum class Type
-        {
-            Ortho,
-            FOV
-        } type;
-        v3f pos{};
-        // v3f rot{};
-        union
-        {
-            float height = 0;
-            float fov_rad;
-        };
-        float aspect = 1;
-        float near_depth = 0;
-        float far_depth = 1;
-        struct
-        {
-            mtx4 projection;
-            mtx4 view;
-        } mtx;
-        u8 invert_y : 1 = 1u;
 
-        inline v2f orthoSize() const { return {height * aspect, height}; }
+    // struct PipelineData
+    //{
+    //     WGPUVertexState vert_state;
+    //     WGPUFragmentState frag_state;
+    //     WGPURenderPipelineDescriptor pipeline_desc = {
+    //         .vertex = vert_state,
+    //         .fragment = &frag_state,
+    //     };
+    //     WGPUPipelineLayout pipeline_layout = nullptr;
+    //     WGPURenderPipeline pipeline;
 
-        void update();
-        void setPerspective(float fov_degrees, float aspect, float in_near, float in_far);
-        void orthoSetSize(v2f size);
-        inline static BasicCamera makeOrtho(v3f in_pos, v2f size, float near = 0, float far = 1)
-        {
-            BasicCamera out{.pos = in_pos, .near_depth = near, .far_depth = far};
-            out.orthoSetSize(size);
-            return out;
-        }
-    };
+    //    void release()
+    //    {
+    //        WGPU_REL(PipelineLayout, pipeline_layout);
+    //        WGPU_REL(RenderPipeline, pipeline);
+    //    }
+    //};
 } // namespace wgfx
 
 namespace wgfx
@@ -442,4 +449,3 @@ namespace wgfx
     });
     static constexpr auto def_depth_stencil_state24p8 = makeDefault<WGPUDepthStencilState>();
 } // namespace wgfx
- 

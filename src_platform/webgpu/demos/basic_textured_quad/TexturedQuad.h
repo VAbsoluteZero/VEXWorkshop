@@ -6,7 +6,7 @@
 #include <webgpu/demos/ViewportHandler.h>
 #include <webgpu/render/WgpuApp.h> // #fixme
 
-namespace vex
+namespace vex::quad_demo
 {
     struct TexturedQuadDemo : public IDemoImpl
     {
@@ -17,7 +17,13 @@ namespace vex
         void update(Application& owner) override;
         void postFrame(Application& owner) override;
         void drawUI(Application& owner) override;
-        virtual ~TexturedQuadDemo() {}
+        virtual ~TexturedQuadDemo()
+        {
+            bg_quad.release();
+            temp_geom.release();
+            viewports.release();
+            gpu_data.release();
+        }
 
     private:
         wgfx::ui::ViewportHandler viewports;
@@ -31,11 +37,17 @@ namespace vex
             wgfx::GpuBuffer vtx_buf;
             wgfx::TextureView tex_view;
 
+            void release()
+            {
+                idx_buf.release();
+                vtx_buf.release();
+                tex_view.release();
+            }
             bool isValid() const
             {
                 return idx_buf.isValid() && vtx_buf.isValid() && tex_view.isValid();
             }
-        } bg_quad;
+        } bg_quad, fg_quad;
         struct QuadPipelineResources
         {
             wgfx::GpuBuffer uniform_buf;
@@ -43,6 +55,16 @@ namespace vex
             WGPUPipelineLayout pipe_layout;
             WGPUBindGroup bind_group;
             WGPURenderPipeline pipeline;
+            WGPURenderPipeline pipeline_srgb;
+            void release()
+            {
+                uniform_buf.release();
+                WGPU_REL(BindGroupLayout, bind_group_layout);
+                WGPU_REL(PipelineLayout, pipe_layout);
+                WGPU_REL(BindGroup, bind_group);
+                WGPU_REL(RenderPipeline, pipeline);
+                WGPU_REL(RenderPipeline, pipeline_srgb);
+            }
 
             bool isValid() const
             {
@@ -62,6 +84,14 @@ namespace vex
             WGPUBindGroup bind_group;
             WGPURenderPipeline pipeline;
 
+            void release()
+            {
+                WGPU_REL(BindGroup, bind_group);
+                WGPU_REL(RenderPipeline, pipeline);
+                idx_buf.release();
+                vtx_buf.release();
+                uniform_buf.release();
+            }
             bool isValid() const
             {
                 return uniform_buf.isValid() && //
@@ -83,11 +113,12 @@ namespace vex
             float width = 0.5f;
         } mouse_points;
 
-        struct SceneData
+        struct
         {
-            wgfx::BasicCamera camera;
+            vex::BasicCamera camera;
         } scene;
 
+        bool viewport_was_active = true;
         WebGpuBackend* wgpu_backend = nullptr;
     };
 } // namespace vex

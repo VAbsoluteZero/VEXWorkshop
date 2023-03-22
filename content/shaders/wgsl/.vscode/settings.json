@@ -1,0 +1,8 @@
+{
+    "wgsl.validateOnSave": false,
+    "wgsl-analyzer.diagnostics.typeErrors": false,
+    "wgsl-analyzer.inlayHints.typeHints": true,
+    "wgsl-analyzer.inlayHints.structLayoutHints": true,
+    "wgsl-analyzer.diagnostics.nagaValidationErrors": false,
+    "wgsl-analyzer.diagnostics.nagaVersion": "main"
+}

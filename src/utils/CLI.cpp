@@ -239,30 +239,30 @@ void vex::console::ConsoleWindow::Draw(const char* title)
 
 void vex::console::ConsoleWindow::ExecCommand(const char* command_line)
 {
-    static bool tst = false;
-    if (!tst)
-    {
-        tst = true;
-        vex::console::makeAndRegisterCmd("test", "blah blah", true,
-            [](const vex::console::CmdCtx& ctx)
-            {
-                return true;
-            });
+    //static bool tst = false;
+    //if (!tst)
+    //{
+    //    tst = true;
+    //    vex::console::makeAndRegisterCmd("test", "blah blah", true,
+    //        [](const vex::console::CmdCtx& ctx)
+    //        {
+    //            return true;
+    //        });
 
-        vex::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
-            [](const vex::console::CmdCtx& ctx)
-            {
-                // tst
-                SPDLOG_INFO("# other stuff: {}\n", ctx.parsed_args->get<int>("id", -1));
-                return true;
-            });
-        vex::console::makeAndRegisterCmd("cmd_2", " I am cmd!\n desc desc.\n", true,
-            [](const vex::console::CmdCtx& ctx)
-            {
-                // tst
-                return ctx.parsed_args->get<int>("id", -1) == 42;
-            });
-    }
+    //    vex::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
+    //        [](const vex::console::CmdCtx& ctx)
+    //        {
+    //            // tst
+    //            SPDLOG_INFO("# other stuff: {}\n", ctx.parsed_args->get<int>("id", -1));
+    //            return true;
+    //        });
+    //    vex::console::makeAndRegisterCmd("cmd_2", " I am cmd!\n desc desc.\n", true,
+    //        [](const vex::console::CmdCtx& ctx)
+    //        {
+    //            // tst
+    //            return ctx.parsed_args->get<int>("id", -1) == 42;
+    //        });
+    //}
 
     std::string full = command_line;
     const char* cmd_s = full.c_str();
@@ -316,7 +316,6 @@ void vex::console::ConsoleWindow::ExecCommand(const char* command_line)
     scroll_to_bottom = true;
 }
  
-
 int vex::console::ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
 {
     switch (data->EventFlag)

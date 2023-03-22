@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <SDL_filesystem.h>
+#include <spdlog/stopwatch.h>
 
 #include <filesystem>
 #include <fstream>
@@ -11,7 +12,10 @@ using namespace vex;
 
 void vex::TextShaderLib::build(const char* rel_path)
 {
-    path_to_dir = rel_path;
+    spdlog::stopwatch sw;
+    defer_ { SPDLOG_WARN("Building TextShaderLib took {} seconds", sw); };
+
+    path_to_dir = std::string(rel_path);
     vex::InlineBufferAllocator<1024 * 20> stackbuf;
     auto al = stackbuf.makeAllocatorHandle();
 
@@ -20,9 +24,13 @@ void vex::TextShaderLib::build(const char* rel_path)
         const auto& path = entry.path();
         auto file_name = path.string();
 
-        std::ifstream m_stream(file_name, std::ios::binary | std::ios::ate);
+        auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
+        std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
 
-        size_t size = std::filesystem::file_size(file_name);
+        if (m_stream.fail() ||  m_stream.bad())
+            continue;
+
+        size_t size = std::filesystem::file_size(adjusted_name);
 
         char* buffer = (char*)al.alloc(size + 1, 1);
         m_stream.seekg(0);
@@ -58,9 +66,9 @@ void vex::TextShaderLib::reload()
     auto al = stackbuf.makeAllocatorHandle();
     for (auto& [file_name, entry] : this->shad_src)
     {
-        std::ifstream m_stream(file_name, std::ios::binary | std::ios::ate);
-
-        size_t size = std::filesystem::file_size(file_name);
+        auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
+        std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
+        size_t size = std::filesystem::file_size(adjusted_name);
 
         char* buffer = (char*)al.alloc(size + 1, 1);
         m_stream.seekg(0);
@@ -74,6 +82,65 @@ void vex::TextShaderLib::reload()
         stackbuf.reset();
     }
 }
+void vex::TextShaderLib::reload(const char* file_name)
+{
+    vex::InlineBufferAllocator<1024 * 20> stackbuf;
+    auto al = stackbuf.makeAllocatorHandle();
+    if (auto* entry = this->shad_src.find(file_name); entry)
+    {
+        auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
+        std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
+        size_t size = std::filesystem::file_size(adjusted_name);
+
+        char* buffer = (char*)al.alloc(size + 1, 1);
+        m_stream.seekg(0);
+        m_stream.read(buffer, size);
+        if (size == 0)
+            return;
+        buffer[size] = '\0';
+
+        entry->text = buffer;
+
+        stackbuf.reset();
+    }
+}
+
+void vex::BasicCamera::update()
+{
+    mtx4 rot_mat = mtx4_identity;
+    mtx4 trans_mat = mtx4_identity;
+    trans_mat = glm::translate(trans_mat, pos);
+    this->mtx.view = (trans_mat * rot_mat);
+    if (type == Type::FOV)
+    {
+        mtx.projection = glm::perspective(fov_rad, aspect, near_depth, far_depth);
+    }
+    else
+    {
+        auto sz = orthoSize() * 0.5f;
+        i32 sign = invert_y ? -1 : 1;
+        mtx.projection = glm::orthoLH_ZO(
+            -sz.x, sz.x, sign * -sz.y, sign * sz.y, near_depth, far_depth);
+    }
+}
+
+void vex::BasicCamera::setPerspective(float fov_degrees, float aspect, float in_near, float in_far)
+{
+    type = Type::FOV;
+    this->fov_rad = glm::radians(fov_degrees);
+    this->near_depth = in_near;
+    this->far_depth = in_far;
+    this->mtx.projection = glm::perspective(fov_rad, aspect, near_depth, far_depth);
+    update();
+}
+
+void vex::BasicCamera::orthoSetSize(v2f size)
+{
+    type = Type::Ortho;
+    this->aspect = size.x / size.y;
+    height = size.y;
+    update();
+}
 
 DynMeshBuilder<PosNormUv> vex::makeQuadUV(vex::Allocator al, float w, float h, v3f origin)
 {
@@ -86,6 +153,23 @@ DynMeshBuilder<PosNormUv> vex::makeQuadUV(vex::Allocator al, float w, float h, v
     mesh.addVertex({origin + br, v3f(0, 0, -1), v2f(1, 1)});
     mesh.addVertex({origin + tr, v3f(0, 0, -1), v2f(1, 0)});
     mesh.addVertex({origin + tl, v3f(0, 0, -1), v2f(0, 0)});
+    u32 zero = 0;
+    mesh.makeTriangle(zero, zero + 1, zero + 2);
+    mesh.makeTriangle(zero, zero + 2, zero + 3);
+    return mesh;
+}
+DynMeshBuilder<PosNormColor> vex::makeQuadColors(
+    vex::Allocator al, float w, float h, QuadColors colors, v3f origin)
+{
+    DynMeshBuilder<PosNormColor> mesh{al, 6, 4};
+    v3f tl{-w / 2, +h / 2, 0.1f};
+    v3f tr{+w / 2, +h / 2, 0.1f};
+    v3f br{+w / 2, -h / 2, 0.1f};
+    v3f bl{-w / 2, -h / 2, 0.1f};
+    mesh.addVertex({origin + bl, v3f(0, 0, -1), colors.bl});
+    mesh.addVertex({origin + br, v3f(0, 0, -1), colors.br});
+    mesh.addVertex({origin + tr, v3f(0, 0, -1), colors.tr});
+    mesh.addVertex({origin + tl, v3f(0, 0, -1), colors.tl});
     u32 zero = 0;
     mesh.makeTriangle(zero, zero + 1, zero + 2);
     mesh.makeTriangle(zero, zero + 2, zero + 3);
@@ -257,20 +341,3 @@ void vex::PolyLine::buildSegmentXY(DynMeshBuilder<PosNormColor>& out_builder, Po
     out_builder.makeTriangle(0, 1, 2);
     out_builder.makeTriangle(0, 2, 3);
 }
-
-
-// if (i1 > 0) [[likely]]
-//{
-//     // last points to be readjusted
-//     PosNormColor& v2 = *(vtx_back - 3);
-//     PosNormColor& v3 = *(vtx_back - 2);
-//     vtx_back[0].pos = v2.pos = (v2.pos + vtx_back[0].pos) * 0.5f;
-//     vtx_back[3].pos = v3.pos = (v3.pos + vtx_back[3].pos) * 0.5f;
-// }
-// if (closed && (i1 == (len - 1)))
-//{
-//     PosNormColor& v2 = *(vtx_back_orig + 1);
-//     PosNormColor& v3 = *(vtx_back_orig + 2);
-//     vtx_back[0].pos = v2.pos = (v2.pos + vtx_back[0].pos) * 0.5f;
-//     vtx_back[3].pos = v3.pos = (v3.pos + vtx_back[3].pos) * 0.5f;
-// }

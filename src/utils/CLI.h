@@ -82,12 +82,12 @@ namespace vex::console
         return CmdRunner::global().registerCmd(std::move(cmd), replace_if_needed);
     }
     inline void removeCmd(const char* key) { CmdRunner::global().remove(key); }
-    inline ClCommand* findCmd(const char* key) { return CmdRunner::global().commands.tryGet(key); }
+    inline ClCommand* findCmd(const char* key) { return CmdRunner::global().commands.find(key); }
 }; // namespace vex::console
 
 
 namespace vex::console
-{ 
+{
     struct PedningEntries
     {
         // #fixme get rid of statics
@@ -122,45 +122,49 @@ namespace vex::console
         std::vector<std::string> buff;
     };
 
-    // NOTE: modified sample from imgui_demo.cpp : ShowExampleAppConsole
-    // slightly tweaked to better match needs of the app.
+
+    // only one console should be available at the time for now,
+    // as they steal pending input in current implementation
     struct ConsoleWindow
     {
-        // #fixme get rid of statics
         static inline PedningEntries g_pending_console_lines;
-        static inline std::unique_ptr<struct ConsoleWindow> g_console;
-        bool is_open = true;
+        const char* name = nullptr;
+        bool is_open = "Console";
 
         char input_buf[256];
         vex::StaticRing<std::string, 256, true> items_rbuf;
         std::vector<std::string> history_buf;
 
-        int history_pos = -1; // -1: new line, 0..History.Size-1 browsing history.
+        i32 history_pos = -1; // -1: new line, 0..History.Size-1 browsing history.
         ImGuiTextFilter text_filter;
         bool auto_scroll = true;
         bool scroll_to_bottom = false;
         unsigned fetch_cooldown : 3 = 0;
 
         ConsoleWindow();
+        ConsoleWindow(const char* in_name) : ConsoleWindow() { name = in_name; };
         ~ConsoleWindow() {}
 
         void ClearLog() { items_rbuf.clear(); }
 
         void Add(std::string str) { items_rbuf.push(std::move(str)); }
 
+        // NOTE: modified sample from imgui_demo.cpp : ShowExampleAppConsole
+        // slightly tweaked to better match needs of the app.
         void Draw(const char* title);
         void ExecCommand(const char* command_line);
 
-        static int TextEditCallbackStub(ImGuiInputTextCallbackData* data)
+        static i32 TextEditCallbackStub(ImGuiInputTextCallbackData* data)
         {
             ConsoleWindow* console = (ConsoleWindow*)data->UserData;
             return console->TextEditCallback(data);
-        } 
-        int TextEditCallback(ImGuiInputTextCallbackData* data);
+        }
+        i32 TextEditCallback(ImGuiInputTextCallbackData* data);
     };
-    static void createConsole() { ConsoleWindow::g_console = std::make_unique<ConsoleWindow>(); }
-    static void showConsoleWindow(ConsoleWindow* window)
+
+    inline void showConsoleWindow(ConsoleWindow* window)
     {
-        window->Draw("Console");
+        if (window)
+            window->Draw(window->name);
     }
 } // namespace vex::console

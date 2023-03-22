@@ -20,6 +20,16 @@ inline SignalState processSignal(SignalData old, SignalData fresh)
     static_assert(0x3 == (u8)SignalState::Going);
     return (SignalState)v;
 }
+
+// inline void cancelActive(InputState& state, SignalState signal = SignalState::None)
+//{
+//     const auto cnt = (u32)SignalId::sMax;
+//     for (u32 i = 0; i < cnt; ++i)
+//     {
+//         state.this_frame[i] = {.id = (SignalId)i, };
+//     }
+// }
+
 vex::input::InputSystem::InputSystem()
 {
     const auto cnt = (u32)SignalId::sMax;
@@ -104,11 +114,11 @@ void vex::input::InputSystem::poll(float dt)
     auto& st = state.this_frame;
     while (SDL_PollEvent(&sdl_event) != 0)
     {
+#if ENABLE_IMGUI 
+        ImGui_ImplSDL2_ProcessEvent(&sdl_event);
+#endif
         switch (sdl_event.type)
         {
-#if ENABLE_IMGUI
-            ImGui_ImplSDL2_ProcessEvent(&sdl_event);
-#endif
             case SDL_QUIT:
             {
                 if (global.quit_delegate)
@@ -126,36 +136,56 @@ void vex::input::InputSystem::poll(float dt)
             }
             case SDL_MOUSEMOTION:
             {
-                global.mouse_delta.x = sdl_event.motion.x;
-                global.mouse_delta.y = sdl_event.motion.y;
+                global.mouse_delta.x = sdl_event.motion.xrel;
+                global.mouse_delta.y = sdl_event.motion.yrel;
                 SDL_GetMouseState(&global.mouse_pos_window.x, &global.mouse_pos_window.y);
                 SDL_GetGlobalMouseState(&global.mouse_pos_global.x, &global.mouse_pos_global.y);
                 st[sid(MouseMove)].value_raw = global.mouse_delta;
             }
             break;
-            case SDL_KEYDOWN:
-                switch (sdl_event.key.keysym.sym)
-                {
-                    case SDLK_w: st[sid(KeyW)].value_raw.x = 1; break;
-                    case SDLK_a: st[sid(KeyA)].value_raw.x = 1; break;
-                    case SDLK_s: st[sid(KeyS)].value_raw.x = 1; break;
-                    case SDLK_d: st[sid(KeyD)].value_raw.x = 1; break;
-                    case SDLK_SPACE: st[sid(KeySpace)].value_raw.x = 1; break;
-                    case SDLK_ESCAPE: st[sid(KeyEscape)].value_raw.x = 1; break;
-                }
-                break;
 
             default: break;
         }
     }
-    // Uint8* keystate = SDL_GetKeyboardState(NULL);
+    // read keystates
+    {
+        i32 num = 0;
+        auto* keystate = SDL_GetKeyboardState(&num);
+        auto update_key = [&](u32 key, decltype(SDLK_w) sdlkey)
+        {
+            auto code = SDL_GetScancodeFromKey(sdlkey);
+            check_(code <= num);
+            auto state = keystate[code];
+            st[key].value_raw.x = (state == SDL_PRESSED);
+        };
+        auto update_key_any_of = [&](u32 key, auto... keys)
+        { 
+            check_((... && (SDL_GetScancodeFromKey(keys) <= num))); 
+            st[key].value_raw.x = (... || (keystate[SDL_GetScancodeFromKey(keys)] == SDL_PRESSED));
+        };
+
+        update_key(sid(KeyW), SDLK_w);
+        update_key(sid(KeyA), SDLK_a);
+        update_key(sid(KeyS), SDLK_s);
+        update_key(sid(KeyD), SDLK_d);
+        update_key(sid(KeySpace), SDLK_SPACE);
+        update_key(sid(KeyEscape), SDLK_ESCAPE);
+        // intended to read left/right into one value
+        update_key_any_of(sid(KeyModAlt), SDLK_LALT, SDLK_RALT);
+        update_key_any_of(sid(KeyModShift), SDLK_LSHIFT, SDLK_RSHIFT);
+        update_key_any_of(sid(KeyModCtrl), SDLK_LCTRL, SDLK_RCTRL);
+        //update_key(sid(KeyModAlt), SDLK_RALT);
+        //update_key(sid(KeyModShift), SDLK_RSHIFT);
+        //update_key(sid(KeyModCtrl), SDLK_RCTRL);
+    }
+    // read mouse states
     {
         int dx, dy;
         auto mask = SDL_GetMouseState(&dx, &dy);
         st[sid(MouseLBK)].value_raw.x = (mask & SDL_BUTTON_LMASK) != 0;
         st[sid(MouseRBK)].value_raw.x = (mask & SDL_BUTTON_RMASK) != 0;
         st[sid(MouseMID)].value_raw.x = (mask & SDL_BUTTON_MMASK) != 0;
-    } 
+    }
 
     static StaticRing<SignalState, 128> debug_history[sid(sMax)]{};
 
@@ -169,8 +199,8 @@ void vex::input::InputSystem::poll(float dt)
         cur.state = processSignal(prev, cur);
         debug_history[i].push(cur.state);
     }
-    //SPDLOG_INFO("{}  = {} | {} ", st[sid(MouseRBK)].value_raw, (u32)st[sid(MouseRBK)].flag,
-    //    (u32)st[sid(MouseRBK)].state);
+    // SPDLOG_INFO("{}  = {} | {} ", st[sid(MouseRBK)].value_raw, (u32)st[sid(MouseRBK)].flag,
+    //     (u32)st[sid(MouseRBK)].state);
 }
 
 void vex::input::InputSystem::updateTriggers()
@@ -196,9 +226,9 @@ void vex::input::InputSystem::onFrameEnd()
     }
 }
 
-bool vex::input::InputSystem::addTrigger(u64 hash, const Trigger& trigger)
+bool vex::input::InputSystem::addTrigger(u64 hash, const Trigger& trigger, bool replace)
 {
-    if (triggers.contains(hash))
+    if (triggers.contains(hash) && !replace)
     {
         std::string m = fmt::format("hash collision, rename trigger to unique id, hash:{}", hash);
         check(false, (m.c_str()));

@@ -38,15 +38,15 @@ void vex::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
     {
         // ImGuiStyle& style = ImGui::GetStyle();
 
-        auto sz = io.DisplaySize;
-
-        spdlog::info("imgui sees : size : {} , {}", sz.x, sz.y);
+        auto sz = io.DisplaySize; 
 
         visuals.fnt_normal = io.Fonts->AddFontFromFileTTF("content/fonts/roboto_light.ttf",
             scale_font(12), NULL, io.Fonts->GetGlyphRangesDefault());
 
         visuals.fnt_header = io.Fonts->AddFontFromFileTTF("content/fonts/fira_medium.ttf",
             scale_font(16), NULL, io.Fonts->GetGlyphRangesDefault());
+        visuals.fnt_accent = io.Fonts->AddFontFromFileTTF("content/fonts/fira_medium.ttf",
+            scale_font(12), NULL, io.Fonts->GetGlyphRangesDefault());
 
         visuals.fnt_tiny = io.Fonts->AddFontFromFileTTF("content/fonts/roboto_light.ttf",
             scale_font(9), NULL, io.Fonts->GetGlyphRangesDefault());
@@ -189,8 +189,8 @@ void vex::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
         colors[ImGuiCol_DragDropTarget] = ImVec4(0.33f, 0.67f, 0.86f, 1.00f);
         colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
         colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 0.00f, 0.00f, 0.70f);
-        colors[ImGuiCol_NavWindowingDimBg] = ImVec4(1.00f, 0.00f, 0.00f, 0.20f);
-        colors[ImGuiCol_ModalWindowDimBg] = ImVec4(1.00f, 0.00f, 0.00f, 0.35f);
+        colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.230f, 0.20f, 0.100f, 0.20f);
+        colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.130f, 0.020f, 0.020f, 0.75f);
 
         new_style.WindowPadding = ImVec2(8.00f, 8.00f);
         new_style.FramePadding = ImVec2(5.00f, 2.00f);

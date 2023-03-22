@@ -13,6 +13,7 @@ namespace vex
     {
         WindowParams WindowArgs;
         i32 target_framerate = -1;
+        bool allow_demo_changes = false;
     };
 
     enum class LayersBaseOrder : u64
@@ -45,6 +46,9 @@ namespace vex
         virtual void startFrame(Application& owner) {}
         virtual void frame(Application& owner) {}
         virtual void postFrame(Application& owner) {}
+        // softReset is a 'reset/clear state', teardown is to destroy inner state fully
+        // including resources
+        virtual void softReset(Application& owner) {}
         virtual void teardown(Application& owner) {}
         virtual void handleWindowResize(Application& owner, v2u32 size){};
 

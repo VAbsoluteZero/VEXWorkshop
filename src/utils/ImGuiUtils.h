@@ -38,6 +38,7 @@ namespace vex
     {
         ImFont* fnt_header = nullptr;
         ImFont* fnt_normal = nullptr;
+        ImFont* fnt_accent = nullptr;
         ImFont* fnt_tiny = nullptr;
         ImFont* fnt_log = nullptr;
 

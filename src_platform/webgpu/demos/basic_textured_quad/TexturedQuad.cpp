@@ -2,16 +2,28 @@
 
 #include <VCore/Containers/Tuple.h>
 #include <application/Environment.h>
+#include <imgui/imgui_internal.h>
 #include <utils/CLI.h>
+#include <utils/ImGuiUtils.h>
 #include <webgpu/render/LayoutManagement.h>
 
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/norm.hpp>
 #ifdef VEX_GFX_WEBGPU_DAWN
     #include <tint/tint.h>
 #endif
+/* 
+ * NOTE:
+ * this whole thing is pretty rough, it is first working thing in WEBGPU
+ * so it is very messy as I am figuring out API & what I can do with it.
+ *
+ */
+
+const char* g_demo_name_readable = "Textured Quad Demo";
 
 using namespace vex;
+using namespace vex::quad_demo;
 using namespace wgfx;
 using namespace std::literals::string_view_literals;
 
@@ -19,10 +31,6 @@ static inline WGPUCommandEncoderDescriptor ctx_desc{nullptr, "TexturedQuadDemo c
 static inline WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "TexturedQuadDemo cmd buf finish"};
 
 
-struct UBOMvp
-{
-    mtx4 model_view_proj = mtx4_identity;
-};
 struct UBOCamera
 {
     mtx4 projection = mtx4_identity;
@@ -65,7 +73,7 @@ namespace pl_init_data
 } // namespace pl_init_data
 
 static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
-    const Context& context, u32 unibuf_size)
+    const RenderContext& context, u32 unibuf_size)
 {
     // Bind group layout
     WGPUBindGroupLayoutEntry bgl_entries[3] = {
@@ -114,7 +122,7 @@ static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
     return {bgl, pl};
 }
 
-static WGPUBindGroup createBindGroups(const Context& context, WGPUBindGroupLayout bind_group_layout,
+static WGPUBindGroup createBindGroups(const RenderContext& context, WGPUBindGroupLayout bind_group_layout,
     const GpuBuffer& unibuf, const TextureView& tex_view)
 {
     WGPUBindGroup out_bind_group = BGBuilder{} //
@@ -128,7 +136,7 @@ static WGPUBindGroup createBindGroups(const Context& context, WGPUBindGroupLayou
 }
 
 static WGPURenderPipeline createPipeline(
-    const TextShaderLib& shader_lib, const Context& context, WGPUPipelineLayout pipeline_layout)
+    const TextShaderLib& shader_lib, const RenderContext& context, WGPUPipelineLayout pipeline_layout)
 {
     using namespace pl_init_data;
     auto* src = shader_lib.shad_src.find("content/shaders/wgsl/basic_unlit.wgsl"sv);
@@ -146,7 +154,7 @@ static WGPURenderPipeline createPipeline(
 }
 // tmp hack, make it proper hot reload #fixme
 static WGPURenderPipeline realoadShaders(
-    TextShaderLib shader_lib, const Context& context, WGPUPipelineLayout pipeline_layout)
+    TextShaderLib shader_lib, const RenderContext& context, WGPUPipelineLayout pipeline_layout)
 {
     shader_lib.reload();
 #ifdef VEX_GFX_WEBGPU_DAWN
@@ -204,13 +212,7 @@ static WGPURenderPipeline realoadShaders(
     auto pipeline = wgpuDeviceCreateRenderPipeline(context.device, &pipeline_desc);
     return pipeline;
 }
-
-template <typename UBO>
-static void updateUniform(wgfx::Context& context, GpuBuffer& unibuf, UBO ubo_transforms)
-{
-    wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBO));
-}
-
+ 
 void TexturedQuadDemo::init(Application& owner, InitArgs args)
 {
     AGraphicsBackend* backend = owner.getGraphicsBackend();
@@ -220,12 +222,12 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
 
     vex::InlineBufferAllocator<32 * 1024> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
-    Context ctx = {
+    RenderContext ctx = {
         .device = globals.device,
         .encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc),
         .queue = globals.queue,
     };
-    ViewportOptions options{.name = "Textured Quad Demo", .size = {800, 600}};
+    ViewportOptions options{.name = g_demo_name_readable, .size = {800, 600}};
     viewports.add(ctx, options);
     scene.camera = BasicCamera::makeOrtho(
         {0.f, 0.f, -2.0}, {default_cam_height * 1.333f, default_cam_height}, -10, 10);
@@ -343,7 +345,7 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
                                      .addUniform(sizeof(UBOMvp), temp_geom.uniform_buf)
                                      .createLayoutAndGroup(ctx.device);
 
-        BasicPipeline<PosNormColor> pl_builder;
+        SimplePipeline<PosNormColor> pl_builder;
         pl_builder.setShader(shad);
         temp_geom.pipeline = pl_builder.createPipeline(ctx, layout);
         temp_geom.bind_group = binding;
@@ -360,7 +362,24 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
                     const auto code = (u8)(SignalId::KeySpace);
                     return state.this_frame[code].state == SignalState::Started;
                 },
-            });
+            },
+            true);
+        owner.input.addTrigger("LeftMBKDownWithCtrl"_trig,
+            Trigger{
+                .fn_logic =
+                    [](Trigger& self, const InputState& state)
+                {
+                    const auto code = (u8)(SignalId::MouseLBK);
+                    const auto code2 = (u8)(SignalId::KeyModCtrl);
+                    if (state.this_frame[code].ia_startedOrGoing() &&
+                        state.this_frame[code2].ia_startedOrGoing())
+                    {
+                        return true;
+                    }
+                    return false;
+                },
+            },
+            true);
     }
 }
 
@@ -372,26 +391,36 @@ void TexturedQuadDemo::update(Application& owner)
         return;
     auto& main_view = viewports.imgui_views[0];
 
-    // input update
+    auto& options = owner.getSettings();
+    auto opt_dict = options.settings;
+    if (options.changed_this_tick)
     {
-        using namespace input; 
+        if (auto entry = opt_dict.find("gfx.pause");
+            entry && entry->getValueOrDefault<bool>(false))
+        {
+            return;
+        }
+    }
+    if (ImGui::IsPopupOpen("Select demo"))
+        return; 
 
-        const v2i32 pos = owner.input.global.mouse_pos_window;
-        const v2i32 origin = main_view.viewport_origin;
-        const v2i32 pos_wnd = pos - origin;
-        const v2f view_size = v2f{main_view.last_seen_size};
-        v3f pos_cam_space = v3f{(pos_wnd.x / view_size.x) - 0.5f, (pos_wnd.y / view_size.y) - 0.5f,
-                                0.0f} *
-                            2.0f;
-        // const auto cam_size = scene.camera.orthoSize();
-        // v3f world_loc = scene.camera.pos + pos_cam_space * v3f{cam_size * 0.5f, 0};
-        auto i_mvp = glm::inverse(scene.camera.mtx.projection * scene.camera.mtx.view);
-        v3f world_loc = i_mvp * v4f{pos_cam_space, 1};
+    const v2i32 pos = owner.input.global.mouse_pos_window;
+    const v2i32 delta = owner.input.global.mouse_delta;
+    const v2f pos_cam_space = main_view.viewportToNormalizedView(pos);
+    // input update
+    if (viewport_was_active && glm::abs(pos_cam_space).x < 1 && glm::abs(pos_cam_space).y < 1)
+    {
+        using namespace input;
+        const v3f world_loc = scene.camera.normalizedViewToWorld(pos_cam_space);
+        v3f world_delta = scene.camera.viewportToCamera(
+            main_view.pixelScaleToNormalizedView(delta));
 
         owner.input.if_triggered("ClearPoints"_trig,
             [&](const input::Trigger& self)
             {
                 mouse_points.points.clear();
+                scene.camera.pos.x = 0;
+                scene.camera.pos.y = 0;
                 return true;
             });
         owner.input.if_triggered("MouseRightDown"_trig,
@@ -404,6 +433,22 @@ void TexturedQuadDemo::update(Application& owner)
         owner.input.if_triggered("MouseMidMove"_trig,
             [&](const input::Trigger& self)
             {
+                world_delta.z = 0;
+                scene.camera.pos = scene.camera.pos + world_delta;
+                return true;
+            });
+        owner.input.if_triggered("LeftMBKDownWithCtrl"_trig,
+            [&](const input::Trigger& self)
+            {
+                // SPDLOG_INFO(" down at {} => {}, adding point", pos_cam_space, world_loc);
+                if (mouse_points.points.size() == 0)
+                {
+                    mouse_points.points.push(Point{world_loc, mouse_points.color});
+                }
+                else if (glm::length2(world_loc - mouse_points.points.peek()->pos) >= (0.1f * 0.1f))
+                {
+                    mouse_points.points.push(Point{world_loc, mouse_points.color});
+                }
                 return true;
             });
     }
@@ -411,8 +456,6 @@ void TexturedQuadDemo::update(Application& owner)
     {
         Viewport& viewport = main_view.render_target;
         auto& wgpu_ctx = viewport.setupForDrawing(globals);
-
-        // scene.camera.height = viewport.options.size.y;
         {
             scene.camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
             scene.camera.update();
@@ -434,21 +477,14 @@ void TexturedQuadDemo::update(Application& owner)
             for (auto& p : mouse_points.points.reverseEnum())
             {
                 lines.add(p.pos);
-                // lines.addList({
             }
-            //     v3f{1, 2, 0} * geom_scale,
-            //     v3f{2, 2, 0} * geom_scale,
-            //     v3f{2, 1, 0} * geom_scale,
-            //     v3f{2, 0, 0} * geom_scale,
-            //     v3f{1, 0, 0} * geom_scale,
-            // });
             vex::PolyLine::buildPolyXY(mesh_data, //
                 PolyLine::Args{
                     .points = lines.data(),
                     .len = lines.size(),
+                    .color = mouse_points.color,
                     .corner_type = PolyLine::Corners::CloseTri,
                     .thickness = mouse_points.width,
-                    .color = mouse_points.color,
                     .closed = mouse_points.loop,
                 });
 
@@ -506,9 +542,7 @@ void TexturedQuadDemo::update(Application& owner)
             return wgpuCommandEncoderFinish(wgpu_ctx.encoder, &ctx_desc_fin);
         }();
         wgpuQueueSubmit(wgpu_ctx.queue, 1, &cmd_buf);
-        WGPU_REL(CommandBuffer, cmd_buf);
-        WGPU_REL(CommandEncoder, wgpu_ctx.encoder);
-        wgpu_ctx.encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc);
+        WGPU_REL(CommandBuffer, cmd_buf); 
 
         wgpuDeviceTick(wgpu_ctx.device);
     }
@@ -517,24 +551,15 @@ void TexturedQuadDemo::update(Application& owner)
 void TexturedQuadDemo::drawUI(Application& owner)
 {
     ui.drawStandardUI(owner, &viewports);
+    viewport_was_active = ImGui::Begin(g_demo_name_readable);
+    defer_ { ImGui::End(); };
+    if (viewport_was_active)
     {
-        ImGui::Begin("Textured Quad Demo");
-
-        ImGui::Checkbox("  Closed loop", &mouse_points.loop);
-        ImGui::SameLine();
-        ImGui::Bullet();
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(64);
-        ImGui::SliderFloat("Line width", &mouse_points.width, 0.1f, 2.f);
-        ImGui::Text("  Press [right mouse button] to add points ot temp geometry. (%d/ %d)",
-            mouse_points.points.size(), mouse_points.max_points);
-        ImGui::Text("  Press [space] to clear dynamic geometry."); 
-
         if (ImGui::Button("reload shaders"))
         {
             auto& globals = wgpu_backend->getGlobalResources();
 
-            Context ctx = {
+            RenderContext ctx = {
                 .device = globals.device,
                 .encoder = nullptr,
                 .queue = globals.queue,
@@ -552,7 +577,23 @@ void TexturedQuadDemo::drawUI(Application& owner)
                 SPDLOG_INFO("Failed to create webgpu pipeline.");
             }
         }
-        ImGui::End();
+        if (ImGui::TreeNode("Options"))
+        {
+            ImGui::PushFont(g_view_hub.visuals.fnt_accent);
+            defer_ { ImGui::PopFont(); };
+            ImGui::Checkbox("  Closed loop", &mouse_points.loop);
+            ImGui::SameLine();
+            ImGui::Bullet();
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(64);
+            ImGui::SliderFloat("Line width", &mouse_points.width, 0.1f, 2.f);
+            ImGui::Text("  Press [right mouse button] to add points ot temp geometry. (%d/ %d)",
+                mouse_points.points.size(), mouse_points.max_points);
+            ImGui::Text("  Hold [left mouse button]+[ctrl] to draw freely.");
+            ImGui::Text("  Hold [mid mouse button] to move camera.");
+            ImGui::Text("  Press [space] to clear dynamic geometry & reset camera.");
+            ImGui::TreePop();
+        }
     }
     {
         ImGui::Begin("Color picker");
@@ -563,17 +604,8 @@ void TexturedQuadDemo::drawUI(Application& owner)
     }
 }
 
-void vex::TexturedQuadDemo::postFrame(Application& owner)
+void TexturedQuadDemo::postFrame(Application& owner)
 {
-    for (auto& vex : viewports.imgui_views)
-    {
-        vex.render_target.context.release();
-        if (vex.changed_last_frame)
-        {
-            vex.changed_last_frame = false;
-            vex.render_target.release();
-            vex.render_target.initialize(vex.render_target.context.device, vex.args);
-        }
-    }
+    viewports.postFrame();
     frame_alloc.reset();
 }

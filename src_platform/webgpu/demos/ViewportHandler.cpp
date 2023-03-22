@@ -3,17 +3,17 @@
 #include <application/Application.h>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <utils/CLI.h>
 #include <utils/ImGuiUtils.h>
 
-void wgfx::ui::ViewportHandler::add(const wgfx::Context& wgpu_ctx, vex::ViewportOptions options)
+void wgfx::ui::ViewportHandler::add(const wgfx::RenderContext& wgpu_ctx, vex::ViewportOptions options)
 {
     wgfx::Viewport vex;
     vex.initialize(wgpu_ctx.device, options);
+    options.name = options.name ? options.name : "debug";
     imgui_views.push_back({
-        .args = {.name = options.name ? options.name : "Demo"},
-        .visible = true,
+        .args = options,
         .render_target = vex,
+        .gui_enabled = true,
     });
 }
 
@@ -22,10 +22,12 @@ void wgfx::ui::ViewportHandler::draw()
     for (auto& view : imgui_views)
     {
         auto s = fmt::format("{}", view.args.name);
-        if (!view.visible)
+        if (!view.gui_enabled)
             continue;
 
-        bool imgui_visible = ImGui::Begin(s.data());
+        ImGui::SetNextWindowSize(
+            ImVec2{(float)view.args.size.x, (float)view.args.size.y}, ImGuiCond_FirstUseEver);
+        view.gui_visible = ImGui::Begin(s.data());
         defer_ { ImGui::End(); };
 
         ImVec2 vmin = ImGui::GetWindowContentRegionMin();
@@ -34,10 +36,10 @@ void wgfx::ui::ViewportHandler::draw()
         v2i32 cur_size = {deltas.x > 0 ? deltas.x : 32, deltas.y > 0 ? deltas.y : 32};
 
         auto wp = ImGui::GetWindowPos();
-        view.viewport_origin = v2i32{wp.x, wp.y} + v2i32{vmin.x, vmin.y}; 
+        view.viewport_origin = v2i32{wp.x, wp.y} + v2i32{vmin.x, vmin.y};
 
         wgfx::Viewport& render_target = view.render_target;
-        if (!imgui_visible || !render_target.isValid())
+        if (!view.gui_visible || !render_target.isValid())
             continue;
 
         ImGui::Image(
@@ -55,6 +57,30 @@ void wgfx::ui::ViewportHandler::draw()
     }
 }
 
+void wgfx::ui::ViewportHandler::update(v2i32 wnd_mouse_pos)
+{
+    for (auto& vp : imgui_views)
+    {
+        vp.mouse_pos_normalized = vp.viewportToNormalizedView(wnd_mouse_pos);
+        vp.mouse_over = glm::abs(vp.mouse_pos_normalized).x < 1 &&
+                        glm::abs(vp.mouse_pos_normalized).y < 1;
+    }
+}
+
+void wgfx::ui::ViewportHandler::postFrame()
+{
+    for (auto& vp : imgui_views)
+    {
+        vp.render_target.context.release();
+        if (vp.changed_last_frame)
+        {
+            vp.changed_last_frame = false;
+            vp.render_target.release();
+            vp.render_target.initialize(vp.render_target.context.device, vp.args);
+        }
+    }
+}
+
 void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandler* viewports)
 {
     // init view
@@ -66,6 +92,7 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
         if (ImGui::BeginMenu("File"))
         {
             defer_ { ImGui::EndMenu(); };
+
             if (ImGui::MenuItem("Quit" /*, "CTRL+Q"*/))
             {
                 spdlog::warn(" Shutting down : initiated by user.");
@@ -75,8 +102,7 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
         if (ImGui::BeginMenu("View"))
         {
             defer_ { ImGui::EndMenu(); };
-            if (ImGui::MenuItem(
-                    "Console", nullptr, &vex::console::ConsoleWindow::g_console->is_open))
+            if (ImGui::MenuItem("Console", nullptr, &console_wnd.is_open))
             {
             }
             ImGui::Separator();
@@ -92,13 +118,15 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
             ImGui::MenuItem("Show ImGui Metrics", nullptr, &g_metric_shown);
         }
         ImGui::Bullet();
-        ImGui::Text(" perf: %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
-            ImGui::GetIO().Framerate);
+        const i32 target_fps = app.getMaxFps();
+        ImGui::Text(" perf: %.3f ms/frame (%.1f FPS) / limit: %d", 1000.0f / ImGui::GetIO().Framerate,
+            ImGui::GetIO().Framerate, target_fps);
     }
 
     // dockspaces
-    [[maybe_unused]] ImGuiID main_dockspace = ImGui::DockSpaceOverViewport(nullptr);
+    if (should_config_docking)
     {
+        [[maybe_unused]] ImGuiID main_dockspace = ImGui::DockSpaceOverViewport(nullptr);
         static ImGuiDockNodeFlags dockspace_flags =
             ImGuiDockNodeFlags_NoDockingInCentralNode; // ImGuiDockNodeFlags_KeepAliveOnly;
 
@@ -115,19 +143,14 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
             // ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(
             //     dockspace_id, ImGuiDir_Left, 0.16f, nullptr, &dockspace_id);
             ImGui::DockBuilderDockWindow("Console", dock_id_down);
-            // ImGui::DockBuilderDockWindow("Details", dock_id_left);
-            ImGui::DockBuilderDockWindow("Viewport 1", dockspace_id);
+            ImGui::DockBuilderDockWindow("MainViewport", dockspace_id);
             ImGui::DockBuilderFinish(main_dockspace);
         }
     }
     if (g_metric_shown)
         ImGui::ShowMetricsWindow();
-    if (vex::console::ConsoleWindow::g_console->is_open)
-        vex::console::showConsoleWindow(vex::console::ConsoleWindow::g_console.get());
-
-    // viewports
+    if (console_wnd.is_open)
+        vex::console::showConsoleWindow(&console_wnd);
     if (viewports)
-    {
         viewports->draw();
-    }
 }

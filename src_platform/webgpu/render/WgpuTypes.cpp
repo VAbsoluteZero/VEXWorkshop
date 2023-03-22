@@ -5,9 +5,10 @@
 #include <SDL_syswm.h>
 #include <SDL_video.h>
 #include <VCore/Utils/VUtilsBase.h>
+#include <gfx/GfxUtils.h>
+#include <spdlog/stopwatch.h>
 #include <stb/stb_image.h>
 
-#include <spdlog/stopwatch.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -18,6 +19,102 @@
     #include <emscripten/html5_webgpu.h>
 #else
 #endif
+
+
+void wgfx::Viewport::initialize(WGPUDevice device, const vex::ViewportOptions& args)
+{
+    options = args;
+    {
+        WGPUTextureDescriptor tex_desc{
+            .label = "viewport texture",
+            .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_RenderAttachment |
+                     WGPUTextureUsage_CopySrc,
+            .dimension = WGPUTextureDimension_2D,
+            .size =
+                {
+                    .width = args.size.x,
+                    .height = args.size.y,
+                    .depthOrArrayLayers = 1,
+                },
+            .format = args.srgb ? WGPUTextureFormat_RGBA8UnormSrgb : WGPUTextureFormat_RGBA8Unorm,
+            .mipLevelCount = 1,
+            .sampleCount = 1,
+        };
+        texture = wgpuDeviceCreateTexture(device, &tex_desc);
+
+        WGPUTextureViewDescriptor view_desc{
+            .label = "viewport texture view",
+            .format = tex_desc.format,
+            .dimension = WGPUTextureViewDimension_2D,
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+            .aspect = WGPUTextureAspect_All,
+        };
+        view = wgpuTextureCreateView(texture, &view_desc);
+        color_attachment.view = view;
+    }
+    // depth
+    if (options.depth_enabled)
+    {
+        WGPUTextureFormat format = WGPUTextureFormat_Depth24PlusStencil8;
+        u32 sample_count = 1;
+
+        WGPUTextureDescriptor depth_texture_desc = {
+            .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
+            .dimension = WGPUTextureDimension_2D,
+            .size =
+                {
+                    .width = args.size.x,
+                    .height = args.size.y,
+                    .depthOrArrayLayers = 1,
+                },
+            .format = format,
+            .mipLevelCount = 1,
+            .sampleCount = sample_count,
+        };
+        depth_texture = wgpuDeviceCreateTexture(device, &depth_texture_desc);
+
+        WGPUTextureViewDescriptor view_desc = {
+            .format = depth_texture_desc.format,
+            .dimension = WGPUTextureViewDimension_2D,
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+            .aspect = WGPUTextureAspect_All,
+        };
+        depth_view = wgpuTextureCreateView(depth_texture, &view_desc);
+        depth_attachment.view = depth_view;
+    }
+}
+
+wgfx::RenderContext& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
+{
+    auto encoder = wgpuDeviceCreateCommandEncoder(globals.device, &this->encoder_desc);
+
+    this->color_attachment.view = view;
+    this->depth_attachment.view = depth_view;
+    WGPURenderPassDescriptor pass{
+        .label = "viewport render pass",
+        .colorAttachmentCount = 1,
+        .colorAttachments = &this->color_attachment,
+        .depthStencilAttachment = depth_view ? &this->depth_attachment : nullptr,
+    };
+    auto render_pass_encoder = wgpuCommandEncoderBeginRenderPass(encoder, &pass);
+    // #fixme REVERSE DEPTH ORDER
+    wgpuRenderPassEncoderSetViewport(
+        render_pass_encoder, 0.0f, 0.0f, options.size.x, options.size.y, 0.0f, 1.0f);
+    wgpuRenderPassEncoderSetScissorRect(
+        render_pass_encoder, 0u, 0u, options.size.x, options.size.y);
+
+    context = wgfx::RenderContext{
+        .device = globals.device,
+        .encoder = encoder,
+        .queue = globals.queue,
+        .render_pass = render_pass_encoder,
+        .cur_tex_view = view,
+    };
+    return context;
+}
+
 
 void wgfx::wgpuWait(std::atomic_bool& flag)
 {
@@ -31,8 +128,9 @@ void wgfx::wgpuWait(std::atomic_bool& flag)
     }
 }
 
-void wgfx::wgpuPollWait(const Context& context, std::atomic_bool& flag, double microsec_timeout)
-{ 
+void wgfx::wgpuPollWait(
+    const RenderContext& context, std::atomic_bool& flag, double microsec_timeout)
+{
     using namespace std::chrono_literals;
     spdlog::stopwatch sw;
     while (!flag)
@@ -45,10 +143,10 @@ void wgfx::wgpuPollWait(const Context& context, std::atomic_bool& flag, double m
         double mic_sec = sw.elapsed() / 1.0us;
         if (microsec_timeout > 0 && mic_sec > microsec_timeout)
         {
-            SPDLOG_ERROR(" wgpuPollWait timeout "); 
+            SPDLOG_ERROR(" wgpuPollWait timeout ");
             return;
         }
-    } 
+    }
 }
 
 WGPUInstance wgfx::createInstance(WGPUInstanceDescriptor desc)
@@ -247,6 +345,43 @@ WGPUShaderModule wgfx::shaderFromSrc(WGPUDevice device, const char* src)
     desc.nextInChain = &shaderCodeDesc.chain;
     return wgpuDeviceCreateShaderModule(device, &desc);
 }
+WGPUShaderModule wgfx::reloadShader(
+    vex::TextShaderLib& shader_lib, const RenderContext& context, const char* shader_name)
+{
+    shader_lib.reload(shader_name);
+    auto* src = shader_lib.shad_src.find(shader_name);
+    if (!check(src, "shader not found"))
+        return false;
+    WGPUShaderModule shad_vert_frag = shaderFromSrc(context.device, src->text.c_str());
+    std::atomic_bool sync_ready = ATOMIC_VAR_INIT(false);
+    bool success = false;
+    wgpuRequest(
+        wgpuShaderModuleGetCompilationInfo,
+        [&](WGPUCompilationInfoRequestStatus status, WGPUCompilationInfo const* compilationInfo,
+            void*)
+        {
+            if (compilationInfo)
+            {
+                for (auto it : vex::Range(compilationInfo->messageCount))
+                {
+                    WGPUCompilationMessage message = compilationInfo->messages[it];
+                    SPDLOG_WARN("Error (line: {}, pos: {}): {}", message.lineNum, message.linePos,
+                        message.message);
+                }
+            }
+            success = (compilationInfo->messageCount == 0);
+            sync_ready = true;
+        },
+        shad_vert_frag);
+    wgpuPollWait(context, sync_ready, 1000);
+    if (!success)
+    {
+        WGPU_REL(ShaderModule, shad_vert_frag);
+        return nullptr;
+    }
+
+    return shad_vert_frag;
+}
 
 WGPUVertexState wgfx::makeVertexState(WGPUDevice device, const VertShaderDesc& desc)
 {
@@ -306,7 +441,7 @@ WGPUFragmentState wgfx::makeFragmentState(WGPUDevice device, const FragShaderDes
 
 
 wgfx::Texture wgfx::Texture::loadFormData(
-    const Context& ctx, LoadImgResult& loaded_img, LoadArgs options)
+    const RenderContext& ctx, LoadImgResult& loaded_img, LoadArgs options)
 {
     u8* data = loaded_img.data;
     if (!checkAlways(data, "failed to load texture"))
@@ -344,7 +479,7 @@ wgfx::Texture wgfx::Texture::loadFormData(
 }
 
 wgfx::Texture wgfx::Texture::loadFormFile(
-    const Context& ctx, const char* filename, LoadArgs options)
+    const RenderContext& ctx, const char* filename, LoadArgs options)
 {
     LoadImgResult loaded_img = loadImage(filename, options.flip_y);
     auto tex = loadFormData(ctx, loaded_img, options);
@@ -352,8 +487,8 @@ wgfx::Texture wgfx::Texture::loadFormFile(
     return tex;
 }
 
-void wgfx::Texture::copyImageToTexture(
-    const Context& ctx, WGPUTexture texture, void* pixels, WGPUExtent3D size, uint32_t channels)
+void wgfx::Texture::copyImageToTexture(const RenderContext& ctx, WGPUTexture texture, void* pixels,
+    WGPUExtent3D size, uint32_t channels)
 {
     const u64 data_size = size.width * size.height * size.depthOrArrayLayers * channels;
     WGPUImageCopyTexture cpy_desc{
@@ -435,41 +570,4 @@ wgfx::LoadImgResult wgfx::loadImage(const char* filename, bool flip_y)
         .channel_count = 4,
         .data = data,
     };
-}
-
-void wgfx::BasicCamera::update()
-{
-    mtx4 rot_mat = mtx4_identity;
-    mtx4 trans_mat = mtx4_identity;
-    trans_mat = glm::translate(trans_mat, pos);
-    this->mtx.view = (trans_mat * rot_mat);
-    if (type == Type::FOV)
-    {
-        mtx.projection = glm::perspective(fov_rad, aspect, near_depth, far_depth);
-    }
-    else
-    {
-        auto sz = orthoSize() * 0.5f;
-        i32 sign = invert_y ? -1 : 1;
-        mtx.projection = glm::orthoLH_ZO(
-            -sz.x, sz.x, sign * -sz.y, sign * sz.y, near_depth, far_depth);
-    }
-}
-
-void wgfx::BasicCamera::setPerspective(float fov_degrees, float aspect, float in_near, float in_far)
-{
-    type = Type::FOV;
-    this->fov_rad = glm::radians(fov_degrees);
-    this->near_depth = in_near;
-    this->far_depth = in_far;
-    this->mtx.projection = glm::perspective(fov_rad, aspect, near_depth, far_depth);
-    update();
-}
-
-void wgfx::BasicCamera::orthoSetSize(v2f size)
-{
-    type = Type::Ortho;
-    this->aspect = size.x / size.y;
-    height = size.y;
-    update();
 }

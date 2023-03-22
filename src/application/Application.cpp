@@ -38,7 +38,6 @@ static void setupSettings(vex::Application& app);
 vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSamples&& samples)
 {
     setupLoggers();
-    vex::console::createConsole();
 
     auto config = in_config;
     { // #fixme
@@ -97,6 +96,7 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
     self.main_window = tWindow::create(config.WindowArgs);
 
     self.framerate.target_framerate = config.target_framerate;
+    self.allow_demo_transition = config.allow_demo_changes;
 
     using namespace std::literals::chrono_literals;
     std::this_thread::sleep_for(10ms);
@@ -158,6 +158,30 @@ i32 vex::Application::runLoop()
         //-----------------------------------------------------------------------------
         // prepare frame
         {
+            if (pending_demo.hasAnyValue())
+            {
+                DemoSamples::Entry& ent = pending_demo.get<DemoSamples::Entry>();
+                if (active_demo)
+                {
+                    SPDLOG_WARN(" [Experimental] Demo reset began.");
+                    active_demo.reset(nullptr);
+                    ImGui::DestroyContext(ImGui::GetCurrentContext());
+                    active_demo.reset(ent.callback(*this));
+                    [[maybe_unused]] auto c = ImGui::CreateContext();
+                    g_view_hub.onFirstPaintCall(
+                        this->main_window->windowSize(), this->main_window->display_size.y);
+                    ImGui::GetStyle() = g_view_hub.visuals.styles[EImGuiStyle::DeepDark];
+                    gfx_backend->softReset(*this);
+                    SPDLOG_WARN(
+                        " [Experimental] Demo reset completed. Hopefully it was successful.");
+                }
+                else
+                {
+                    active_demo.reset(ent.callback(*this));
+                }
+                SPDLOG_WARN(" Active demo : {}", ent.readable_name);
+                pending_demo = {};
+            }
             gfx_backend->startFrame(*this);
         }
         //-----------------------------------------------------------------------------
@@ -172,22 +196,7 @@ i32 vex::Application::runLoop()
         //-----------------------------------------------------------------------------
         // imgui draw callbacks
         {
-#if ENABLE_IMGUI
-            if (active_demo)
-                active_demo->drawUI(*this);
-            else
-                showDemoSelection();
-
-            for (auto& [view_name, view] : g_view_hub.views)
-            {
-                for (auto& callback : view.delayed_gui_drawcalls)
-                {
-                    if (callback)
-                        callback({ImGui::GetCurrentContext()});
-                }
-                view.delayed_gui_drawcalls.clear();
-            }
-#endif
+            showAppLevelUI();
         }
         //-----------------------------------------------------------------------------
         // post frame
@@ -201,8 +210,21 @@ i32 vex::Application::runLoop()
         {
             using namespace std::chrono_literals;
             framerate.frame_number++;
-            double dt_sec = g_frame_sw.elapsed() / 1.0s;
+            auto ft_elapsed = g_frame_sw.elapsed();
+            double dt_sec = ft_elapsed / 1.0s;
             ftime.update(dt_sec);
+
+            // dumb implementation #fixme - rewrite
+            if (!framerate.fpsUnconstrained())
+            {
+                double dt_ms = ft_elapsed / 1.0ms;
+                auto desired_frame_dur = framerate.desiredFrameDurationMs();
+                auto left_ms = desired_frame_dur - dt_ms;
+                if (left_ms > 0.1f)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds((i64)(left_ms - 0.05f)));
+                }
+            }
 
             g_frame_sw.reset();
         }
@@ -212,6 +234,10 @@ i32 vex::Application::runLoop()
 
     } while (running && !pending_stop);
 
+    if (active_demo)
+    {
+        active_demo = {};
+    }
     if (gfx_backend)
     {
         gfx_backend->teardown(*this);
@@ -244,11 +270,52 @@ i32 vex::Application::runLoop()
 //-----------------------------------------------------------------------------
 // [SECTION] ImGUI
 //-----------------------------------------------------------------------------
-void vex::Application::showDemoSelection()
+void vex::Application::showAppLevelUI()
 {
+#if ENABLE_IMGUI
+    static bool gui_demo_selection_flag = false;
+    if (allow_demo_transition)
+    {
+        if (ImGui::BeginMainMenuBar())
+        {
+            defer_ { ImGui::EndMainMenuBar(); };
+            if (ImGui::BeginMenu("File"))
+            {
+                defer_ { ImGui::EndMenu(); };
+                ImGui::MenuItem("Show demo selection", nullptr, &gui_demo_selection_flag);
+            }
+        }
+    }
+    if ((gui_demo_selection_flag && !pending_demo.hasAnyValue()) || !active_demo)
+    {
+        if (showDemoSelection())
+            gui_demo_selection_flag = false;
+    }
+    if (active_demo)
+        active_demo->drawUI(*this);
+
+    for (auto& [view_name, view] : g_view_hub.views)
+    {
+        for (auto& callback : view.delayed_gui_drawcalls)
+        {
+            if (callback)
+                callback({ImGui::GetCurrentContext()});
+        }
+        view.delayed_gui_drawcalls.clear();
+    }
+#endif
+}
+bool vex::Application::showDemoSelection()
+{
+#if ENABLE_IMGUI
+    if (allow_demo_transition == false && active_demo)
+        return false;
+
+    bool selected = false;
     if (!ImGui::IsPopupOpen("Select demo"))
         ImGui::OpenPopup("Select demo");
-    if (ImGui::BeginPopupModal("Select demo", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if (ImGui::BeginPopupModal(
+            "Select demo", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
     {
         ImGui::Text("Available code samples:\n");
         ImGui::Separator();
@@ -258,7 +325,8 @@ void vex::Application::showDemoSelection()
             if (ImGui::Button(entry.readable_name))
             {
                 ImGui::CloseCurrentPopup();
-                active_demo.reset(entry.callback(*this));
+                pending_demo = entry;
+                selected = true;
             }
             if (ImGui::IsItemHovered())
             {
@@ -271,6 +339,12 @@ void vex::Application::showDemoSelection()
         }
         ImGui::EndPopup();
     }
+    if (selected && pending_demo.hasAnyValue())
+    {
+        SPDLOG_WARN(" Demo selected. Loading. ");
+    }
+    return selected;
+#endif
 }
 //-----------------------------------------------------------------------------
 // [SECTION] LOGGERS
@@ -326,24 +400,17 @@ static void setupLoggers()
 
 void setupSettings(vex::Application& app)
 {
-    // auto& settings_container = app.getSettings();
-
-    // settings_container.addSetting("gfx.wireframe", false);
-    // settings_container.addSetting("gfx.cullmode", 1);
+    auto& settings_container = app.getSettings();
+    settings_container.addSetting("gfx.pause", false);
 
     vex::console::makeAndRegisterCmd("app.set",
         "Change application settings. Type 'list' to list all. \n", true,
         [](const vex::console::CmdCtx& ctx)
         {
-            std::optional<std::string_view> cmd_key = ctx.parsed_args->get<std::string_view>(0);
-            if (!cmd_key)
-                return false;
-
-            std::string option{cmd_key.value()};
-
             auto& settings_dict = vex::Application::get().getSettings().settings;
-
-            if (option == "list")
+            std::optional<std::string_view> cmd_key = ctx.parsed_args->get<std::string_view>(0);
+            bool list = ctx.parsed_args->get<bool>("list", false);
+            if (list)
             {
                 SPDLOG_INFO(
                     "* available options & expected type of arg (additional constraints may "
@@ -370,7 +437,13 @@ void setupSettings(vex::Application& app)
                 }
                 return true;
             }
-            vex::OptNumValue* entry = settings_dict.tryGet(option);
+
+            if (!cmd_key)
+                return false;
+
+            std::string option{cmd_key.value()};
+
+            vex::OptNumValue* entry = settings_dict.find(option);
 
             if (nullptr == entry)
                 return false;

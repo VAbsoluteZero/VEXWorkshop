@@ -3,6 +3,7 @@
 #include <VCore/Containers/Dict.h>
 #include <VCore/Memory/Memory.h>
 #include <VFramework/VEXBase.h>
+#include <application/Platfrom.h>
 
 // #todo replace with thin type
 #include <functional>
@@ -22,6 +23,10 @@ namespace vex::input
         KeyA,
         KeyS,
         KeyD,
+
+        KeyModAlt,
+        KeyModShift,
+        KeyModCtrl,
         // KeyAnykey,
 
         sMax,
@@ -56,6 +61,15 @@ namespace vex::input
         inline constexpr v2f asVec2f() const { return value_raw; }
         inline constexpr bool isActive() const { return Flag::Active == flag; }
         inline constexpr bool isInactive() const { return Flag::None == flag; }
+
+        inline constexpr bool ia_startedOrGoing() const
+        {
+            return SignalState::Going == state || SignalState::Started == state;
+        }
+        inline constexpr bool ia_started() const
+        {
+            return  SignalState::Started == state;
+        }
     };
     struct InputState
     {
@@ -110,10 +124,14 @@ namespace vex::input
             Trigger* tg = triggers.find(hash);
             return tg ? tg->triggered_this_frame : false;
         }
-        template <typename Callable>
+        template <typename Callable, bool checked = true>
         inline void if_triggered(u64 hash, Callable&& callable)
         {
             Trigger* tg = triggers.find(hash);
+            if constexpr (checked)
+            {
+                check(tg, "trigger not found");
+            }
             if (tg && tg->triggered_this_frame)
             {
                 const Trigger* c_tg = tg;
@@ -135,7 +153,7 @@ namespace vex::input
         {
             return addTrigger(util::fnv1a<true>(name), trigger);
         }
-        bool addTrigger(u64 hash, const Trigger& trigger);
+        bool addTrigger(u64 hash, const Trigger& trigger, bool replace = false);
 
         vex::Dict<u64, Trigger> triggers;
         InputState state;

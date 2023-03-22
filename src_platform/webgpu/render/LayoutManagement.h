@@ -65,6 +65,19 @@ namespace wgfx
             .attributes = attributes,
         };
     };
+    struct EmptyVertex
+    {
+    };
+    template <>
+    struct VertLayout<EmptyVertex>
+    {
+        using Vert = EmptyVertex;
+        static constexpr WGPUVertexBufferLayout buffer_layout = {
+            .stepMode = WGPUVertexStepMode_VertexBufferNotUsed,
+            .attributeCount = 0,
+            .attributes = nullptr,
+        };
+    };
 
     struct BGLayoutBuilder
     {
@@ -197,10 +210,10 @@ namespace wgfx
             .sampleType = WGPUTextureSampleType_Float,
             .viewDimension = WGPUTextureViewDimension_2D,
             .multisampled = false,
-        }; 
+        };
         vex::Allocator al = vex::gMallocator;
         BGLayoutBuilder layout_builder{.entries = {al, 4}};
-        BGBuilder group_builder{.entries = {al, 4}}; 
+        BGBuilder group_builder{.entries = {al, 4}};
 
         inline BGLCombinedBuilder& addUniform(u32 min_size, const GpuBuffer& buf, u32 offset = 0,
             WGPUShaderStageFlags visibility = WGPUShaderStage_Vertex, bool dyn_offset = false)
@@ -211,6 +224,23 @@ namespace wgfx
                     {
                         .type = WGPUBufferBindingType_Uniform,
                         .hasDynamicOffset = dyn_offset,
+                        .minBindingSize = min_size,
+                    },
+            });
+            group_builder.add(buf);
+            return *this;
+        }
+
+        inline BGLCombinedBuilder& addStorageBuffer(u32 min_size, const GpuBuffer& buf,
+            WGPUShaderStageFlags visibility = WGPUShaderStage_Vertex, bool read_only = true)
+        {
+            layout_builder.add(WGPUBindGroupLayoutEntry{
+                .visibility = visibility,
+                .buffer =
+                    {
+                        .type = read_only ? WGPUBufferBindingType_ReadOnlyStorage
+                                          : WGPUBufferBindingType_Storage,
+                        //.hasDynamicOffset = dyn_offset,
                         .minBindingSize = min_size,
                     },
             });
@@ -255,7 +285,7 @@ namespace wgfx
     };
 
     template <typename VertType>
-    struct BasicPipeline
+    struct SimplePipeline
     {
         static constexpr const WGPUVertexBufferLayout vert_layout =
             VertLayout<VertType>::buffer_layout;
@@ -284,13 +314,14 @@ namespace wgfx
             .multisample = multisample_state,
             .fragment = &frag_state,
         };
+
         inline void setShader(WGPUShaderModule module)
         {
             vert_state.module = module;
             frag_state.module = module;
         }
 
-        WGPURenderPipeline createPipeline(const Context& context, WGPUBindGroupLayout layout)
+        WGPURenderPipeline createPipeline(const RenderContext& context, WGPUBindGroupLayout layout)
         {
             WGPUPipelineLayoutDescriptor pl_desc{
                 .bindGroupLayoutCount = 1,
