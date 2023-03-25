@@ -4,7 +4,7 @@
 #include <VCore/Containers/Dict.h>
 #include <gfx/GfxUtils.h>
  
-namespace vex::pf_demo
+namespace vex::flow
 {  
 
     struct Scene
@@ -16,4 +16,4 @@ namespace vex::pf_demo
     {
         
     };
-} // namespace vex::pf_demo
+} // namespace vex::flow

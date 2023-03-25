@@ -251,12 +251,10 @@ auto wgfx::Globals::isValid() const -> bool
 }
 
 void wgfx::Globals::release()
-{ //
-    WGPU_REL(Surface, surface);
+{ // 
     WGPU_REL(SwapChain, swap_chain);
     // WGPU_REL(Device, device);
-    wgpuDeviceDestroy(device);
-    WGPU_REL(Adapter, adapter);
+    wgpuDeviceDestroy(device); 
     WGPU_REL(Instance, instance);
 }
 

@@ -13,10 +13,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define WEBGPU_CPP_IMPLEMENTATION
+#include <spdlog/stopwatch.h>
 #include <stb/stb_image.h>
 #include <stb/stb_image_write.h>
 #include <tinyobj/tiny_obj_loader.h>
-#include <spdlog/stopwatch.h>
 
 //
 #include <webgpu/demos/basic_textured_quad/TexturedQuad.h>
@@ -28,20 +28,26 @@ using namespace vex;
 // #fixme - possibly register samples similarly to the way test frameworks register tests
 vex::DemoSamples registerAvailableDemoCtors();
 
+struct XY
+{
+    u32 x;
+    u32 y;
+};
+
 int main(int argc, char** argv)
 {
     vex::StartupConfig config;
-    config.WindowArgs = {.w = 1600, .h = 1200};
+    config.WindowArgs = {.w = 1800, .h = 1400};
     // experimental feature, originally demo would be selected only once
     config.allow_demo_changes =
 #ifndef NDEBUG
         true;
 #else
-        false;
+        true;
 #endif
-    config.target_framerate = 300;
+    config.target_framerate = 300; 
 
-    spdlog::stopwatch sw; 
+    spdlog::stopwatch sw;
     auto& app = vex::Application::init(config, registerAvailableDemoCtors());
     app.activateDemo("pf_main");
     SPDLOG_WARN("Initializing application took {} seconds", sw);
@@ -60,7 +66,7 @@ vex::DemoSamples registerAvailableDemoCtors()
         [](vex::Application& owner) -> vex::IDemoImpl*
         {
             spdlog::stopwatch sw;
-            defer_{ SPDLOG_WARN("Initializing demo took {} seconds", sw); };
+            defer_ { SPDLOG_WARN("Initializing demo took {} seconds", sw); };
 
             auto new_demo = new vex::quad_demo::TexturedQuadDemo();
             new_demo->init(owner, {});
@@ -70,9 +76,9 @@ vex::DemoSamples registerAvailableDemoCtors()
         [](vex::Application& owner) -> vex::IDemoImpl*
         {
             spdlog::stopwatch sw;
-            defer_{ SPDLOG_WARN("Initializing demo took {} seconds", sw); };
+            defer_ { SPDLOG_WARN("Initializing demo took {} seconds", sw); };
 
-            auto new_demo = new vex::pf_demo::PathfinderDemo();
+            auto new_demo = new vex::flow::FlowfieldPF();
             new_demo->init(owner, {});
             return new_demo;
         });

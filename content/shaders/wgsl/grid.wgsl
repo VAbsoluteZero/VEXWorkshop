@@ -20,41 +20,42 @@ struct VertexOutput {
 fn vs_main(@builtin(vertex_index) i: u32, in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.pos = uniforms.mvp * vec4<f32>(in.pos, 1.0);
-    //out.pos = vec4<f32>(in.pos, 1.0); pow(in.uv, vec2<f32>(8,8))
-    out.color = vec4<f32>(uniforms.data2.y, uniforms.data2.y, 0.3, 1.0);
+
+    var v = (v2f(out.pos.x, out.pos.y));
+
+    out.pos.x = floor(v.x / uniforms.data2.z) * uniforms.data2.z;
+    out.pos.y = floor(v.y / uniforms.data2.w) * uniforms.data2.w;
+
+    out.color = uniforms.data1;
     out.uv = in.uv;
     return out;
 }
+
 const pi : f32 = 3.14159265359; 
 const pi2 : f32 = pi * 2; 
 alias v2f = vec2<f32>;
+alias v4f = vec4<f32>;
+alias v2u32 = vec2<u32>;
+alias mtx4 =  mat4x4<f32>;
 
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
-    var side_len = 16.;// uniforms.data2.y;
-    let scale_bias = uniforms.data2.z / 100.0f;
-    var subdiv_adjusted = round((4.0 * scale_bias) / 4.0f);
-    subdiv_adjusted *= 4.0f; 
-    
-    let main_freq: v2f = in.uv * pi2 * side_len ;
-    let sub_main_freq: v2f = in.uv * pi2 * side_len * subdiv_adjusted;
-    var uv_sin: vec2<f32> = cos(main_freq) + // 
-        (cos(5 * main_freq) * 0.1) - v2f(1.05, 1.05);
-    var uv_sin_adj: vec2<f32> = cos(sub_main_freq) + //
-        (cos(5 * sub_main_freq) * 0.5) - v2f(1.05, 1.05);
+    var side_len = uniforms.data2.x;
+    var thickness = uniforms.data2.y;
 
-    var p = uv_sin ;
-    var p2 = uv_sin_adj ;
+    let main_freq: v2f = in.uv * pi2 * side_len  ;
+    //let sub_main_freq: v2f = in.uv * pi2 * side_len * subdiv_adjusted;
+    let mult: f32 = 1;
+    var uv_cos: vec2<f32> = cos(main_freq) * (mult);
+    let iter_cnt = pi2 * side_len  ;
+    var discard_y = cos(iter_cnt * thickness * 0.5) * mult;
 
-    var val_max = max(p.x, p.y);
-    var val_max_subdiv = max(p2.x, p2.y); 
+    var max_uv = max(uv_cos.x, uv_cos.y);
+    if (max_uv) < (discard_y) { 
+        discard;
+    }
 
-    let pos_v = max(val_max, 0.0);
-    color.a =  round(pos_v * 20) * 0.55 +  (pos_v * 4) * 0.15; 
-    // if subdiv_adjusted > 1 {
-    //     color.a += max(val_max_subdiv, 0) * 0.3;
-    // }   
     return color;
 } 

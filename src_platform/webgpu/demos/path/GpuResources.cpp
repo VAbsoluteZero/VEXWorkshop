@@ -2,7 +2,7 @@
 
 #include <webgpu/render/LayoutManagement.h>
 using namespace vex;
-using namespace vex::pf_demo;
+using namespace vex::flow;
 using namespace wgfx;
 using namespace std::literals::string_view_literals;
 
@@ -10,15 +10,14 @@ using namespace std::literals::string_view_literals;
 void ViewportGrid::init(const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib)
 {
     vex::InlineBufferAllocator<1024> temp_alloc_resource;
-    auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
+    auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle(); 
 
     auto* src = text_shad_lib.shad_src.find(grid_shader_file);
     if (!check(src, "shader not found"))
         return;
     WGPUShaderModule shad = shaderFromSrc(ctx.device, src->text.c_str());
 
-    auto tmp_mesh = buildPlane<PosNormUv>(
-        tmp_alloc, 2, {-1.0f, -1.0f}, {1.0f, 1.0f}, 8.0);
+    auto tmp_mesh = buildPlane<PosNormUv>(tmp_alloc, 2, {-1.0f, -1.0f}, {1.0f, 1.0f}, 8.0);
 
     for (auto& vtx : tmp_mesh.vertices)
     {
@@ -66,13 +65,34 @@ void ViewportGrid::init(const wgfx::RenderContext& ctx, const TextShaderLib& tex
     bind_group = binding;
 }
 
-void vex::pf_demo::ViewportGrid::draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx)
+void vex::flow::ViewportGrid::draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx)
 {
-    // get pixel size
+    auto grid_thicness_px = draw_ctx.settings->valueOr(
+        opt_grid_thickness.key_name, opt_grid_thickness.default_val);
+    v4f grid_color = draw_ctx.settings->valueOr(
+        opt_grid_color.key_name, opt_grid_color.default_val);
+
+    if (grid_thicness_px < 1 || draw_ctx.grid_half_size < 0.0001f)
+        return; 
+
+    const float grid_thickness_scaled = grid_thicness_px / (draw_ctx.viewport_size.y * 0.5);
+    const float cell_len = (draw_ctx.viewport_size.y * 0.5) / draw_ctx.grid_half_size;
+    auto half_num_lines = draw_ctx.grid_half_size;
+    auto cell_div_line_width = cell_len / grid_thicness_px;
+    if (cell_div_line_width < 2)
+    {
+        return;
+    }
+    if (cell_len / grid_thicness_px < 4)
+    {
+        half_num_lines *= 0.5f;
+    }
+
     UBOMvp4Colors4Floats vbo{
         .model_view_proj = draw_ctx.camera_mvp,
-        .data1 = Color::blue(),
-        .data2 = {draw_ctx.time, draw_ctx.grid_half_size, draw_ctx.pixel_scale, draw_ctx.grid_w},
+        .data1 = grid_color,
+        .data2 = {half_num_lines, grid_thickness_scaled, draw_ctx.pixel_size_nm.x,
+            draw_ctx.pixel_size_nm.y},
     };
     updateUniform(ctx, uniform_buf, vbo);
 
@@ -107,7 +127,7 @@ bool ViewportGrid::reloadShaders(TextShaderLib& shader_lib, const RenderContext&
     return true;
 }
 
-void vex::pf_demo::TempGeometry::init(
+void vex::flow::TempGeometry::init(
     const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib)
 {
     vex::InlineBufferAllocator<1024> temp_alloc_resource;
@@ -152,7 +172,7 @@ void vex::pf_demo::TempGeometry::init(
     check(isValid(), "temp_geometry initialization failed");
 }
 
-void vex::pf_demo::TempGeometry::draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx,
+void vex::flow::TempGeometry::draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx,
     ROSpan<u32> indices, ROSpan<PosNormColor> vertices)
 {
     checkAlwaysRel(
@@ -184,7 +204,7 @@ void vex::pf_demo::TempGeometry::draw(const wgfx::RenderContext& ctx, const Draw
 }
 
 
-void vex::pf_demo::ColorQuad::init(
+void vex::flow::ColorQuad::init(
     const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib)
 {
     vex::InlineBufferAllocator<1024> temp_alloc_resource;
@@ -221,11 +241,11 @@ void vex::pf_demo::ColorQuad::init(
     bind_group = binding;
 }
 
-void vex::pf_demo::ColorQuad::draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx)
+void vex::flow::ColorQuad::draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx)
 {
     UBOHeatMap vbo{
         .camera_vp = draw_ctx.camera_mvp,
-        .data1 = {draw_ctx.time, draw_ctx.delta_time, draw_ctx.pixel_scale, 0},
+        .data1 = {draw_ctx.time, draw_ctx.delta_time, 0, 0},
         .data2 = {},
         .data3 = {},
         .data4 = {},
@@ -243,7 +263,7 @@ void vex::pf_demo::ColorQuad::draw(const wgfx::RenderContext& ctx, const DrawCon
     }
 }
 
-bool vex::pf_demo::ColorQuad::reloadShaders(
+bool vex::flow::ColorQuad::reloadShaders(
     vex::TextShaderLib& shader_lib, const wgfx::RenderContext& context)
 {
     WGPUShaderModule shad_vert_frag = reloadShader(shader_lib, context, bg_shader_file);
@@ -263,14 +283,14 @@ bool vex::pf_demo::ColorQuad::reloadShaders(
     return true;
 }
 
-void vex::pf_demo::CellHeatmapV1::init(
+void vex::flow::CellHeatmapV1::init(
     const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib, ROSpan<u32> heatmap)
 {
     vex::InlineBufferAllocator<1024> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
     auto* src = text_shad_lib.shad_src.find(hm_shader_file);
-    if (!check(src, "shader not found"))
+    if (!checkAlwaysRel(src, "shader not found"))
         return;
     WGPUShaderModule shad = shaderFromSrc(ctx.device, src->text.c_str());
 
@@ -310,7 +330,7 @@ void vex::pf_demo::CellHeatmapV1::init(
     bind_group = binding;
 }
 
-void vex::pf_demo::CellHeatmapV1::draw(
+void vex::flow::CellHeatmapV1::draw(
     const wgfx::RenderContext& ctx, const DrawContext& draw_ctx, const HeatmapDynamicData& args)
 {
     UBOHeatMap vbo{
@@ -318,7 +338,7 @@ void vex::pf_demo::CellHeatmapV1::draw(
         .data1 = args.color1,
         .data2 = args.color2,
         .data3 = {},
-        .data4 = {},
+        .data4 = {draw_ctx.time, 0, 0, 0},
         .quad_size = {draw_ctx.camera_h, draw_ctx.camera_h},
         .buffer_dimensions = args.bounds,
     };
@@ -339,7 +359,7 @@ void vex::pf_demo::CellHeatmapV1::draw(
     }
 }
 
-bool vex::pf_demo::CellHeatmapV1::reloadShaders(
+bool vex::flow::CellHeatmapV1::reloadShaders(
     vex::TextShaderLib& shader_lib, const wgfx::RenderContext& context)
 {
     WGPUShaderModule shad_vert_frag = reloadShader(shader_lib, context, hm_shader_file);

@@ -3098,7 +3098,8 @@ ImGuiWindow::~ImGuiWindow()
 {
     IM_ASSERT(DrawList == &DrawListInst);
     IM_DELETE(Name);
-    ColumnsStorage.clear_destruct();
+    if (ColumnsStorage.Data != NULL)
+        ColumnsStorage.clear_destruct();
 }
 
 ImGuiID ImGuiWindow::GetID(const char* str, const char* str_end)

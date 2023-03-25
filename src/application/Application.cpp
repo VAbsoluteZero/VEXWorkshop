@@ -32,6 +32,13 @@
 
 using namespace std::literals::string_view_literals;
 
+static inline const auto opt_imgui_demo = vex::SettingsContainer::EntryDesc<bool>{
+    .key_name = "app.ShowIMGUIDemoWindow",
+    .info = "Display demo.",
+    .default_val = false,
+    .flags = 0,
+};
+
 static void setupLoggers();
 static void setupSettings(vex::Application& app);
 
@@ -117,6 +124,7 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
     }
     setupSettings(self);
     self.all_demos = samples;
+    opt_imgui_demo.addTo(self.getSettings());
 
     return self;
 }
@@ -270,12 +278,15 @@ i32 vex::Application::runLoop()
 //-----------------------------------------------------------------------------
 // [SECTION] ImGUI
 //-----------------------------------------------------------------------------
+static vex::SettingsContainer::VersionFilter imgui_demo{opt_imgui_demo.key_name};
 void vex::Application::showAppLevelUI()
 {
 #if ENABLE_IMGUI
     static bool gui_demo_selection_flag = false;
     if (allow_demo_transition)
     {
+        ImGui::PushFont(vex::g_view_hub.visuals.fnt_accent);
+        defer_ { ImGui::PopFont(); };
         if (ImGui::BeginMainMenuBar())
         {
             defer_ { ImGui::EndMainMenuBar(); };
@@ -303,6 +314,12 @@ void vex::Application::showAppLevelUI()
         }
         view.delayed_gui_drawcalls.clear();
     }
+    imgui_demo.ifHasValue<bool>(settings,
+        [](bool& v)
+        {
+            if (v)
+                ImGui::ShowDemoWindow();
+        });
 #endif
 }
 bool vex::Application::showDemoSelection()
@@ -403,7 +420,7 @@ void setupSettings(vex::Application& app)
     auto& settings_container = app.getSettings();
     settings_container.addSetting("gfx.pause", false);
 
-    vex::console::makeAndRegisterCmd("app.set",
+    vex::console::makeAndRegisterCmd("set",
         "Change application settings. Type 'list' to list all. \n", true,
         [](const vex::console::CmdCtx& ctx)
         {
@@ -418,7 +435,7 @@ void setupSettings(vex::Application& app)
                 for (auto& [k, v] : settings_dict)
                 {
                     const char* type_name = nullptr;
-                    v.match(
+                    v.value.match(
                         [&, &kk = k](i32& a)
                         {
                             type_name = "int32";
@@ -443,13 +460,13 @@ void setupSettings(vex::Application& app)
 
             std::string option{cmd_key.value()};
 
-            vex::OptNumValue* entry = settings_dict.find(option);
+            auto* entry = settings_dict.find(option);
 
             if (nullptr == entry)
                 return false;
 
             bool matched = false;
-            entry->match(
+            entry->value.match(
                 [&](i32& v)
                 {
                     matched = true;
@@ -472,7 +489,7 @@ void setupSettings(vex::Application& app)
                         v = cmd_value.value();
                 });
 
-            vex::Application::get().getSettings().changed_this_tick = true;
+            entry->current_version++;
             // SPDLOG_WARN("# could not set value to setting");
             return matched;
         });

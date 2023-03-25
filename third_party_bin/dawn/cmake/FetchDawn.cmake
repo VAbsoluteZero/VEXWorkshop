@@ -1,5 +1,7 @@
 include(FetchContent)
 
+set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/deps/")
+
 FetchContent_Declare(
 	dawn
 	GIT_REPOSITORY https://dawn.googlesource.com/dawn
@@ -14,14 +16,19 @@ function(make_dawn_available)
 	FetchContent_GetProperties(dawn)
 	if (NOT dawn_POPULATED)
 		FetchContent_Populate(dawn)
-
+		
+		message(STATUS " running fetch script")
 		execute_process(
 			COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/tools/fetch_dawn_dependencies.py"
-			WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/_deps/dawn-src"
-			OUTPUT_VARIABLE OUT
-			ERROR_VARIABLE OUT
+			WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/deps/dawn-src/"
+			OUTPUT_VARIABLE OUT1
+			RESULT_VARIABLE OUT2
+			ERROR_VARIABLE OUT3
 		)
-		message(STATUS "fetch_dawn_dependencies: ${OUT}")
+		message(STATUS "fetch dawn dependencies: ${OUT1}")
+		message(STATUS " w ${OUT2}")
+		message(STATUS " e  ${OUT3}")
+		message(STATUS "dir: ${CMAKE_BINARY_DIR}/deps/dawn-src" )
 
 		set(DAWN_BUILD_SAMPLES OFF)
 		set(TINT_BUILD_TINT ON)  
@@ -52,6 +59,8 @@ function(make_dawn_available)
 		set(TINT_BUILD_AS_OTHER_OS OFF)
 		set(TINT_BUILD_REMOTE_COMPILE OFF)
 
+		message(STATUS "================================================================")
+		message(STATUS ${dawn_SOURCE_DIR} "  :: info :: " ${dawn_BINARY_DIR})
 		add_subdirectory(${dawn_SOURCE_DIR} ${dawn_BINARY_DIR})
 	endif ()
 
@@ -72,6 +81,7 @@ function(make_dawn_available)
 		extinst_tables
 		webgpu_dawn
 		webgpu_headers_gen
+		dawn_public_config
 	)
 	
 	foreach (Target ${AllDawnTargets})
@@ -80,7 +90,7 @@ function(make_dawn_available)
 	# set_property(TARGET glfw PROPERTY FOLDER "External/GLFW3")
 	# set_property(TARGET update_mappings PROPERTY FOLDER "External/GLFW3")
 
-	# This is likely needed for other targets as well 
-	target_include_directories(dawn_utils PUBLIC "${CMAKE_BINARY_DIR}/_deps/dawn-src/src")
+	# This is likely needed for other targets as well dawn_public_config
+	target_include_directories(dawn_utils PUBLIC "${CMAKE_BINARY_DIR}/deps/dawn-src/src")
 	#set(CMAKE_BUILD_TYPE SAVED_TG_BUILD_TYPE)
 endfunction()

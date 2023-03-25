@@ -3,7 +3,7 @@
 #include <SDL.h>
 #include <spdlog/spdlog.h>
 
-//vex::ImViewHub vex::g_view_hub{};
+// vex::ImViewHub vex::g_view_hub{};
 
 auto colorFromBytes(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -36,24 +36,46 @@ void vex::ImViewHub::onFirstPaintCall(v2f window_size, i32 display_h)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigDockingWithShift = false;
     {
-        // ImGuiStyle& style = ImGui::GetStyle();
-
-        auto sz = io.DisplaySize; 
+        static const ImWchar icon_ranges[] = {ICON_MIN_CI, ICON_MAX_16_CI, 0};
+        auto sz = io.DisplaySize;
 
         visuals.fnt_normal = io.Fonts->AddFontFromFileTTF("content/fonts/roboto_light.ttf",
             scale_font(12), NULL, io.Fonts->GetGlyphRangesDefault());
+        {
+            ImFontConfig config;
+            config.MergeMode = true;
+            config.GlyphOffset.y = 5;
+            config.PixelSnapH = true;
+            visuals.fnt_icon = io.Fonts->AddFontFromFileTTF(
+                "content/fonts/codicon.ttf", scale_font(10), &config, icon_ranges);
+        }
 
         visuals.fnt_header = io.Fonts->AddFontFromFileTTF("content/fonts/fira_medium.ttf",
-            scale_font(16), NULL, io.Fonts->GetGlyphRangesDefault());
+            scale_font(14), NULL, io.Fonts->GetGlyphRangesDefault()); 
+        visuals.fnt_log = io.Fonts->AddFontFromFileTTF("content/fonts/ubuntu_mono.ttf",
+            scale_font(10), NULL, io.Fonts->GetGlyphRangesDefault());
+        {
+            ImFontConfig config;
+            config.MergeMode = true;
+            config.GlyphOffset.y = 4;
+            config.PixelSnapH = true;
+            visuals.fnt_icon = io.Fonts->AddFontFromFileTTF(
+                "content/fonts/codicon.ttf", scale_font(10), &config, icon_ranges);
+        }
+
         visuals.fnt_accent = io.Fonts->AddFontFromFileTTF("content/fonts/fira_medium.ttf",
             scale_font(12), NULL, io.Fonts->GetGlyphRangesDefault());
-
+        {
+            ImFontConfig config;
+            config.MergeMode = true;
+            config.GlyphOffset.y = 5;
+            config.PixelSnapH = true;
+            visuals.fnt_icon = io.Fonts->AddFontFromFileTTF(
+                "content/fonts/codicon.ttf", scale_font(12), &config, icon_ranges);
+            // io.Fonts->Build();
+        }
         visuals.fnt_tiny = io.Fonts->AddFontFromFileTTF("content/fonts/roboto_light.ttf",
             scale_font(9), NULL, io.Fonts->GetGlyphRangesDefault());
-
-        visuals.fnt_log = io.Fonts->AddFontFromFileTTF("content/fonts/ubuntu_mono.ttf",
-            scale_font(9), NULL, io.Fonts->GetGlyphRangesDefault());
-
         io.Fonts->Build();
     }
     // =================================

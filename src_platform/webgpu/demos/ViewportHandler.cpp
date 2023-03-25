@@ -72,7 +72,7 @@ void wgfx::ui::ViewportHandler::postFrame()
     for (auto& vp : imgui_views)
     {
         vp.render_target.context.release();
-        if (vp.changed_last_frame)
+        if (vp.changed_last_frame && vp.render_target.context.device)
         {
             vp.changed_last_frame = false;
             vp.render_target.release();

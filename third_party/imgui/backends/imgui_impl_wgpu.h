@@ -13,8 +13,8 @@
 
 #pragma once
 #include "imgui.h"          // IMGUI_IMPL_API
-
-#include <webgpu.h> 
+ 
+#include <webgpu.h>
 
 IMGUI_IMPL_API bool ImGui_ImplWGPU_Init(WGPUDevice device, int num_frames_in_flight,
     WGPUTextureFormat rt_format, WGPUTextureFormat depth_format = WGPUTextureFormat_Undefined);

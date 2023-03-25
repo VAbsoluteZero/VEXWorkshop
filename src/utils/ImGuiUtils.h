@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <misc/IconsCodicons.h>
+
 namespace vex
 {
     struct ImGuiSizes
@@ -35,10 +37,11 @@ namespace vex
         Hackerman
     }; 
     struct ImVisLib
-    {
+    { 
         ImFont* fnt_header = nullptr;
         ImFont* fnt_normal = nullptr;
         ImFont* fnt_accent = nullptr;
+        ImFont* fnt_icon = nullptr;
         ImFont* fnt_tiny = nullptr;
         ImFont* fnt_log = nullptr;
 

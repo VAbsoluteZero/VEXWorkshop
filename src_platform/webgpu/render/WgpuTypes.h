@@ -5,9 +5,12 @@
 
 #ifdef VEX_GFX_WEBGPU_DAWN
     #include <webgpu.h>
-    #define WGPU_REL(x, a) \
-        if (a)             \
-        wgpu##x##Release(a)
+    #define WGPU_REL(x, a)       \
+        if (a)                   \
+        {                        \
+            wgpu##x##Release(a); \
+            a = nullptr;         \
+        }
 #else
     #include <wgpu/webgpu.h>
     #include <wgpu/wgpu.h>
@@ -76,7 +79,7 @@ namespace wgfx
         {
             if (release_view)
                 WGPU_REL(TextureView, cur_tex_view);
-            WGPU_REL(RenderPassEncoder, render_pass);
+            // WGPU_REL(RenderPassEncoder, render_pass);
             WGPU_REL(CommandEncoder, encoder);
         };
     };

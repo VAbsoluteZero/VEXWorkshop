@@ -12,7 +12,7 @@ void vex::ModelLoader::update(Application& owner)
 
 void vex::ModelLoader::drawUI(Application& owner)
 { //
-    bool gui_enabled = ImGui::Begin("ModelLoader");
+/*    bool gui_enabled = ImGui::Begin("ModelLoader");
     ImGui::Text("testing testing");
-    defer_ { ImGui::End(); };
+    defer_ { ImGui::End(); }*/;
 }

@@ -62,6 +62,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         return v4f(0.5342, 0.7543, 0.9, 1.0);
     }
     var part = tile >> 8;
-    var fpart = clamp(0., 1., f32(part) / 60.0);
-    return v4f(fpart, (1 - sin(fpart * pi)) * 0.75, 0.0332 / (fpart + 0.0001), 1);//mix(0, 0.1, 1 / fpart  )
+    if part == 0 {
+        return v4f(0.5342, 0.9543, 0.9, 1.0);
+    }
+    var fpart = clamp(0., 1., f32(part) / 55.0);
+    var r =  fpart;// 0.95 + cos(fpart * pi * u.data2.x * 9) * 0.041;
+    var b = 0.0532 / (fpart + 0.0021) + 0.1;
+    return v4f(r, (1.02 - sin(fpart * pi)) * 1.05 - b * 0.3, b, 1);//mix(0, 0.1, 1 / fpart  )fpart
 } 

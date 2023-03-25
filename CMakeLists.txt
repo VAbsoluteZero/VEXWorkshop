@@ -73,13 +73,13 @@ if(NOT EXISTS "${VEX_ROOTDIR}/VCore")
     message(FATAL_ERROR "Couldn't find VEX lib or fetch submodules. VEX_FETCH either off or failed.")
 endif() 
 # -------------------------------------------------------------------------------------------------
-# SUBDIRECTORY (for every platfrom) 
+# SUBDIRECTORY (for every platfrom)  
 # -------------------------------------------------------------------------------------------------
 add_subdirectory("third_party/spdlog")   
 add_subdirectory("third_party/glm")   
 add_subdirectory("third_party/rapidobj")  
 # -------------------------------------------------------------------------------------------------
-# configure include paths & source files
+# configure include paths & source files 
 # -------------------------------------------------------------------------------------------------
 include_directories(${SDL2_INCLUDE_DIRS})
 include_directories(${VEX_INCLUDE_DIRS})
@@ -108,16 +108,16 @@ if (VEX_USE_WGPU OR VEX_USE_DAWN OR VEX_USE_EMSCRIPTEN)
 elseif(VEX_USE_DX11)
     add_compile_definitions(VEX_GFX_DX11=1) 
     set(VEX_BACKEND_DIRECTX ON)
-else()
+else() 
     message(FATAL_ERROR "error : Invalid configuration. Gfx backend not selected") 
 endif() 
  
 if (VEX_USE_DAWN)     
     # FETCH dawn
-    message(STATUS "info: BACKEND = DAWN") 
-    add_subdirectory("third_party_bin/dawn") 
-    include_directories(${CMAKE_BINARY_DIR}/_deps/dawn-build/gen/include/dawn)
-    #include_directories(${CMAKE_BINARY_DIR}/_deps/dawn-src/include/)  
+    message(STATUS "info: BACKEND = DAWN where:${VEXGameOfLife_SOURCE_DIR}/third_party_bin/dawn/") 
+    add_subdirectory("${VEXGameOfLife_SOURCE_DIR}/third_party_bin/dawn/") 
+    include_directories(${CMAKE_BINARY_DIR}/deps/dawn-build/gen/include/dawn) 
+    include_directories(${VEXGameOfLife_SOURCE_DIR}/third_party_bin/dawn/)  
     # get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)  
 endif()
 
@@ -279,8 +279,8 @@ if (NOT VEX_USE_BIN_DIR)
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/VexGame"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/VexGame"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/VexGame"
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/build/VexGame/${CMAKE_BUILD_TYPE}"
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build/VexGame/${CMAKE_BUILD_TYPE}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/build/VexGame/Dbg"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build/VexGame/Rel"
     )
 else() 
     set_target_properties(VEXGameOfLife
@@ -334,11 +334,11 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
         message(STATUS "MSVC_TOOLSET_VERSION: ${MSVC_TOOLSET_VERSION}")
         if(NOT VEX_MSVC_CLANG) 
             target_compile_options(VEXGameOfLife PUBLIC "/ZI")
-            target_compile_options(VEXGameOfLife PUBLIC "/MP")
-            target_link_options(VEXGameOfLife PUBLIC "/INCREMENTAL")  
+            target_compile_options(VEXGameOfLife PUBLIC "/MP") 
         endif()
+        target_link_options(VEXGameOfLife PUBLIC "/INCREMENTAL") 
     endif() 
-endif() 
+endif()  
 # ------------------------------------------------------------------------------------------------- 
 if (NOT EMSCRIPTEN)
     # -------------------------------------------------------------------------------------------------

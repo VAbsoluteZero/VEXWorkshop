@@ -13,13 +13,14 @@
 #ifdef VEX_GFX_WEBGPU_DAWN
     #include <tint/tint.h>
 #endif
-/* 
+/*
  * NOTE:
  * this whole thing is pretty rough, it is first working thing in WEBGPU
  * so it is very messy as I am figuring out API & what I can do with it.
  *
  */
 
+constexpr const char* console_name = "Console##quad";
 const char* g_demo_name_readable = "Textured Quad Demo";
 
 using namespace vex;
@@ -122,8 +123,8 @@ static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
     return {bgl, pl};
 }
 
-static WGPUBindGroup createBindGroups(const RenderContext& context, WGPUBindGroupLayout bind_group_layout,
-    const GpuBuffer& unibuf, const TextureView& tex_view)
+static WGPUBindGroup createBindGroups(const RenderContext& context,
+    WGPUBindGroupLayout bind_group_layout, const GpuBuffer& unibuf, const TextureView& tex_view)
 {
     WGPUBindGroup out_bind_group = BGBuilder{} //
                                        .add(unibuf)
@@ -135,8 +136,8 @@ static WGPUBindGroup createBindGroups(const RenderContext& context, WGPUBindGrou
     return out_bind_group;
 }
 
-static WGPURenderPipeline createPipeline(
-    const TextShaderLib& shader_lib, const RenderContext& context, WGPUPipelineLayout pipeline_layout)
+static WGPURenderPipeline createPipeline(const TextShaderLib& shader_lib,
+    const RenderContext& context, WGPUPipelineLayout pipeline_layout)
 {
     using namespace pl_init_data;
     auto* src = shader_lib.shad_src.find("content/shaders/wgsl/basic_unlit.wgsl"sv);
@@ -212,7 +213,7 @@ static WGPURenderPipeline realoadShaders(
     auto pipeline = wgpuDeviceCreateRenderPipeline(context.device, &pipeline_desc);
     return pipeline;
 }
- 
+
 void TexturedQuadDemo::init(Application& owner, InitArgs args)
 {
     AGraphicsBackend* backend = owner.getGraphicsBackend();
@@ -231,6 +232,8 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
     viewports.add(ctx, options);
     scene.camera = BasicCamera::makeOrtho(
         {0.f, 0.f, -2.0}, {default_cam_height * 1.333f, default_cam_height}, -10, 10);
+
+    ui.console_wnd.name = console_name;
     // init wgpu state
     {
         // quad
@@ -385,24 +388,19 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
 
 void TexturedQuadDemo::update(Application& owner)
 {
-    auto& globals = wgpu_backend->getGlobalResources();
-    DynMeshBuilder<PosNormColor> mesh_data = {alloc, 512, 256};
     if (viewports.imgui_views.size() < 1)
         return;
-    auto& main_view = viewports.imgui_views[0];
-
     auto& options = owner.getSettings();
     auto opt_dict = options.settings;
-    if (options.changed_this_tick)
-    {
-        if (auto entry = opt_dict.find("gfx.pause");
-            entry && entry->getValueOrDefault<bool>(false))
-        {
-            return;
-        }
-    }
-    if (ImGui::IsPopupOpen("Select demo"))
-        return; 
+    if (auto entry = opt_dict.find("gfx.pause");
+        entry && entry->value.getValueOr<bool>(false))
+        return;
+    if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+        return;
+
+    auto& globals = wgpu_backend->getGlobalResources();
+    DynMeshBuilder<PosNormColor> mesh_data = {alloc, 512, 256};
+    auto& main_view = viewports.imgui_views[0];
 
     const v2i32 pos = owner.input.global.mouse_pos_window;
     const v2i32 delta = owner.input.global.mouse_delta;
@@ -415,7 +413,7 @@ void TexturedQuadDemo::update(Application& owner)
         v3f world_delta = scene.camera.viewportToCamera(
             main_view.pixelScaleToNormalizedView(delta));
 
-        owner.input.if_triggered("ClearPoints"_trig,
+        owner.input.ifTriggered("ClearPoints"_trig,
             [&](const input::Trigger& self)
             {
                 mouse_points.points.clear();
@@ -423,21 +421,21 @@ void TexturedQuadDemo::update(Application& owner)
                 scene.camera.pos.y = 0;
                 return true;
             });
-        owner.input.if_triggered("MouseRightDown"_trig,
+        owner.input.ifTriggered("MouseRightDown"_trig,
             [&](const input::Trigger& self)
             {
                 // SPDLOG_INFO(" clicked at {} => {}, adding point", pos_cam_space, world_loc);
                 mouse_points.points.push(Point{world_loc, mouse_points.color});
                 return true;
             });
-        owner.input.if_triggered("MouseMidMove"_trig,
+        owner.input.ifTriggered("MouseMidMove"_trig,
             [&](const input::Trigger& self)
             {
                 world_delta.z = 0;
                 scene.camera.pos = scene.camera.pos + world_delta;
                 return true;
             });
-        owner.input.if_triggered("LeftMBKDownWithCtrl"_trig,
+        owner.input.ifTriggered("LeftMBKDownWithCtrl"_trig,
             [&](const input::Trigger& self)
             {
                 // SPDLOG_INFO(" down at {} => {}, adding point", pos_cam_space, world_loc);
@@ -542,7 +540,7 @@ void TexturedQuadDemo::update(Application& owner)
             return wgpuCommandEncoderFinish(wgpu_ctx.encoder, &ctx_desc_fin);
         }();
         wgpuQueueSubmit(wgpu_ctx.queue, 1, &cmd_buf);
-        WGPU_REL(CommandBuffer, cmd_buf); 
+        WGPU_REL(CommandBuffer, cmd_buf);
 
         wgpuDeviceTick(wgpu_ctx.device);
     }

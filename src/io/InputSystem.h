@@ -114,18 +114,18 @@ namespace vex::input
         void updateTriggers();
         void onFrameEnd();
 
-        [[nodiscard]] inline bool is_triggered(const char* trigger)
+        [[nodiscard]] inline bool isTriggered(const char* trigger)
         {
             Trigger* tg = triggers.find(util::fnv1a<true>(trigger));
             return tg ? tg->triggered_this_frame : false;
         }
-        [[nodiscard]] inline bool is_triggered(u64 hash)
+        [[nodiscard]] inline bool isTriggered(u64 hash)
         {
             Trigger* tg = triggers.find(hash);
             return tg ? tg->triggered_this_frame : false;
         }
         template <typename Callable, bool checked = true>
-        inline void if_triggered(u64 hash, Callable&& callable)
+        inline void ifTriggered(u64 hash, Callable&& callable)
         {
             Trigger* tg = triggers.find(hash);
             if constexpr (checked)

@@ -59,8 +59,6 @@ namespace vex::quad_demo
             void release()
             {
                 uniform_buf.release();
-                WGPU_REL(BindGroupLayout, bind_group_layout);
-                WGPU_REL(PipelineLayout, pipe_layout);
                 WGPU_REL(BindGroup, bind_group);
                 WGPU_REL(RenderPipeline, pipeline);
                 WGPU_REL(RenderPipeline, pipeline_srgb);

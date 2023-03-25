@@ -3,21 +3,42 @@
 #include <VCore/Containers/Dict.h>
 #include <VFramework/VEXBase.h>
 #include <gfx/GfxUtils.h>
+
 #include <webgpu/render/LayoutManagement.h>
 #include <webgpu/render/WgpuTypes.h>
+#include <application/Platfrom.h>
 
-namespace vex::pf_demo
-{
+namespace vex::flow
+{ 
+    //struct SettingsFlags // predefined flags
+    //{
+    //    static constexpr u32 k_pf_demo_setting = 0x0001'0000u;
+    //};
+    static inline const auto opt_grid_thickness = SettingsContainer::EntryDesc<i32>{
+        .key_name = "pf.GridSize",
+        .info = "Thickness of the grid. Value less than 2 disables the grid.",
+        .default_val = 2,
+        .min = 0,
+        .max = 8,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_grid_color = SettingsContainer::EntryDesc<v4f>{
+        .key_name = "pf.GridColor",
+        .info = "Color of the grid.",
+        .default_val = Color::gray(), 
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
     struct DrawContext
     {
+        SettingsContainer* settings = nullptr;
         mtx4 camera_mvp = mtx4_identity;
         mtx4 camera_model_view = mtx4_identity;
         mtx4 camera_projection = mtx4_identity;
-        float pixel_scale = 0.01f;
+        v2u32 viewport_size;
+        v2f pixel_size_nm = {0.002f,0.002f};
         float delta_time = 0.0f;
         float time = 0.0f;
-        float grid_half_size = 16;
-        float grid_w = 4.0f;
+        float grid_half_size = 16; 
         float camera_h = 4.0f;
     };
 
@@ -169,4 +190,4 @@ namespace vex::pf_demo
             // && vtx_buf.isValid() && idx_buf.isValid() ;
         }
     };
-} // namespace vex::pf_demo
+} // namespace vex::flow
