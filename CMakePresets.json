@@ -1,92 +1,161 @@
 {
-	"version": 3,
-	"cmakeMinimumRequired": {
-		"major": 3,
-		"minor": 18,
-		"patch": 0
-	},
-	"configurePresets": [
-		{
-			"name": "DefaultCfg",
-			"displayName": "Default Config",
-			"generator": "Visual Studio 17 2022",
-			"binaryDir": "${sourceDir}/cmake_out/${presetName}",
-			"hidden": true,
-			"architecture": {
-				"value": "x64",
-				"strategy": "external"
-			},
-			"cacheVariables": {
-				"CMAKE_CONFIGURATION_TYPES": "Debug;Release;RELWITHDEBINFO",
-				"VEX_DEBUG_CMAKE": true,
-				"SDL_SSE2": "ON",
-				"SDL_SSE3": "ON",
-				"SDL_SSEMATH": "ON",
-				"SDL_MMX": "ON",
-				"SDL_ASSEMBLY": "ON"
-			}
-		},
-		{
-			"name": "clang_win",
-			"displayName": "Clang Release",
-			"inherits": "DefaultCfg",
-			"generator": "Ninja",
-			"description": "Default build options for Clang", 
-			"cacheVariables": {
-				"CMAKE_CXX_COMPILER": "clang-cl",
-				"CMAKE_C_COMPILER": "clang-cl"
-			},  
-			"vendor": {
-				"microsoft.com/VisualStudioSettings/CMake/1.0": {
-					"intelliSenseMode": "windows-clang-x64"
-				}
-			}
-		},
-		{
-			"name": "clang_win_dbg",
-			"displayName": "Clang Debug",
-			"inherits": "DefaultCfg",
-			"generator": "Ninja",
-			"description": "Default build options for Clang", 
-			"cacheVariables": {
-				"CMAKE_CXX_COMPILER": "clang-cl",
-				"CMAKE_C_COMPILER": "clang-cl",
-				"CMAKE_BUILD_TYPE": "Debug",
-				"VEX_DEBUG_CMAKE": true
-			},
-			"vendor": {
-				"microsoft.com/VisualStudioSettings/CMake/1.0": {
-					"intelliSenseMode": "windows-clang-x64"
-				}
-			}
-		},
-		{
-			"name": "MSVC",
-			"displayName": "MSVC",
-			"hidden": true,
-			"description": "Build options for MSVC",
-			"inherits": "DefaultCfg",
-			"cacheVariables": {
-				"CMAKE_CXX_COMPILER": "MSVC"
-			}
-		},
-		{
-			"name": "MSVCDebug",
-			"displayName": "MSVC Debug",
-			"inherits": "MSVC", 
-			"cacheVariables": {
-				"CMAKE_BUILD_TYPE": "Debug",
-				"VEX_DEBUG_CMAKE": true
-			}
-		},
-		{
-			"name": "MSVCRelease",
-			"displayName": "MSVC Release",
-			"inherits": "MSVC", 
-			"cacheVariables": {
-				"CMAKE_BUILD_TYPE": "Release",
-				"VEX_DEBUG_CMAKE": true
-			}
-		}
-	]
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 18,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "DefaultCfg",
+            "displayName": "Default Config",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/cmake_output/${presetName}",
+            "hidden": true,
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RELWITHDEBINFO",
+                "VEX_DEBUG_CMAKE": false,
+                "SDL_SSE2": "ON",
+                "SDL_SSE3": "ON",
+                "SDL_SSE4": "ON",
+                "SDL_SSEMATH": "ON",
+                "SDL_MMX": "ON",
+                "SDL_ASSEMBLY": "ON",
+                "VEX_USE_DAWN": false,
+                "VEX_USE_WGPU": false,
+                "VEX_USE_DX11": false,
+                "VEX_USE_EMSCRIPTEN": false
+            }
+        },
+        {
+            "name": "clang_base",
+            "displayName": "Clang default",
+            "inherits": "DefaultCfg",
+            "hidden": true,
+            "generator": "Ninja",
+            "cacheVariables": {
+                "VEX_MSVC_CLANG": true,
+                "CMAKE_CXX_COMPILER": "clang-cl",
+                "CMAKE_C_COMPILER": "clang-cl",
+                "VEX_USE_DAWN": true
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "intelliSenseMode": "windows-clang-x64"
+                }
+            }
+        },
+        {
+            "name": "clang_win_rdbg_wgpu",
+            "displayName": "ClangWGPU ReleaseDbgInfo",
+            "inherits": "clang_base",
+            "generator": "Ninja",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "VEX_USE_WGPU": true
+            }
+        },
+        {
+            "name": "clang_win_dbg_wgpu",
+            "displayName": "ClangWGPU Debug",
+            "inherits": "clang_base",
+            "generator": "Ninja",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "VEX_USE_WGPU": true
+            }
+        },
+        {
+            "name": "clang_win_rel_dawn",
+            "displayName": "ClangDawn ReleaseDbgInfo",
+            "inherits": "clang_base",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "VEX_USE_DAWN": true
+            }
+        },
+        {
+            "name": "clang_win_dbg_dawn",
+            "displayName": "ClangDawn Debug",
+            "inherits": "clang_base",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "VEX_USE_DAWN": true
+            }
+        },
+        {
+            "name": "clang_web",
+            "displayName": "Clang WEB",
+            "inherits": "DefaultCfg",
+            "hidden": false,
+            "generator": "Ninja",
+            "description": " >> ONLY USE IT WITH 'emcmake' as it will set proper envars << ",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER": "em++",
+                "CMAKE_C_COMPILER": "emcc",
+                "VEX_USE_EMSCRIPTEN": true,
+                "VEX_USE_BIN_DIR" :  true
+            }
+        },
+        {
+            "name": "MSVC",
+            "displayName": "MSVC",
+            "hidden": true,
+            "inherits": "DefaultCfg",
+            "cacheVariables": {
+                "VEX_MSVC_CLANG": false,
+                "CMAKE_CXX_COMPILER": "MSVC",
+                "VEX_USE_DX11": true
+            }
+        },
+        {
+            "name": "MSVCDebugDx11",
+            "displayName": "MSVC Debug",
+            "hidden": true,
+            "inherits": "MSVC",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "MSVCReleaseDx11",
+            "displayName": "MSVC Release",
+            "inherits": "MSVC",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "Clang Dawn Debug",
+            "configurePreset": "clang_win_dbg_dawn",
+            "hidden": false
+        },
+        {
+            "name": "Clang Dawn ReleaseWithDbgInfo",
+            "configurePreset": "clang_win_rel_dawn",
+            "hidden": false
+        },
+        {
+            "name": "Clang WebBuild",
+            "configurePreset": "clang_web",
+            "hidden": false
+        },
+        {
+            "name": "MSVCDebugBuild",
+            "hidden": true,
+            "configurePreset": "MSVCReleaseDx11"
+        }
+    ]
 }

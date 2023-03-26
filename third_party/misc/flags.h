@@ -32,10 +32,10 @@ namespace flags
 				}
 				// If the last token was an option, it needs to be drained.
 				flush();
-			}
+			} 
 			parser(const std::vector<std::string_view>& in_args)
 			{
-				for (int i = 0; i < in_args.size(); ++i)
+				for (u32 i = 0; i < in_args.size(); ++i)
 				{
 					churn(in_args[i]);
 				}

@@ -25,7 +25,7 @@ endif()
 
 # Build in parallel under Visual Studio. Not enabled by default.
 if(MSVC)
-  if(NOT CLANG)
+  if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(sdl-build-options INTERFACE "/MP")
   endif()
 endif(MSVC)
@@ -2885,6 +2885,7 @@ if(IOS OR TVOS)
 endif()
 
 if(SDL_SHARED)
+message(STATUS "info : ============================================================")
   add_library(SDL2 SHARED ${SOURCE_FILES} ${VERSION_SOURCES})
   # alias target for in-tree builds
   add_library(SDL2::SDL2 ALIAS SDL2)

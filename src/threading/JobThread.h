@@ -2,7 +2,7 @@
 #include <memory>
 #include <thread>
 
-namespace vp
+namespace vex
 {
 	//name, debug data, ect
 	struct JobThreadConfig

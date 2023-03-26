@@ -7,7 +7,7 @@
 
 struct SDL_Window;
 struct SDL_Renderer;
-namespace vp
+namespace vex
 {
 	enum class EWindowMode : unsigned char
 	{
@@ -18,27 +18,25 @@ namespace vp
 
 	struct WindowParams
 	{
-		std::string name = "demo";
-		int w = 2840;
-		int h = 1620;
-
-		EWindowMode m = EWindowMode::SDLWindow;
+		std::string name = "VEX";
+		int w = -1;
+		int h = -1;
+		int x = -1;
+		int y = -1;  
+		EWindowMode m;
+		bool resizable = true;
 	};
 
 	class SDLWindow
 	{
 	public:
-		using tWindowHandle = SDL_Window; 
-
-		int height() { return params.h; }
-		int width() { return params.w; }
-		EWindowMode mode() { return params.m; }
+		using tWindowHandle = SDL_Window;   
 
 		static std::unique_ptr<SDLWindow> create(const WindowParams& params);
 
 		tWindowHandle* getRawWindow() { return sdl_window; } 
 
-		v2i32 windowSize() { return {params.w, params.h}; }
+		v2u32 windowSize();
 		v2i32 display_size{0, 0};
 
 		~SDLWindow();
@@ -51,4 +49,4 @@ namespace vp
 		WindowParams params;
 		tWindowHandle* sdl_window = nullptr; 
 	};
-} // namespace vp
+} // namespace vex

@@ -1,10 +1,13 @@
 # Created by https://www.gitignore.io/api/c++,linux,macos,windows,visualstudio
 # Edit at https://www.gitignore.io/?templates=c++,linux,macos,windows,visualstudio
-
+cmake_output/
 cmake_out/
 Inter/
 Intermediate/
 Build/
+CompileScoreSettings*
+compileData*
+!thrid_party_bin/*
 # Build results
 [Dd]ebugBuild/
 [Rr]eleaseBuild/
@@ -20,6 +23,9 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
+
+compileData*
+CompileScoreSettings.json
 
 ### C++ ###
 # Prerequisites
