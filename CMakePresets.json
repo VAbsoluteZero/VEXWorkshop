@@ -54,6 +54,7 @@
             "displayName": "ClangWGPU ReleaseDbgInfo",
             "inherits": "clang_base",
             "generator": "Ninja",
+            "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "VEX_USE_WGPU": true
@@ -64,6 +65,7 @@
             "displayName": "ClangWGPU Debug",
             "inherits": "clang_base",
             "generator": "Ninja",
+            "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "VEX_USE_WGPU": true
@@ -136,7 +138,17 @@
     ],
     "buildPresets": [
         {
-            "name": "web_build",
+            "name": "Clang Dawn Debug",
+            "configurePreset": "clang_win_dbg_dawn",
+            "hidden": false
+        },
+        {
+            "name": "Clang Dawn ReleaseWithDbgInfo",
+            "configurePreset": "clang_win_rel_dawn",
+            "hidden": false
+        },
+        {
+            "name": "Clang WebBuild",
             "configurePreset": "clang_web",
             "hidden": false
         },
