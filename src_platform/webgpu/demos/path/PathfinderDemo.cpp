@@ -242,8 +242,8 @@ void FlowfieldPF::update(Application& owner)
             v2u32 cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
             if (init_data.contains(cell) && !init_data.isBlocked(cell))
             {
-                spdlog::stopwatch sw;
-                defer_ { SPDLOG_WARN(" bfs took approx {} ms", sw.elapsed() / 1ms); };
+                //spdlog::stopwatch sw;
+                //defer_ { SPDLOG_WARN(" bfs took approx {} ms", sw.elapsed() / 1ms); };
                 if (draw_args.settings->valueOr(opt_allow_diagonal.key_name, true))
                     Flow::gridSyncBFS<true>({cell}, init_data, processed_map);
                 else

@@ -375,6 +375,9 @@ if (NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build/bench/${CMAKE_BUILD_TYPE}"
     )  
     # POST BUILD 
+    if (TARGET mylib)
+
+    endif()
     add_custom_command ( TARGET VEXWorkshop POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
          $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXWorkshop>

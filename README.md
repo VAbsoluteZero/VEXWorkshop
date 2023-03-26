@@ -1,2 +1,4 @@
-# Hash Vis
-Simple hash func visualizator (bit bias, collision rates). Uses list of 200K words as default input.
+# VEXGameOfLife
+Graphics API / Gamedev
+Currently a set of half backed webgpu demos.
+This is enviroment when I experiment with different things using SDL window / WEBGPU renderer as a fundation.
