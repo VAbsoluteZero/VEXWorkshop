@@ -24,6 +24,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 
+compileData*
+CompileScoreSettings.json
+
 ### C++ ###
 # Prerequisites
 *.d
