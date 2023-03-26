@@ -14,16 +14,17 @@ using namespace vex::input;
 using namespace vex::flow;
 using namespace wgfx;
 using namespace std::literals::string_view_literals;
+using namespace std::literals::chrono_literals;
 constexpr const char* console_name = "Console##pathfind";
 
-static InitData_v1 fromImage(const char* img = "content/sprites/flow/grid_map32.png")
+void Flow::Map1b::fromImage(Flow::Map1b& out, const char* img)
 {
     spdlog::stopwatch sw;
     defer_ { SPDLOG_WARN("Texture loader: loading PNG, elapsed: {} seconds", sw); };
 
     auto texture = loadImage(img);
     if (!checkAlwaysRel(texture.data, "invalid source texture"))
-        return {}; 
+        return;
     const u32 bytes_per_row = texture.width * texture.channel_count;
     check_(texture.channel_count == 4);
     const u32 rows = texture.height;
@@ -31,32 +32,61 @@ static InitData_v1 fromImage(const char* img = "content/sprites/flow/grid_map32.
     const u32 byte_len = bytes_per_row * rows;
     u32* data_as_u32 = reinterpret_cast<u32*>(texture.data);
 
-    InitData_v1 out = {.grid = {.size = {texture.width, texture.height}}};
+    vex::Buffer<u8>& source = out.source;
+    source.reserve(texture.width * texture.height);
+    vex::Buffer<u8>& matrix = out.matrix;
+    matrix.addZeroed(texture.width * texture.height);
+    out.size = {cols, rows};
 
-    out.grid.array.addUninitialized(texture.width * texture.height);
-    u32* out_write_ptr = out.grid.array.data();
+    out.debug_layer.addZeroed(texture.width * texture.height);
+
     for (u32 i = 0; i < rows * cols; i++)
     {
         u32 c = *(data_as_u32 + i);
-        *out_write_ptr = (u8)(c & 0x000000ff);
-        out_write_ptr++;
-        if ((c & 0x00ff0000) > 16)
-            out.spawn_location = {i % texture.width, i / texture.width};
-        if ((c & 0x0000ff00) > 16)
-            out.initial_goal = {i % texture.width, i / texture.width};
+        bool blocked = (c & 0x000000ff) > 200;
+        source.add(blocked ? 0 : 1);
     }
-    std::string result = "map:\n";
-    result.reserve(byte_len * 4 + rows + 4);
-    auto inserter = std::back_inserter(result);
-    for (i32 i = 0; i < rows * cols; ++i)
-    {
-        fmt::format_to(inserter, "{:2x} ", *(out.grid.atOffset(i)));
-        if ((i + 1) % texture.width == 0)
-            fmt::format_to(inserter, "\n");
-    }
-    spdlog::info(result);
 
-    return out;
+    constexpr v2i32 neighbors[8] = {
+        {0, -1},  // top (CW sart)
+        {1, -1},  // top-right
+        {1, 0},   // right
+        {1, 1},   // bot-right
+        {0, 1},   // bot
+        {-1, 1},  // bot-left
+        {-1, 0},  // left
+        {-1, -1}, // top-left
+    };
+
+    for (u32 y = 0; y < rows; y++)
+    {
+        for (u32 x = 0; x < cols; x++)
+        {
+            v2i32 cur_xy = {x, y};
+            u8* cur_out = matrix.data() + rows * y + x;
+            u8 self_mask = *(source.data() + rows * cur_xy.y + cur_xy.x);
+            if (self_mask)
+            {
+                for (u8 i = 0; i < 8; ++i)
+                {
+                    v2i32 xy = cur_xy + neighbors[i];
+                    u8 mask = 1 << i;
+                    mask &= [&]()
+                    {
+                        if (xy.x < 0 || xy.x >= cols || xy.y < 0 || xy.y >= rows)
+                            return 0;
+                        return *(source.data() + rows * xy.y + xy.x) ? 0xff : 0;
+                    }();
+                    *cur_out |= mask;
+                }
+            }
+            else
+            {
+                *cur_out = 0;
+            }
+            out.debug_layer.at(rows * y + x) = *cur_out;
+        }
+    }
 }
 
 inline bool shouldPause(Application& owner)
@@ -96,8 +126,15 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         viewports.imgui_views.back().gui_enabled = false;
     }
     {
-        init_data = fromImage();
-        heatmap.init(ctx, wgpu_backend->text_shad_lib, init_data.grid.array.constSpan());
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
+        processed_map.data.reserve(init_data.size.x * init_data.size.y);
+        for (u8 c : init_data.source)
+            processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
+
+        heatmap.init(ctx, wgpu_backend->text_shad_lib, processed_map.data.constSpan(),
+            "content/shaders/wgsl/cell_heatmap.wgsl");
+        debug_overlay.init(ctx, wgpu_backend->text_shad_lib, processed_map.data.constSpan(),
+            "content/shaders/wgsl/cell_debugmap.wgsl");
 
         ui.should_config_docking = false;
         ui.console_wnd.name = console_name;
@@ -110,6 +147,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         auto& options = owner.getSettings();
         opt_grid_thickness.addTo(options);
         opt_grid_color.addTo(options);
+        opt_show_dbg_overlay.addTo(options);
+        opt_allow_diagonal.addTo(options);
 
         defer_till_dtor.emplace_back(
             [&owner]
@@ -117,6 +156,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 auto& options = owner.getSettings();
                 opt_grid_thickness.removeFrom(options);
                 opt_grid_color.removeFrom(options);
+                opt_show_dbg_overlay.removeFrom(options);
+                opt_allow_diagonal.removeFrom(options);
             });
     }
 
@@ -131,83 +172,6 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         },
         true);
     frame_alloc_resource.reset();
-}
-
-static void simpleGridBFS_DictBased(Application& owner, v2u32 start, MapGrid_v1& grid)
-{ 
-    vex::InlineBufferAllocator<2096> temp_alloc_resource;
-    auto al = temp_alloc_resource.makeAllocatorHandle();
-
-    vex::StaticRing<v2i32, 2024, true> stack;
-    vex::Buffer<v2u32> neighbors{al, 64};
-
-    struct HS
-    {
-        inline static i32 hash(v2u32 key) { return (int)(key.x << 16 | key.y); }
-        inline static bool is_equal(v2u32 a, v2u32 b) { return a.x == b.x && a.y == b.y; }
-    };
-    Dict<v2u32, float, HS> previous{1024};
-
-    stack.push(start);
-    u32 iter = 0;
-    previous[start] = 0;
-    while (stack.size() > 0)
-    {
-        auto current = stack.popUnchecked();
-        // bool added_new = false;
-
-        neighbors.len = 0;
-        neighbors.add(current - v2i32{-1, 0});
-        neighbors.add(current - v2i32{1, 0});
-        neighbors.add(current - v2i32{0, 1});
-        neighbors.add(current - v2i32{0, -1});
-
-        for (int i = 0; i < neighbors.len; ++i)
-        {
-            iter++;
-            auto next = neighbors[i];
-            u32 tile = *(grid.at(next)) & 0x000000ff;
-            bool can_move = tile != 255;
-
-            if (!can_move)
-                continue;
-            if (next.x >= grid.size.x || next.y >= grid.size.y)
-                continue;
-
-            i32 dist_so_far = 1;
-            if (previous.contains(current))
-            {
-                dist_so_far += previous[current];
-            }
-            if (!previous.contains(next) || previous[next] > dist_so_far)
-            {
-                // added_new = true;
-                stack.push(next);
-                previous[next] = dist_so_far;
-            }
-        }
-    }
-
-    for (auto& [k, d] : previous)
-    {
-        grid[k] &= 0x000000ff;
-        grid[k] |= (~0x000000ffu) & (((u32)d) << 8);
-    }
-    owner.input.ifTriggered("EscDown"_trig,
-        [&](const input::Trigger& self)
-        {
-            std::string result = "map:\n";
-            result.reserve(4096 * 4);
-            auto inserter = std::back_inserter(result);
-            for (i32 i = 0; i < grid.array.len; ++i)
-            {
-                fmt::format_to(inserter, "{:2x} ", (((u8)0xffffff00u | *(grid.atOffset(i))) >> 8));
-                if ((i + 1) % grid.size.x == 0)
-                    fmt::format_to(inserter, "\n");
-            }
-            spdlog::info(result);
-            return true;
-        });
 }
 
 void FlowfieldPF::update(Application& owner)
@@ -236,6 +200,7 @@ void FlowfieldPF::update(Application& owner)
                 defer_ { SPDLOG_WARN("shaders are realoded, it took: {} seconds", sw); };
                 background.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 heatmap.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
+                debug_overlay.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 view_grid.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 return true;
             });
@@ -260,60 +225,56 @@ void FlowfieldPF::update(Application& owner)
             .pixel_size_nm = {0.5f / viewport.options.size.x, 0.5f / viewport.options.size.y},
             .delta_time = time.unscalled_dt_f32,
             .time = (float)time.unscaled_runtime,
-            .grid_half_size = init_data.grid.size.x / 2.0f,
+            .grid_half_size = init_data.size.x / 2.0f,
             .camera_h = camera.height,
         };
         { // draw HEATMAP & background
             auto mpos = camera.normalizedViewToWorld(viewports.imgui_views[0].mouse_pos_normalized);
-            float r = init_data.grid.size.y / camera.height;
-            v2u32 cell = {mpos.x * r + 16, -mpos.y * r + 16};
-            if (init_data.grid.contains(cell))
-                simpleGridBFS_DictBased(owner, cell, init_data.grid);
-            auto int_sz = init_data.grid.size;
-            check_(int_sz.x > 0 && int_sz.y > 0);
+
+            float r = init_data.size.y / camera.height;
+
+            owner.input.ifTriggered("MouseRightHeld"_trig,
+                [&](const input::Trigger& self)
+                {
+                    return true;
+                });
+
+            v2u32 cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
+            if (init_data.contains(cell) && !init_data.isBlocked(cell))
+            {
+                spdlog::stopwatch sw;
+                defer_ { SPDLOG_WARN(" bfs took approx {} ms", sw.elapsed() / 1ms); };
+                if (draw_args.settings->valueOr(opt_allow_diagonal.key_name, true))
+                    Flow::gridSyncBFS<true>({cell}, init_data, processed_map);
+                else
+                    Flow::gridSyncBFS<false>({cell}, init_data, processed_map);
+            }
+
+            auto int_sz = init_data.size;
+
             heatmap.draw(wgpu_ctx, draw_args,
                 HeatmapDynamicData{
-                    .buffer = init_data.grid.array.constSpan(),
+                    .buffer = processed_map.data.constSpan(),
                     .bounds = {(u32)int_sz.x, (u32)int_sz.y},
                     .color1 = {0.340f, 0.740f, 0.707f, 1.f},
                     .color2 = {0.930f, 0.400f, 0.223f, 1.f},
                 });
 
+            if (draw_args.settings->valueOr(opt_show_dbg_overlay.key_name, false))
+            {
+                debug_overlay.draw(wgpu_ctx, draw_args,
+                    HeatmapDynamicData{
+                        .buffer = init_data.debug_layer.constSpan(),
+                        .bounds = {(u32)int_sz.x, (u32)int_sz.y},
+                        .color1 = {0.340f, 0.740f, 0.707f, 1.f},
+                        .color2 = {0.930f, 0.400f, 0.223f, 1.f},
+                    });
+            }
+
             background.draw(wgpu_ctx, draw_args);
         }
         { // draw GRID
             view_grid.draw(wgpu_ctx, draw_args);
-        }
-        if (false)
-        {
-            DynMeshBuilder<PosNormColor> mesh_data = {frame_alloc, 512, 256};
-
-            vex::Buffer<v3f> lines{frame_alloc, 10};
-            lines.addList({
-                {0.0f, 0.0f, 0.0f},
-                {0.0f, 1.0f, 0.0f},
-                {1.0f, 1.0f, 0.0f},
-                {1.0f, 2.0f, 0.0f},
-                {2.0f, 2.0f, 0.0f},
-                {2.0f, 3.0f, 0.0f},
-                {3.0f, 3.0f, 0.0f},
-                {3.0f, 4.0f, 0.0f},
-                {4.0f, 4.0f, 0.0f},
-                {4.0f, 5.0f, 0.0f},
-            });
-
-            vex::PolyLine::buildPolyXY(mesh_data, //
-                PolyLine::Args{
-                    .points = lines.data(),
-                    .len = lines.size(),
-                    .color = Color::cyan(),
-                    .corner_type = PolyLine::Corners::CloseTri,
-                    .thickness = 0.1f,
-                    .closed = false,
-                });
-            auto& verts = mesh_data.vertices;
-            auto& indices = mesh_data.indices;
-            temp_geom.draw(wgpu_ctx, draw_args, indices.constSpan(), verts.constSpan());
         }
         viewport.finishAndSubmit();
         wgpuDeviceTick(wgpu_ctx.device);
@@ -365,17 +326,42 @@ void FlowfieldPF::drawUI(Application& owner)
 
         auto& options = owner.getSettings();
 
-        if (ImGui::Button(ICON_CI_GRIPPER "##pf_show_options"))
+        auto is_diag_move_allowed = options.settings.find(opt_allow_diagonal.key_name);
+        if (is_diag_move_allowed && is_diag_move_allowed->value.getValueOr<bool>(true))
+        {
+            if (ImGui::Button(ICON_CI_DIFF_ADDED " disable diagonal movement##pf_hide_overlay"))
+                is_diag_move_allowed->value.set<bool>(false);
+        }
+        else if (is_diag_move_allowed)
+        {
+            if (ImGui::Button(ICON_CI_DIFF_IGNORED " enable diagonal movement##pf_show_overlay"))
+                is_diag_move_allowed->value.set<bool>(true);
+        }
+
+        auto should_show_overlay_opt = options.settings.find(opt_show_dbg_overlay.key_name);
+        if (should_show_overlay_opt && should_show_overlay_opt->value.getValueOr<bool>(false))
+        {
+            if (ImGui::Button(ICON_CI_DEBUG " debug overlay##pf_hide_overlay"))
+                should_show_overlay_opt->value.set<bool>(false);
+        }
+        else if (should_show_overlay_opt)
+        {
+            if (ImGui::Button(ICON_CI_DEBUG " debug overlay##pf_show_overlay"))
+                should_show_overlay_opt->value.set<bool>(true);
+        }
+
+        if (ImGui::Button(ICON_CI_SETTINGS " presentation##pf_show_options"))
             gui_options.options_shown = !gui_options.options_shown;
         if (gui_options.options_shown)
         {
-            bool visible = ImGui::BeginChild("##pf_options", GuiRelVec{0.25, 0}, true);
+            [[maybe_unused]] bool visible = ImGui::BeginChild(
+                "##pf_options", GuiRelVec{0.25, 0}, true);
             defer_ { ImGui::EndChild(); };
             ImGui::Indent(4);
             defer_ { ImGui::Unindent(); };
             for (auto& [k, v] : options.settings)
             {
-                if ((SettingsContainer::Flags::k_visible_in_ui | v.flags) == 0)
+                if ((SettingsContainer::Flags::k_visible_in_ui & v.flags) == 0)
                     continue;
                 if (!k.starts_with("pf.") || k.length() < 4)
                     continue;
@@ -413,7 +399,7 @@ void FlowfieldPF::drawUI(Application& owner)
             }
         }
     }
-    ImGui::End(); 
+    ImGui::End();
 }
 void FlowfieldPF::postFrame(Application& owner)
 {

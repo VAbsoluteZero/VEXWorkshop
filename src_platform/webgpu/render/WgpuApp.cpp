@@ -18,15 +18,7 @@
 #include <utils/ImGuiUtils.h>
 #include <spdlog/stopwatch.h>
 
-using namespace std::literals::chrono_literals;
-
-// void wgfx::Viewport::submit(const wgfx::RenderContext& globals)
-//{
-//     WGPUCommandBufferDescriptor cmd_desc{};
-//     cmd_desc.label = "Command buffer";
-//     WGPUCommandBuffer command = wgpuCommandEncoderFinish(frame_data.encoder, &cmd_desc);
-//     wgpuQueueSubmit(globals.queue, 1, &command);
-// }
+using namespace std::literals::chrono_literals; 
 
 struct WgpuRenderInterface
 {

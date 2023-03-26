@@ -49,7 +49,7 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
 
     var output: VertexOutput;
     output.pos = u.camera_vp * //
-        vec4(pos[i].x * u.quad_size.x * 0.5, pos[i].y * u.quad_size.y * 0.5, 5.0, 1.0);
+        vec4(pos[i].x * u.quad_size.x * 0.5, pos[i].y * u.quad_size.y * 0.5, 4.0, 1.0);
     output.uv = uv[i];
     return output;
 } 
@@ -58,16 +58,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var p: v2u32 = v2u32(u32(in.uv.x * f32(u.bounds.x)), u32(in.uv.y * f32(u.bounds.y)));
 
     var tile = heatmap.cells[p.y * u.bounds.x + p.x];
-    if (tile & 0xf000) > 0 {
-        return v4f(0.64342, 0.85543, 0.8349, 1.0);
-    }
-    var part = tile & 0x7fff;
+ 
+    var part = tile &  0x00ff;
     if part == 0 {
-        return v4f(0.5342, 0.9543, 0.9, 1.0);
+        return v4f(0.9342, 0.1543, 0.1, 1.0);
     }
-    let expected_extreme = f32(u.bounds.x + u.bounds.y);
-    var fpart = clamp(0., 1., f32(part) / expected_extreme);
-    var r = fpart;// 0.95 + cos(fpart * pi * u.data2.x * 9) * 0.041;
-    var b = 0.0532 / (fpart + 0.0021);
-    return v4f(r, (1.02 - sin(fpart * pi)) * 1.05 - b * 0.12, b, 1);//mix(0, 0.1, 1 / fpart  )fpart
+    var popcnt = countOneBits(part); // 1 ->8 
+
+    var green = clamp(0., 1., f32(popcnt) / 8.0);
+    var red =  1.0 - green; 
+    return v4f(red, green, (green + red) * 0.25, 1); 
 } 

@@ -93,6 +93,19 @@ vex::input::InputSystem::InputSystem()
                 return false;
             },
         });
+    addTrigger("MouseRightHeld"_trig,
+        Trigger{
+            .fn_logic =
+                [](Trigger& self, const InputState& state)
+            {
+                if (state.this_frame[sid(MouseRBK)].state == SignalState::Started ||
+                    state.this_frame[sid(MouseRBK)].state == SignalState::Going)
+                {
+                    return true;
+                }
+                return false;
+            },
+        });
     addTrigger("EscDown"_trig,
         Trigger{
             .fn_logic =
@@ -114,7 +127,7 @@ void vex::input::InputSystem::poll(float dt)
     auto& st = state.this_frame;
     while (SDL_PollEvent(&sdl_event) != 0)
     {
-#if ENABLE_IMGUI 
+#if ENABLE_IMGUI
         ImGui_ImplSDL2_ProcessEvent(&sdl_event);
 #endif
         switch (sdl_event.type)
@@ -159,8 +172,8 @@ void vex::input::InputSystem::poll(float dt)
             st[key].value_raw.x = (state == SDL_PRESSED);
         };
         auto update_key_any_of = [&](u32 key, auto... keys)
-        { 
-            check_((... && (SDL_GetScancodeFromKey(keys) <= num))); 
+        {
+            check_((... && (SDL_GetScancodeFromKey(keys) <= num)));
             st[key].value_raw.x = (... || (keystate[SDL_GetScancodeFromKey(keys)] == SDL_PRESSED));
         };
 
@@ -174,9 +187,9 @@ void vex::input::InputSystem::poll(float dt)
         update_key_any_of(sid(KeyModAlt), SDLK_LALT, SDLK_RALT);
         update_key_any_of(sid(KeyModShift), SDLK_LSHIFT, SDLK_RSHIFT);
         update_key_any_of(sid(KeyModCtrl), SDLK_LCTRL, SDLK_RCTRL);
-        //update_key(sid(KeyModAlt), SDLK_RALT);
-        //update_key(sid(KeyModShift), SDLK_RSHIFT);
-        //update_key(sid(KeyModCtrl), SDLK_RCTRL);
+        // update_key(sid(KeyModAlt), SDLK_RALT);
+        // update_key(sid(KeyModShift), SDLK_RSHIFT);
+        // update_key(sid(KeyModCtrl), SDLK_RCTRL);
     }
     // read mouse states
     {

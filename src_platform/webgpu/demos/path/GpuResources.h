@@ -159,7 +159,7 @@ namespace vex::flow
     };
     struct CellHeatmapV1
     {
-        static constexpr const char* hm_shader_file = "content/shaders/wgsl/cell_heatmap.wgsl";
+        const char* hm_shader_file = "content/shaders/wgsl/cell_heatmap.wgsl";
 
         wgfx::GpuBuffer uniform_buf;
         wgfx::GpuBuffer storage_buf;
@@ -170,7 +170,8 @@ namespace vex::flow
         WGPURenderPipeline pipeline;
 
         void init(
-            const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib, ROSpan<u32> heatmap);
+            const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib, ROSpan<u32> heatmap,
+            const char* in_shader_file);
         void draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx,
             const HeatmapDynamicData& args);
         bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::RenderContext& context);

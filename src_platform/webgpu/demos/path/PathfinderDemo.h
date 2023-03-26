@@ -16,146 +16,142 @@ namespace vex::flow
         static inline const char* main_vp_name = "MainViewport";
         static inline const char* debug_vp_name = "Debug Layer";
 
-        static inline const char* setting_grid_sz = "pf.grid_size";
+        // static inline const char* setting_grid_sz = "pf.grid_size";
     } // namespace ids
 
-    // static inline const auto opt_grid_enabled = SettingsContainer::EntryDesc<bool>{
-    //     .key_name = "pf.grid.enabled",
-    //     .info = "Show or hide grid",
-    //     .default_val = 4u,
-    // };
+    static inline const auto opt_show_dbg_overlay = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.NeighborNumOverlay",
+        .info = "Show or hide overlay that shows number of neighbors",
+        .default_val = false,
+        .flags = 0,
+    };
+    static inline const auto opt_allow_diagonal = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.AllowDiagonalMovement",
+        .info = "Show or hide overlay that shows number of neighbors",
+        .default_val = true,
+        .flags = 0,
+    };
 
-    struct MapGrid_v1
+    struct ProcessedData
     {
-        // 255 => blocked time, 0 free tile, in-between move cost
-        vex::Buffer<u32> array;
+        static constexpr u32 dist_mask = ~(1 << 15);
+        // grid 8b+8b flow vector, 15b distance so far, 1b mask (16th) for blocked
+        vex::Buffer<u32> data;
         v2i32 size{0, 0};
         bool contains(v2u32 index) const { return index.x < size.x && index.y < size.y; }
-        FORCE_INLINE u32& operator[](v2u32 index) { return array[index.y * size.x + index.x]; }
-        FORCE_INLINE u32& operator[](v2i32 index) { return array[index.y * size.x + index.x]; }
-        FORCE_INLINE u32* at(v2i32 index) { return &array[index.y * size.x + index.x]; }
-        FORCE_INLINE u32* at(i32 x, i32 y) { return &array[y * size.x + x]; }
-        FORCE_INLINE u32* atOffset(u32 byte_offset) { return (array.data() + byte_offset); }
-        FORCE_INLINE u32* row(i32 row) { return &array[row * size.x]; }
-    };
-    struct InitData_v1
-    {
-        MapGrid_v1 grid;
-        v2u32 initial_goal;
-        v2u32 spawn_location;
+        FORCE_INLINE u32& operator[](v2u32 index) { return data[index.y * size.x + index.x]; }
+        FORCE_INLINE u32& operator[](v2i32 index) { return data[index.y * size.x + index.x]; }
+        FORCE_INLINE u32& operator[](i32 offset) { return *(data.first + offset); }
+        FORCE_INLINE u32 at(i32 offset) { return *(data.first + offset); }
+        FORCE_INLINE u32& atRef(i32 offset) { return *(data.first + offset); }
     };
 
-    template <bool k_diagonal = false>
-    struct GridMap1b
+    struct Flow
     {
-        static constexpr u32 min_row_size = 8;
-        // grid 8b+8b flow vector, 15b distance so far, 1b mask (16th) for blocked
-        // neighbors as bitmask, starting at 1 as Top and going clockwise (e.g. top+left:00000101
-        // zero means blocked
-        vex::Buffer<u8> matrix; // neighbor matrix
-        v2u32 size{0, 0};
+        static constexpr u8 mask_top = 0b0000'0001;
+        static constexpr u8 mask_top_right = 0b0000'0010;
+        static constexpr u8 mask_right = 0b0000'0100;
+        static constexpr u8 mask_bot_right = 0b0000'1000;
+        static constexpr u8 mask_bot = 0b0001'0000;
+        static constexpr u8 mask_bot_left = 0b0010'0000;
+        static constexpr u8 mask_left = 0b0100'0000;
+        static constexpr u8 mask_top_left = 0b1000'0000;
 
-        FORCE_INLINE u32* getData(v2u32 cell)
-        {
-            return data_full.first + (cell.y) * size.x + cell.x;
-        }
-        FORCE_INLINE u32* getData(u32 x, u32 y) { return getData({x, y}); }
-        FORCE_INLINE u32* getData(u32 offset) { return data_full.first + offset; }
-
-
-        FORCE_INLINE u32* matrixCell(v2u32 cell)
-        {
-            return matrix.first + (cell.y) * size.x + cell.x;
-        }
-        FORCE_INLINE u8* matrixCell(u32 offset) { return matrix.first + offset; }
-    };
-
-    struct GridFlowGen
-    {
+        static constexpr u8 i_top = 0;
+        static constexpr u8 i_top_right = 1;
+        static constexpr u8 i_right = 2;
+        static constexpr u8 i_bot_right = 3;
+        static constexpr u8 i_bot = 4;
+        static constexpr u8 i_bot_left = 5;
+        static constexpr u8 i_left = 6;
+        static constexpr u8 i_top_left = 7;
         struct Args
         {
             v2u32 start{0, 0};
         };
 
-        template <bool k_diagonal = false>
-        void BFS(Args args, GridMap1b<k_diagonal>& grid)
+
+        struct Map1b
         {
-            vex::InlineBufferAllocator<2096> temp_alloc_resource;
-            auto al = temp_alloc_resource.makeAllocatorHandle();
+            static void fromImage(Flow::Map1b& out, const char* img);
+            // neighbors as bitmask, starting at 1 as Top and going clockwise (e.g.
+            // top+right:00000101 zero means blocked
+            vex::Buffer<u8> source;
+            vex::Buffer<u8> matrix;       // neighbor matrix
+            vex::Buffer<u32> debug_layer; // 1st byte is the same as in matrix
+            v2u32 size{0, 0};
 
-            vex::StaticRing<v2i32, 2024, true> stack;
-            vex::Buffer<v2u32> neighbors{al, 64};
+            bool contains(v2u32 index) const { return index.x < size.x && index.y < size.y; }
 
-            struct HS
+            bool isBlocked(v2u32 index) const { return source[index.y * size.x + index.x] == 0; }
+
+            FORCE_INLINE u8* cellMaskPtr(v2u32 cell)
             {
-                inline static i32 hash(v2u32 key) { return (int)(key.x << 16 | key.y); }
-                inline static bool is_equal(v2u32 a, v2u32 b) { return a.x == b.x && a.y == b.y; }
+                return matrix.first + (cell.y) * size.x + cell.x;
+            }
+            FORCE_INLINE u8 cellMask(v2u32 cell) { return *(cellMaskPtr(cell)); }
+            FORCE_INLINE u8 cellMask(u32 x, u32 y) { return *(cellMaskPtr({x, y})); }
+            FORCE_INLINE u8 cellMask(u32 offset) const { return *(matrix.first + offset); }
+        };
+
+        template <bool allow_diagonal = false>
+        inline static void gridSyncBFS(Args args, const Map1b& grid, ProcessedData& out)
+        {
+            constexpr u8 diag_mask = allow_diagonal ? 0xff : 0b01010101;
+            struct OffsetTableVal
+            {
+                i16 mul = 0;
+                i16 offset = 0;
             };
-            Dict<v2u32, float, HS> previous{1024};
+            // struct
+            vex::StaticRing<i32, 2024, true> frontier;
+            // std::vector<i32> frontier;
+            // frontier.reserve(2024)
+            out.data.reserve(grid.size.x * grid.size.y);
+            out.data.len = 0;
+            for (u8 c : grid.source)
+                out.data.add(c ? 0 : ~ProcessedData::dist_mask);
 
-            stack.push(start);
-            u32 iter = 0;
-            previous[start] = 0;
-            while (stack.size() > 0)
+            [[maybe_unused]] u32 iter = 0;
+
+            const i32 neighbor_offsets[8] = {
+                // only 4 would be used in case grid does not allow diag move
+                -(i32)grid.size.x + 0, // top (CW sart)
+                -(i32)grid.size.x + 1, // top-right
+                /*same row       */ 1, // right
+                +(i32)grid.size.x + 1, // bot-right
+                +(i32)grid.size.x + 0, // bot
+                +(i32)grid.size.x - 1, // bot-left
+                /*same row      */ -1, // left
+                -(i32)grid.size.x - 1, // top-left
+            };
+
+            frontier.push(args.start.y * grid.size.x + args.start.x);
+            out[frontier.peekUnchecked()] = 0;
+            constexpr auto dist_mask = ProcessedData::dist_mask;
+            while (frontier.size() > 0)
             {
-                auto current = stack.popUnchecked();
-                // bool added_new = false;
-
-                neighbors.len = 0;
-                neighbors.add(current - v2i32{-1, 0});
-                neighbors.add(current - v2i32{1, 0});
-                neighbors.add(current - v2i32{0, 1});
-                neighbors.add(current - v2i32{0, -1});
-
-                for (int i = 0; i < neighbors.len; ++i)
+                i32 current = (i32)frontier.dequeueUnchecked();
+                const u8 cell = grid.cellMask(current)  & diag_mask;
+                u32 dist_so_far = out[current];
+                for (u8 i = 0; (i < 8) && cell; ++i)
                 {
-                    iter++;
-                    auto next = neighbors[i];
-                    u32 tile = *(grid.at(next)) & 0x000000ff;
-                    bool can_move = tile != 255;
-
-                    if (!can_move)
-                        continue;
-                    if (next.x >= grid.size.x || next.y >= grid.size.y)
-                        continue;
-
-                    i32 dist_so_far = 1;
-                    if (previous.contains(current))
+                    u8 cur_i = ((cell & (1u << i)) > 0);
+                    if (cur_i)
                     {
-                        dist_so_far += previous[current];
-                    }
-                    if (!previous.contains(next) || previous[next] > dist_so_far)
-                    {
-                        // added_new = true;
-                        stack.push(next);
-                        previous[next] = dist_so_far;
+                        u32 next = current + neighbor_offsets[i];
+                        // checkAlways_(next < grid.size.x * grid.size.y);
+                        bool visited = (out.at(next) & dist_mask) > 0;
+                        if (visited)
+                            continue;
+                        out[next] |= dist_so_far + 1; // add diagonal cost
+                        frontier.push(next);
                     }
                 }
             }
-
-            for (auto& [k, d] : previous)
-            {
-                grid[k] &= 0x000000ff;
-                grid[k] |= (~0x000000ffu) & (((u32)d) << 8);
-            }
-            owner.input.ifTriggered("EscDown"_trig,
-                [&](const input::Trigger& self)
-                {
-                    std::string result = "map:\n";
-                    result.reserve(4096 * 4);
-                    auto inserter = std::back_inserter(result);
-                    for (i32 i = 0; i < grid.array.len; ++i)
-                    {
-                        fmt::format_to(
-                            inserter, "{:2x} ", (((u8)0xffffff00u | *(grid.atOffset(i))) >> 8));
-                        if ((i + 1) % grid.size.x == 0)
-                            fmt::format_to(inserter, "\n");
-                    }
-                    spdlog::info(result);
-                    return true;
-                });
         }
     };
+
 
     struct FlowfieldPF : public IDemoImpl
     {
@@ -170,6 +166,9 @@ namespace vex::flow
         virtual ~FlowfieldPF();
 
     private:
+        // void drawMainViewport(Application& owner);
+        // void drawDebugViewport(Application& owner);
+
         wgfx::ui::ViewportHandler viewports;
         wgfx::ui::BasicDemoUI ui;
         vex::InlineBufferAllocator<2 * 1024 * 1024> frame_alloc_resource;
@@ -177,12 +176,14 @@ namespace vex::flow
         vex::Allocator frame_alloc = frame_alloc_resource.makeAllocatorHandle();
         bool docking_not_configured = true;
 
-        InitData_v1 init_data{};
+        Flow::Map1b init_data;
+        ProcessedData processed_map;
 
         ColorQuad background;
         TempGeometry temp_geom;
         ViewportGrid view_grid;
         CellHeatmapV1 heatmap;
+        CellHeatmapV1 debug_overlay;
 
         WebGpuBackend* wgpu_backend = nullptr;
 

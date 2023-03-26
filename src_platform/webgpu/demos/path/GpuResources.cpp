@@ -284,8 +284,9 @@ bool vex::flow::ColorQuad::reloadShaders(
 }
 
 void vex::flow::CellHeatmapV1::init(
-    const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib, ROSpan<u32> heatmap)
+    const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib, ROSpan<u32> heatmap, const char* in_shader_file)
 {
+    hm_shader_file = in_shader_file;
     vex::InlineBufferAllocator<1024> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
@@ -312,8 +313,7 @@ void vex::flow::CellHeatmapV1::init(
             .label = "grid uni buf",
             .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Storage,
             .size = (u32)heatmap.byteSize(),
-        },
-        (u8*)heatmap.data, heatmap.byteSize());
+        });
 
     auto [layout, binding] = BGLCombinedBuilder{.al = tmp_alloc} //
                                  .addUniform(sizeof(UBOHeatMap), uniform_buf, 0,
