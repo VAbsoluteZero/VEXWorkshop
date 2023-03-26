@@ -18,11 +18,11 @@ namespace vex
 
 	struct WindowParams
 	{
-		std::string name = "demo";
+		std::string name = "VEX";
 		int w = -1;
 		int h = -1;
 		int x = -1;
-		int y = -1; 
+		int y = -1;  
 		EWindowMode m;
 		bool resizable = true;
 	};

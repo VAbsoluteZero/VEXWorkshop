@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------------------
 # asserts & checks
 cmake_minimum_required(VERSION 3.20)
-if(${VEXGameOfLife_SOURCE_DIR} MATCHES "[\]\[]")
+if(${VEXWorkshop_SOURCE_DIR} MATCHES "[\]\[]")
     message("Note: Path contains special characters and that could lead to CMAKE being broken.\n")
 endif()
 if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
@@ -12,7 +12,7 @@ endif()
 # -------------------------------------------------------------------------------------------------
 set (CMAKE_SYSTEM_VERSION 10.0 (latest installed version))
 message("win: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
-project(VEXGameOfLife VERSION 0.1)
+project(VEXWorkshop VERSION 0.1)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_SUPPRESS_REGENERATION true) # no zero check  
@@ -29,8 +29,8 @@ include(FindGIT)
 include(FetchContent)   
 find_package(Git QUIET)
 
-set(VEX_ROOTDIR "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib")
-set(VEX_INCLUDE_DIRS "${VEXGameOfLife_SOURCE_DIR}/vex/VEXlib")  
+set(VEX_ROOTDIR "${VEXWorkshop_SOURCE_DIR}/vex/VEXlib")
+set(VEX_INCLUDE_DIRS "${VEXWorkshop_SOURCE_DIR}/vex/VEXlib")  
 set(SIZEOF_VOIDP ${CMAKE_SIZEOF_VOID_P}) # Check for 64 or 32 bit
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -83,13 +83,13 @@ add_subdirectory("third_party/rapidobj")
 # -------------------------------------------------------------------------------------------------
 include_directories(${SDL2_INCLUDE_DIRS})
 include_directories(${VEX_INCLUDE_DIRS})
-include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/SDL2/include/") 
-include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/spdlog/include/")
-include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/glm/")
-include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party/")  
-include_directories("${VEXGameOfLife_SOURCE_DIR}/src")  
-include_directories("${VEXGameOfLife_SOURCE_DIR}/third_party_bin") 
-include_directories("${VEXGameOfLife_SOURCE_DIR}/src_platform") 
+include_directories("${VEXWorkshop_SOURCE_DIR}/third_party/SDL2/include/") 
+include_directories("${VEXWorkshop_SOURCE_DIR}/third_party/spdlog/include/")
+include_directories("${VEXWorkshop_SOURCE_DIR}/third_party/glm/")
+include_directories("${VEXWorkshop_SOURCE_DIR}/third_party/")  
+include_directories("${VEXWorkshop_SOURCE_DIR}/src")  
+include_directories("${VEXWorkshop_SOURCE_DIR}/third_party_bin") 
+include_directories("${VEXWorkshop_SOURCE_DIR}/src_platform") 
 # -------------------------------------------------------------------------------------------------  
 # PLATFORM   
 if (VEX_USE_WGPU AND VEX_USE_DAWN) 
@@ -114,10 +114,10 @@ endif()
  
 if (VEX_USE_DAWN)     
     # FETCH dawn
-    message(STATUS "info: BACKEND = DAWN where:${VEXGameOfLife_SOURCE_DIR}/third_party_bin/dawn/") 
-    add_subdirectory("${VEXGameOfLife_SOURCE_DIR}/third_party_bin/dawn/") 
+    message(STATUS "info: BACKEND = DAWN where:${VEXWorkshop_SOURCE_DIR}/third_party_bin/dawn/") 
+    add_subdirectory("${VEXWorkshop_SOURCE_DIR}/third_party_bin/dawn/") 
     include_directories(${CMAKE_BINARY_DIR}/deps/dawn-build/gen/include/dawn) 
-    include_directories(${VEXGameOfLife_SOURCE_DIR}/third_party_bin/dawn/)  
+    include_directories(${VEXWorkshop_SOURCE_DIR}/third_party_bin/dawn/)  
     # get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)  
 endif()
 
@@ -125,10 +125,10 @@ if (EMSCRIPTEN)
     message(STATUS " info PLATFORM : EMSCRIPTEN")  
 	file(GLOB_RECURSE VEX_PLATFORM_SRC
         CONFIGURE_DEPENDS 
-        "${VEXGameOfLife_SOURCE_DIR}src_platform/webgpu/*.cpp")
+        "${VEXWorkshop_SOURCE_DIR}src_platform/webgpu/*.cpp")
 
-    include_directories("${VEXGameOfLife_SOURCE_DIR}/src_platform/webgpu/") 
-	set(VEX_PLATFORM_IMGUISRC "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_wgpu.cpp") 
+    include_directories("${VEXWorkshop_SOURCE_DIR}/src_platform/webgpu/") 
+	set(VEX_PLATFORM_IMGUISRC "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_wgpu.cpp") 
 	set(CMAKE_EXECUTABLE_SUFFIX ".html")  
 
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY") #-s ASYNCIFY -s STRICT=1
@@ -152,21 +152,21 @@ elseif (WIN32)
     message(STATUS " info PLATFORM : WIN32/64")  
     set(SDL_SHARED TRUE)
     add_subdirectory("third_party/SDL2") 
-    include_directories("${VEXGameOfLife_SOURCE_DIR}/src_platform/windows/")
+    include_directories("${VEXWorkshop_SOURCE_DIR}/src_platform/windows/")
 endif() 
 # ------------------------------------------------------------------------------------------------- 
 if (VEX_BACKEND_WEBGPU) 
 	file(GLOB_RECURSE VEX_PLATFORM_SRC
         CONFIGURE_DEPENDS 
-        "${VEXGameOfLife_SOURCE_DIR}/src_platform/webgpu/render/*.cpp"
-        "${VEXGameOfLife_SOURCE_DIR}/src_platform/webgpu/*.cpp")
-    set(VEX_PLATFORM_IMGUISRC "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_wgpu.cpp")
+        "${VEXWorkshop_SOURCE_DIR}/src_platform/webgpu/render/*.cpp"
+        "${VEXWorkshop_SOURCE_DIR}/src_platform/webgpu/*.cpp")
+    set(VEX_PLATFORM_IMGUISRC "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_wgpu.cpp")
 elseif(VEX_BACKEND_DIRECTX) 
 	file(GLOB_RECURSE VEX_PLATFORM_SRC
         CONFIGURE_DEPENDS 
-        "${VEXGameOfLife_SOURCE_DIR}/src_platform/windows/render/*.cpp") 
+        "${VEXWorkshop_SOURCE_DIR}/src_platform/windows/render/*.cpp") 
     if (VEX_USE_DX11)  
-        set(VEX_PLATFORM_IMGUISRC "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_dx11.cpp")
+        set(VEX_PLATFORM_IMGUISRC "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_dx11.cpp")
     else()
        message(FATAL_ERROR "error : dx12 not implemented yet") 
     endif() 
@@ -175,11 +175,11 @@ endif()
 # rest of source files    
 file(GLOB_RECURSE VEX_GOL_SRC 
     CONFIGURE_DEPENDS 
-    "${VEXGameOfLife_SOURCE_DIR}/platform/windows/*.cpp" "${VEXGameOfLife_SOURCE_DIR}/src/*.h")
+    "${VEXWorkshop_SOURCE_DIR}/platform/windows/*.cpp" "${VEXWorkshop_SOURCE_DIR}/src/*.h")
 
 file(GLOB_RECURSE VEX_GOL_SRC 
     CONFIGURE_DEPENDS 
-    "${VEXGameOfLife_SOURCE_DIR}/src/*.cpp" "${VEXGameOfLife_SOURCE_DIR}/src/*.h")
+    "${VEXWorkshop_SOURCE_DIR}/src/*.cpp" "${VEXWorkshop_SOURCE_DIR}/src/*.h")
 
 file(GLOB_RECURSE VEX_SRC 
     CONFIGURE_DEPENDS 
@@ -195,45 +195,45 @@ list (APPEND VEX_ALLSRC ${VEX_PLATFORM_SRC})
 set(VEX_SRC_AND_FILES ${VEX_ALLSRC})
 file(GLOB VEX_OTHER_FILES 
     CONFIGURE_DEPENDS 
-    "${VEXGameOfLife_SOURCE_DIR}/.clang-format" "${VEX_ROOTDIR}/.clang-format"
-    "${VEXGameOfLife_SOURCE_DIR}/*.txt" "${VEXGameOfLife_SOURCE_DIR}/*.json"
-    "${VEXGameOfLife_SOURCE_DIR}/src/*.txt" "${VEXGameOfLife_SOURCE_DIR}/src/*.json" 
-    "${VEXGameOfLife_SOURCE_DIR}/content/shaders/*.hlsl" 
+    "${VEXWorkshop_SOURCE_DIR}/.clang-format" "${VEX_ROOTDIR}/.clang-format"
+    "${VEXWorkshop_SOURCE_DIR}/*.txt" "${VEXWorkshop_SOURCE_DIR}/*.json"
+    "${VEXWorkshop_SOURCE_DIR}/src/*.txt" "${VEXWorkshop_SOURCE_DIR}/src/*.json" 
+    "${VEXWorkshop_SOURCE_DIR}/content/shaders/*.hlsl" 
     "${VEX_ROOTDIR}/*.txt" "${VEX_ROOTDIR}/*.hlsl" "${VEX_ROOTDIR}/*.json")
 
 file(GLOB_RECURSE VEX_GLM_HEADERS 
     CONFIGURE_DEPENDS 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/glm/*.h" )
+    "${VEXWorkshop_SOURCE_DIR}/third_party/glm/*.h" )
   
 # -------------------------------------------------------------------------------------------------
 # add gear imgui
 file(GLOB_RECURSE VEX_IMGUI_HEADERS 
     CONFIGURE_DEPENDS 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/*.h"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/*.h"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/gizmo/*.h")
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/*.h"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/*.h"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/gizmo/*.h")
 
 add_library(imgui STATIC
     # Main Imgui files
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui.cpp" 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_draw.cpp"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_tables.cpp"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_demo.cpp"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui_widgets.cpp"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/imgui.cpp" 
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/imgui_draw.cpp"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/imgui_tables.cpp"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/imgui_demo.cpp"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/imgui_widgets.cpp"
     # addons ImGuizmo/ImCurveEdit 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/gizmo/ImGuizmo.cpp"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/gizmo/ImCurveEdit.cpp"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/gizmo/ImGuizmo.cpp"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/gizmo/ImCurveEdit.cpp"
     # SDL2+dx11-specific files
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_sdl.cpp" 
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_sdl.cpp" 
     ${VEX_PLATFORM_IMGUISRC}# ${VEX_IMGUI_HEADERS}
     )  
 # Make SDL2 available to Imgui
 target_include_directories(imgui PUBLIC ${SDL2_INCLUDE_DIRS})
 # imgui/backends/ contains the SDL implementation
 target_include_directories(imgui PUBLIC 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/misc/" 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/" 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/backends/")  
+    "${VEXWorkshop_SOURCE_DIR}/third_party/misc/" 
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/" 
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/")  
 # -------------------------------------------------------------------------------------------------
 list (APPEND VEX_SRC_AND_FILES ${VEX_OTHER_FILES})
 list (APPEND VEX_SRC_AND_FILES ${VEX_GLM_HEADERS})
@@ -255,7 +255,7 @@ if(VEX_DEBUG_CMAKE)
     message("all source files: ${VEX_ALLSRC}") 
 endif()  
 # -------------------------------------------------------------------------------------------------
-# add to VEXGameOfLife target
+# add to VEXWorkshop target
 # -------------------------------------------------------------------------------------------------
 if (MSVC)
 	set(ORIGINAL_CMAKE_LINK_LFAGS "${CMAKE_EXE_LINKER_FLAGS}")
@@ -265,16 +265,16 @@ add_compile_definitions(GLM_FORCE_LEFT_HANDED=1 GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
 add_compile_definitions(VEXCORE_DEFINE_STRHASH=1 FMT_EXCEPTIONS=0 SPDLOG_NO_EXCEPTIONS=1)
 
 add_compile_definitions( SPDLOG_COMPILED_LIB)
-set(EXECUTABLE_OUTPUT_PATH  ${VEXGameOfLife_SOURCE_DIR}/build/)  
+set(EXECUTABLE_OUTPUT_PATH  ${VEXWorkshop_SOURCE_DIR}/build/)  
 ######################################################################################################
-add_executable(VEXGameOfLife ${VEX_ALLSRC}) # VEXGameOfLife target
+add_executable(VEXWorkshop ${VEX_ALLSRC}) # VEXWorkshop target
 # libs
-target_link_libraries(VEXGameOfLife PRIVATE rapidobj::rapidobj)
-target_link_libraries(VEXGameOfLife PRIVATE imgui) 
-target_link_libraries(VEXGameOfLife PRIVATE spdlog) 
+target_link_libraries(VEXWorkshop PRIVATE rapidobj::rapidobj)
+target_link_libraries(VEXWorkshop PRIVATE imgui) 
+target_link_libraries(VEXWorkshop PRIVATE spdlog) 
 
 if (NOT VEX_USE_BIN_DIR)
-    set_target_properties(VEXGameOfLife
+    set_target_properties(VEXWorkshop
         PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/VexGame"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/VexGame"
@@ -283,7 +283,7 @@ if (NOT VEX_USE_BIN_DIR)
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build/VexGame/Rel"
     )
 else() 
-    set_target_properties(VEXGameOfLife
+    set_target_properties(VEXWorkshop
         PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build_out/VexGame"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build_out/VexGame"
@@ -293,19 +293,19 @@ else()
     )
 endif()
 
-target_precompile_headers(VEXGameOfLife PRIVATE 
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/glm/glm_common.h"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/spdlog/include/spdlog/spdlog.h"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/spdlog/include/spdlog/common.h"
-    "${VEXGameOfLife_SOURCE_DIR}/third_party/imgui/imgui.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Utils/VUtilsBase.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Utils/CoreTemplates.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Utils/VMath.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Dict.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Union.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Stack.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Tuple.h"
-    "${VEXGameOfLife_SOURCE_DIR}/vex/VEXLib/VFramework/VEXBase.h"
+target_precompile_headers(VEXWorkshop PRIVATE 
+    "${VEXWorkshop_SOURCE_DIR}/third_party/glm/glm_common.h"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/spdlog/include/spdlog/spdlog.h"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/spdlog/include/spdlog/common.h"
+    "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/imgui.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Utils/VUtilsBase.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Utils/CoreTemplates.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Utils/VMath.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Dict.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Union.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Stack.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VCore/Containers/Tuple.h"
+    "${VEXWorkshop_SOURCE_DIR}/vex/VEXLib/VFramework/VEXBase.h"
 ) 
 
 if (VEX_USE_DX11) 
@@ -313,30 +313,30 @@ if (VEX_USE_DX11)
     if(NOT HAS_D3D11)
         message(FATAL_ERROR " trying to link agains dx11 libs but they were not found") 
     endif()
-    target_link_libraries(VEXGameOfLife PRIVATE d3d11 dxgi) 
+    target_link_libraries(VEXWorkshop PRIVATE d3d11 dxgi) 
 endif() 
 if(NOT EMSCRIPTEN)
-    target_link_libraries(VEXGameOfLife PRIVATE SDL2main SDL2-static)  
+    target_link_libraries(VEXWorkshop PRIVATE SDL2main SDL2-static)  
     if (VEX_USE_DAWN)      
-        target_link_libraries(VEXGameOfLife PRIVATE webgpu) 
+        target_link_libraries(VEXWorkshop PRIVATE webgpu) 
     elseif(VEX_USE_WGPU)
         message(STATUS " ===> linking to WGPU") 
         add_subdirectory("third_party_bin/wgpu") 
-        target_link_libraries(VEXGameOfLife PRIVATE webgpu) 
-        target_copy_webgpu_binaries(VEXGameOfLife) 
+        target_link_libraries(VEXWorkshop PRIVATE webgpu) 
+        target_copy_webgpu_binaries(VEXWorkshop) 
     endif()
 endif()
 
-target_sources(VEXGameOfLife PRIVATE app_manifest.manifest) 
+target_sources(VEXWorkshop PRIVATE app_manifest.manifest) 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     if(MSVC)
         #add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>)
         message(STATUS "MSVC_TOOLSET_VERSION: ${MSVC_TOOLSET_VERSION}")
         if(NOT VEX_MSVC_CLANG) 
-            target_compile_options(VEXGameOfLife PUBLIC "/ZI")
-            target_compile_options(VEXGameOfLife PUBLIC "/MP") 
+            target_compile_options(VEXWorkshop PUBLIC "/ZI")
+            target_compile_options(VEXWorkshop PUBLIC "/MP") 
         endif()
-        target_link_options(VEXGameOfLife PUBLIC "/INCREMENTAL") 
+        target_link_options(VEXWorkshop PUBLIC "/INCREMENTAL") 
     endif() 
 endif()  
 # ------------------------------------------------------------------------------------------------- 
@@ -346,8 +346,8 @@ if (NOT EMSCRIPTEN)
     # ------------------------------------------------------------------------------------------------- 
     file(GLOB_RECURSE VEX_TST_SRC 
         CONFIGURE_DEPENDS 
-        "${VEXGameOfLife_SOURCE_DIR}/src_test/*.cpp" "${VEXGameOfLife_SOURCE_DIR}/src_test/*.h"
-        "${VEXGameOfLife_SOURCE_DIR}/src_test/vex/*.cpp"
+        "${VEXWorkshop_SOURCE_DIR}/src_test/*.cpp" "${VEXWorkshop_SOURCE_DIR}/src_test/*.h"
+        "${VEXWorkshop_SOURCE_DIR}/src_test/vex/*.cpp"
     ) 
    
     set(SNITCH_DEFINE_MAIN OFF) 
@@ -360,8 +360,8 @@ if (NOT EMSCRIPTEN)
     # -------------------------------------------------------------------------------------------------
     file(GLOB_RECURSE VEX_BENCH_SRC 
         CONFIGURE_DEPENDS 
-        "${VEXGameOfLife_SOURCE_DIR}/src_bench/*.cpp" "${VEXGameOfLife_SOURCE_DIR}/src_bench/*.h"
-        "${VEXGameOfLife_SOURCE_DIR}/src_bench/vex/*.cpp"
+        "${VEXWorkshop_SOURCE_DIR}/src_bench/*.cpp" "${VEXWorkshop_SOURCE_DIR}/src_bench/*.h"
+        "${VEXWorkshop_SOURCE_DIR}/src_bench/vex/*.cpp"
     ) 
 
     add_executable(VexBench ${VEX_BENCH_SRC} ${VEX_SRC} "src_bench/misc/bittests.cpp")  # <=============== VexBench target
@@ -375,21 +375,21 @@ if (NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build/bench/${CMAKE_BUILD_TYPE}"
     )  
     # POST BUILD 
-    add_custom_command ( TARGET VEXGameOfLife POST_BUILD
+    add_custom_command ( TARGET VEXWorkshop POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-         $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXGameOfLife>
+         $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXWorkshop>
     )  
-    add_custom_command(TARGET VEXGameOfLife POST_BUILD
+    add_custom_command(TARGET VEXWorkshop POST_BUILD
        COMMAND ${CMAKE_COMMAND} -E copy_directory 
-        ${CMAKE_SOURCE_DIR}/content/ $<TARGET_FILE_DIR:VEXGameOfLife>/content/) 
+        ${CMAKE_SOURCE_DIR}/content/ $<TARGET_FILE_DIR:VEXWorkshop>/content/) 
 endif() 
 # -------------------------------------------------------------------------------------------------
 # extras 
 if (MSVC)
-	target_compile_options(VEXGameOfLife PRIVATE /W2)
+	target_compile_options(VEXWorkshop PRIVATE /W2)
 endif() 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang") 
-    target_compile_options(VEXGameOfLife PRIVATE -Wno-class-conversion)
+    target_compile_options(VEXWorkshop PRIVATE -Wno-class-conversion)
 endif() 
 get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 message(STATUS "  include dirs:  ")
