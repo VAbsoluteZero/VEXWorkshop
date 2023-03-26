@@ -19,8 +19,8 @@ namespace vex
 	struct WindowParams
 	{
 		std::string name = "demo";
-		int w = 2840;
-		int h = 1620;
+		int w = -1;
+		int h = -1;
 		int x = -1;
 		int y = -1; 
 		EWindowMode m;

@@ -37,7 +37,6 @@ struct XY
 int main(int argc, char** argv)
 {
     vex::StartupConfig config;
-    config.WindowArgs = {.w = 1800, .h = 1400};
     // experimental feature, originally demo would be selected only once
     config.allow_demo_changes =
 #ifndef NDEBUG
