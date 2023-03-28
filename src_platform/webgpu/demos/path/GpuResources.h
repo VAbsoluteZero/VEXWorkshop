@@ -2,18 +2,17 @@
 
 #include <VCore/Containers/Dict.h>
 #include <VFramework/VEXBase.h>
+#include <application/Platfrom.h>
 #include <gfx/GfxUtils.h>
-
 #include <webgpu/render/LayoutManagement.h>
 #include <webgpu/render/WgpuTypes.h>
-#include <application/Platfrom.h>
 
 namespace vex::flow
-{ 
-    //struct SettingsFlags // predefined flags
+{
+    // struct SettingsFlags // predefined flags
     //{
-    //    static constexpr u32 k_pf_demo_setting = 0x0001'0000u;
-    //};
+    //     static constexpr u32 k_pf_demo_setting = 0x0001'0000u;
+    // };
     static inline const auto opt_grid_thickness = SettingsContainer::EntryDesc<i32>{
         .key_name = "pf.GridSize",
         .info = "Thickness of the grid. Value less than 2 disables the grid.",
@@ -25,7 +24,7 @@ namespace vex::flow
     static inline const auto opt_grid_color = SettingsContainer::EntryDesc<v4f>{
         .key_name = "pf.GridColor",
         .info = "Color of the grid.",
-        .default_val = Color::gray(), 
+        .default_val = v4f(Color::gray()) * 0.5f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     struct DrawContext
@@ -35,10 +34,10 @@ namespace vex::flow
         mtx4 camera_model_view = mtx4_identity;
         mtx4 camera_projection = mtx4_identity;
         v2u32 viewport_size;
-        v2f pixel_size_nm = {0.002f,0.002f};
+        v2f pixel_size_nm = {0.002f, 0.002f};
         float delta_time = 0.0f;
         float time = 0.0f;
-        float grid_half_size = 16; 
+        float grid_half_size = 16;
         float camera_h = 4.0f;
     };
 
@@ -51,7 +50,7 @@ namespace vex::flow
     struct ViewportGrid
     {
         static constexpr const char* grid_shader_file = "content/shaders/wgsl/grid.wgsl";
-        wgfx::GpuBuffer vtx_buf;
+        wgfx::GpuBuffer vtx_buf; 
         wgfx::GpuBuffer idx_buf;
         wgfx::GpuBuffer uniform_buf;
         WGPUBindGroup bind_group;
@@ -59,12 +58,12 @@ namespace vex::flow
         wgfx::SimplePipeline<PosNormUv> pipeline_data; // needed for reload
         WGPUBindGroupLayout bgl_layout;
         WGPURenderPipeline pipeline;
+         
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib);
 
-        void init(const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib);
+        void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx);
 
-        void draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx);
-
-        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::RenderContext& context);
+        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
 
         void release()
         {
@@ -93,9 +92,9 @@ namespace vex::flow
         WGPUBindGroup bind_group;
         WGPURenderPipeline pipeline;
 
-        void init(const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib);
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib);
 
-        void draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx, ROSpan<u32> indices,
+        void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx, ROSpan<u32> indices,
             ROSpan<PosNormColor> vertices);
 
         void release()
@@ -141,9 +140,9 @@ namespace vex::flow
         WGPUBindGroupLayout bgl_layout;
         WGPURenderPipeline pipeline;
 
-        void init(const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib);
-        void draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ct);
-        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::RenderContext& context);
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib);
+        void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ct);
+        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
 
         void release()
         {
@@ -157,6 +156,11 @@ namespace vex::flow
             // && vtx_buf.isValid() && idx_buf.isValid() ;
         }
     };
+
+    struct SharedData
+    {
+    };
+
     struct CellHeatmapV1
     {
         const char* hm_shader_file = "content/shaders/wgsl/cell_heatmap.wgsl";
@@ -169,12 +173,14 @@ namespace vex::flow
         WGPUBindGroupLayout bgl_layout;
         WGPURenderPipeline pipeline;
 
-        void init(
-            const wgfx::RenderContext& ctx, const TextShaderLib& text_shad_lib, ROSpan<u32> heatmap,
-            const char* in_shader_file);
-        void draw(const wgfx::RenderContext& ctx, const DrawContext& draw_ctx,
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib,
+            ROSpan<u32> heatmap, const char* in_shader_file);
+
+        // void copyBufferToGPU();
+
+        void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx,
             const HeatmapDynamicData& args);
-        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::RenderContext& context);
+        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
 
         void release()
         {
@@ -190,5 +196,81 @@ namespace vex::flow
             return uniform_buf.isValid() && storage_buf.isValid() && bind_group && pipeline;
             // && vtx_buf.isValid() && idx_buf.isValid() ;
         }
+    };
+    struct ComputeArgs
+    {
+        v2u32 map_size{0, 0};
+    };
+    struct ComputeFields
+    {
+        struct UBO
+        {
+            v2u32 size;
+        };
+        struct ComputeContext
+        {
+            WGPUDevice device = nullptr;
+        };
+        const char* cf_shader_file = "content/shaders/wgsl/flow/flowfield_conv.wgsl";
+
+        wgfx::GpuBuffer uniform_buf;
+        wgfx::GpuBuffer output_buf;
+        wgfx::GpuBuffer staging_buf;
+        WGPUBindGroup bind_group;
+
+        wgfx::ComputePipeline pipeline_data;
+        WGPUBindGroupLayout bgl_layout;
+        WGPUComputePipeline pipeline;
+
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib,
+            const char* in_shader_file, wgfx::GpuBuffer& map_data_buf, v2u32 size);
+
+        void compute(const wgfx::GpuContext& ctx, const ComputeArgs& args);
+
+        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
+
+        void release()
+        {
+            WGPU_REL(BindGroup, bind_group);
+            WGPU_REL(BindGroupLayout, bgl_layout);
+            WGPU_REL(ComputePipeline, pipeline);
+            // vtx_buf.release();
+            uniform_buf.release();
+            output_buf.release();
+            staging_buf.release();
+        }
+        bool isValid() const
+        {
+            return uniform_buf.isValid() && output_buf.isValid() && bind_group && pipeline;
+        }
+    };
+    struct OverlayData
+    { 
+        v2u32 bounds;
+        v4f color1;
+        v4f color2;
+    };
+    struct FlowFieldsOverlay
+    {
+        const char* shader_file = "content/shaders/wgsl/flow/flowfield_overlay.wgsl";
+        WGPUBindGroup bind_group;
+        wgfx::GpuBuffer uniform_buf;
+        wgfx::SimplePipeline<wgfx::EmptyVertex> pipeline_data;
+        WGPUBindGroupLayout bgl_layout;
+        WGPURenderPipeline pipeline;
+
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib,
+            wgfx::GpuBuffer& flow_v2f_buf, const char* in_shader_file);
+        void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx, OverlayData data);
+        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
+
+        void release()
+        {
+            WGPU_REL(BindGroup, bind_group);
+            WGPU_REL(BindGroupLayout, bgl_layout);
+            WGPU_REL(RenderPipeline, pipeline);
+            uniform_buf.release();
+        }
+        bool isValid() const { return uniform_buf.isValid() && bind_group && pipeline; }
     };
 } // namespace vex::flow

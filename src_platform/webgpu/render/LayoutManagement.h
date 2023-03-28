@@ -321,7 +321,7 @@ namespace wgfx
             frag_state.module = module;
         }
 
-        WGPURenderPipeline createPipeline(const RenderContext& context, WGPUBindGroupLayout layout)
+        WGPURenderPipeline createPipeline(const GpuContext& context, WGPUBindGroupLayout layout)
         {
             WGPUPipelineLayoutDescriptor pl_desc{
                 .bindGroupLayoutCount = 1,
@@ -336,28 +336,37 @@ namespace wgfx
             return pl;
         }
     };
+    struct ComputePipeline
+    {
+        const char* label = "compute";
+        WGPUProgrammableStageDescriptor descriptor{
+            .nextInChain = nullptr,
+            .module = nullptr,
+            .entryPoint = "cs_main",
+            .constantCount = 0,
+            .constants = nullptr,
+        }; 
 
-    // template <typename VertType>
-    // inline auto buildSimplePipeline(WGPUShaderModule shader)
-    //{ //
-
-    //    return 1;
-    //}
-
+        inline WGPUComputePipeline createPipeline(
+            const GpuContext& context, WGPUShaderModule shader, WGPUBindGroupLayout layout)
+        {
+            WGPUPipelineLayoutDescriptor pl_desc{
+                .bindGroupLayoutCount = 1,
+                .bindGroupLayouts = &layout,
+            };
+            auto pipeline_layout = wgpuDeviceCreatePipelineLayout(context.device, &pl_desc);
+            check_(pipeline_layout);
+            descriptor.module  = shader;
+            check_(descriptor.module);
+            WGPUComputePipelineDescriptor pipeline_desc{
+                .label = label,
+                .layout = pipeline_layout,
+                .compute = descriptor,
+            };
+            auto pl = wgpuDeviceCreateComputePipeline(context.device, &pipeline_desc);
+            check_(pl);
+            return pl;
+        }
+    };
 
 } // namespace wgfx
-// namespace wgfx
-#define WGPU_VERTATTR_DESC(loc, fmt, offset)           \
-    {                                                  \
-        .format = f, .offset = o, .shaderLocation = l, \
-    }
-#define WGPU_VERTBUFFERLAYOUT_DESC(type, arr)  \
-    {                                          \
-        .arrayStride = sizeof(type),           \
-        .stepMode = WGPUVertexStepMode_Vertex, \
-        .attributeCount = std::size(arr),      \
-        .attributes = arr,                     \
-    };
-#define WGPU_VERTEX_BUFFER_LAYOUT(type, name, bind_size, ...) \
-    WGPUVertexAttribute name##_attributes[] = {__VA_ARGS__};  \
-    WGPUVertexBufferLayout name##_vdl = WGPU_VERTBUFFERLAYOUT_DESC(type, n

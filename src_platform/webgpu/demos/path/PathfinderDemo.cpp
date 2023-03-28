@@ -108,11 +108,13 @@ vex::flow::FlowfieldPF::~FlowfieldPF()
 }
 void FlowfieldPF::init(Application& owner, InitArgs args)
 {
+    defer_ { frame_alloc_resource.reset(); };
+
     auto* backend = owner.getGraphicsBackend();
     checkLethal(backend->id == GfxBackendID::Webgpu, "unsupported gfx backend");
     this->wgpu_backend = static_cast<WebGpuBackend*>(backend);
     auto& globals = wgpu_backend->getGlobalResources();
-    RenderContext ctx = {
+    GpuContext ctx = {
         .device = globals.device,
         .encoder = wgpuDeviceCreateCommandEncoder(globals.device, nullptr),
         .queue = globals.queue,
@@ -125,8 +127,9 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         viewports.add(ctx, options);
         viewports.imgui_views.back().gui_enabled = false;
     }
+    // init webgpu stuff
     {
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -142,14 +145,20 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         view_grid.init(ctx, wgpu_backend->text_shad_lib);
         temp_geom.init(ctx, wgpu_backend->text_shad_lib);
         background.init(ctx, wgpu_backend->text_shad_lib);
+
+        compute_pass.init(ctx, wgpu_backend->text_shad_lib,
+            "content/shaders/wgsl/flow/flowfield_conv.wgsl", heatmap.storage_buf, init_data.size);
+        flow_overlay.init(ctx, wgpu_backend->text_shad_lib, compute_pass.output_buf,
+            "content/shaders/wgsl/flow/flowfield_overlay.wgsl");
     }
+    // init console variables
     {
         auto& options = owner.getSettings();
         opt_grid_thickness.addTo(options);
         opt_grid_color.addTo(options);
         opt_show_dbg_overlay.addTo(options);
         opt_allow_diagonal.addTo(options);
-
+        opt_show_numbers.addTo(options);
         defer_till_dtor.emplace_back(
             [&owner]
             {
@@ -158,9 +167,10 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 opt_grid_color.removeFrom(options);
                 opt_show_dbg_overlay.removeFrom(options);
                 opt_allow_diagonal.removeFrom(options);
+                opt_show_numbers.removeFrom(options);
             });
     }
-
+    // add input hooks
     owner.input.addTrigger("DEBUG"_trig,
         Trigger{
             .fn_logic =
@@ -171,7 +181,6 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
             },
         },
         true);
-    frame_alloc_resource.reset();
 }
 
 void FlowfieldPF::update(Application& owner)
@@ -196,17 +205,21 @@ void FlowfieldPF::update(Application& owner)
             [&](const input::Trigger& self)
             {
                 spdlog::stopwatch sw;
-                SPDLOG_INFO(ICON_CI_WARNING "  pppppp pp  ");
-                defer_ { SPDLOG_WARN("shaders are realoded, it took: {} seconds", sw); };
+                defer_
+                {
+                    SPDLOG_WARN(ICON_CI_WARNING "shaders are realoded, it took: {} seconds", sw);
+                };
                 background.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 heatmap.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 debug_overlay.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 view_grid.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
+                flow_overlay.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
+                compute_pass.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
                 return true;
             });
     }
     {
-        auto& wgpu_ctx = viewport.setupForDrawing(globals);
+        // compute READS from storage buffer that contains search result
 
         auto camera = BasicCamera::makeOrtho({0.f, 0.f, -4.0}, {12 * 1.333f, 16}, -10, 10);
 
@@ -215,6 +228,8 @@ void FlowfieldPF::update(Application& owner)
         auto model_view_proj = camera.mtx.projection * camera.mtx.view;
 
         auto& time = owner.getTime();
+
+        auto int_sz = init_data.size;
 
         DrawContext draw_args{
             .settings = &owner.getSettings(),
@@ -228,30 +243,34 @@ void FlowfieldPF::update(Application& owner)
             .grid_half_size = init_data.size.x / 2.0f,
             .camera_h = camera.height,
         };
+        auto& wgpu_ctx = viewport.setupForDrawing(globals);
+        wgpuDeviceTick(wgpu_ctx.device);
         { // draw HEATMAP & background
             auto mpos = camera.normalizedViewToWorld(viewports.imgui_views[0].mouse_pos_normalized);
 
             float r = init_data.size.y / camera.height;
-
+            v2u32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
             owner.input.ifTriggered("MouseRightHeld"_trig,
                 [&](const input::Trigger& self)
                 {
+                    if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
+                        goal_cell = m_cell;
                     return true;
                 });
 
-            v2u32 cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
-            if (init_data.contains(cell) && !init_data.isBlocked(cell))
+            if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
             {
-                //spdlog::stopwatch sw;
-                //defer_ { SPDLOG_WARN(" bfs took approx {} ms", sw.elapsed() / 1ms); };
+                // spdlog::stopwatch sw;
+                // defer_ { SPDLOG_WARN(" bfs took approx {} ms", sw.elapsed() / 1ms); };
                 if (draw_args.settings->valueOr(opt_allow_diagonal.key_name, true))
-                    Flow::gridSyncBFS<true>({cell}, init_data, processed_map);
+                    Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
                 else
-                    Flow::gridSyncBFS<false>({cell}, init_data, processed_map);
+                    Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
+
+                // ImGui::GetMainViewport()->DrawData->CmdLists[0]->AddText
             }
 
-            auto int_sz = init_data.size;
-
+            // heatmap WRITES to storage buffer that contains search result
             heatmap.draw(wgpu_ctx, draw_args,
                 HeatmapDynamicData{
                     .buffer = processed_map.data.constSpan(),
@@ -259,6 +278,9 @@ void FlowfieldPF::update(Application& owner)
                     .color1 = {0.340f, 0.740f, 0.707f, 1.f},
                     .color2 = {0.930f, 0.400f, 0.223f, 1.f},
                 });
+            compute_pass.compute(wgpu_ctx, ComputeArgs{
+                                               .map_size = int_sz,
+                                           });
 
             if (draw_args.settings->valueOr(opt_show_dbg_overlay.key_name, false))
             {
@@ -274,8 +296,10 @@ void FlowfieldPF::update(Application& owner)
             background.draw(wgpu_ctx, draw_args);
         }
         { // draw GRID
+            flow_overlay.draw(wgpu_ctx, draw_args, {.bounds = int_sz});
             view_grid.draw(wgpu_ctx, draw_args);
         }
+        // SUBMIT
         viewport.finishAndSubmit();
         wgpuDeviceTick(wgpu_ctx.device);
     }
@@ -319,12 +343,33 @@ void FlowfieldPF::drawUI(Application& owner)
         }
     }
 
+    auto& options = owner.getSettings();
     if (ImGui::Begin(ids::main_vp_name))
     {
-        ImGui::PushFont(vex::g_view_hub.visuals.fnt_log);
-        defer_ { ImGui::PopFont(); };
+        if (options.valueOr(opt_show_numbers.key_name, false) && processed_map.size.x > 0)
+        {
+            const ImColor color = ImColor(1.0f, 1.0f, 1.0f, 1.0f);
+            ImDrawList* dlist = ImGui::GetWindowDrawList();
+            i32 pos = 0;
+            ImVec2 min_xy = ImGui::GetWindowContentRegionMin();
+            auto vp_size = viewports.imgui_views[0].last_seen_size;
+            v2f center = vp_size / 2;
+            center.x += min_xy.x + 2;
+            center.y += min_xy.y + 12;
 
-        auto& options = owner.getSettings();
+            f32 cell_w = (vp_size.y / 2.0f) / (processed_map.size.y / 2.0f);
+            v2f orig = center - v2f{vp_size.y / 2 - cell_w / 2, vp_size.y / 2 - cell_w / 2};
+            for (auto it : processed_map.data)
+            {
+                auto dist = it & processed_map.dist_mask;
+                auto cell = v2i32{pos % processed_map.size.x, pos / processed_map.size.x};
+                ImVec2 spos = {(orig.x + cell.x * cell_w), (orig.y + cell.y * cell_w)};
+                std::string buff = fmt::format("{}", dist);
+                dlist->AddText(vex::g_view_hub.visuals.fnt_tiny, ImGui::GetFontSize() * 0.8, spos,
+                    color, buff.data());
+                pos++;
+            }
+        }
 
         auto is_diag_move_allowed = options.settings.find(opt_allow_diagonal.key_name);
         if (is_diag_move_allowed && is_diag_move_allowed->value.getValueOr<bool>(true))
@@ -354,8 +399,10 @@ void FlowfieldPF::drawUI(Application& owner)
             gui_options.options_shown = !gui_options.options_shown;
         if (gui_options.options_shown)
         {
+            ImGui::PushFont(vex::g_view_hub.visuals.fnt_log);
+            defer_ { ImGui::PopFont(); };
             [[maybe_unused]] bool visible = ImGui::BeginChild(
-                "##pf_options", GuiRelVec{0.25, 0}, true);
+                "##pf_options", GuiRelVec{0.25, 0}, false);
             defer_ { ImGui::EndChild(); };
             ImGui::Indent(4);
             defer_ { ImGui::Unindent(); };
@@ -390,11 +437,11 @@ void FlowfieldPF::drawUI(Application& owner)
                     },
                     [&](v4f& a)
                     {
-                        ImGui::BeginChild("Color picker");
+                        //ImGui::BeginChild("Color picker");
                         ImGui::TextUnformatted("GridColor");
-                        ImGui::SetNextItemWidth(256);
+                        ImGui::SetNextItemWidth(256); 
                         ImGui::ColorPicker4("##GridColor", (float*)&a.x);
-                        ImGui::EndChild();
+                        //ImGui::EndChild();
                     });
             }
         }

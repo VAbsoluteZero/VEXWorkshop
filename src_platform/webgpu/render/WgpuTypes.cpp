@@ -86,7 +86,7 @@ void wgfx::Viewport::initialize(WGPUDevice device, const vex::ViewportOptions& a
     }
 }
 
-wgfx::RenderContext& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
+wgfx::GpuContext& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
 {
     auto encoder = wgpuDeviceCreateCommandEncoder(globals.device, &this->encoder_desc);
 
@@ -105,7 +105,7 @@ wgfx::RenderContext& wgfx::Viewport::setupForDrawing(const wgfx::Globals& global
     wgpuRenderPassEncoderSetScissorRect(
         render_pass_encoder, 0u, 0u, options.size.x, options.size.y);
 
-    context = wgfx::RenderContext{
+    context = wgfx::GpuContext{
         .device = globals.device,
         .encoder = encoder,
         .queue = globals.queue,
@@ -129,7 +129,7 @@ void wgfx::wgpuWait(std::atomic_bool& flag)
 }
 
 void wgfx::wgpuPollWait(
-    const RenderContext& context, std::atomic_bool& flag, double microsec_timeout)
+    const GpuContext& context, std::atomic_bool& flag, double microsec_timeout)
 {
     using namespace std::chrono_literals;
     spdlog::stopwatch sw;
@@ -302,6 +302,7 @@ void wgfx::GpuBuffer::copyViaStaging(CpyArgs args)
 
     const auto buff_size = (data_len + 3) & ~3;
     WGPUBufferDescriptor stag_desc = {
+        .label = "temp stage buf in copyViaStaging",
         .usage = WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc,
         .size = buff_size,
         .mappedAtCreation = true,
@@ -344,7 +345,7 @@ WGPUShaderModule wgfx::shaderFromSrc(WGPUDevice device, const char* src)
     return wgpuDeviceCreateShaderModule(device, &desc);
 }
 WGPUShaderModule wgfx::reloadShader(
-    vex::TextShaderLib& shader_lib, const RenderContext& context, const char* shader_name)
+    vex::TextShaderLib& shader_lib, const GpuContext& context, const char* shader_name)
 {
     shader_lib.reload(shader_name);
     auto* src = shader_lib.shad_src.find(shader_name);
@@ -439,7 +440,7 @@ WGPUFragmentState wgfx::makeFragmentState(WGPUDevice device, const FragShaderDes
 
 
 wgfx::Texture wgfx::Texture::loadFormData(
-    const RenderContext& ctx, LoadImgResult& loaded_img, LoadArgs options)
+    const GpuContext& ctx, LoadImgResult& loaded_img, LoadArgs options)
 {
     u8* data = loaded_img.data;
     if (!checkAlways(data, "failed to load texture"))
@@ -477,7 +478,7 @@ wgfx::Texture wgfx::Texture::loadFormData(
 }
 
 wgfx::Texture wgfx::Texture::loadFormFile(
-    const RenderContext& ctx, const char* filename, LoadArgs options)
+    const GpuContext& ctx, const char* filename, LoadArgs options)
 {
     LoadImgResult loaded_img = loadImage(filename, options.flip_y);
     auto tex = loadFormData(ctx, loaded_img, options);
@@ -485,7 +486,7 @@ wgfx::Texture wgfx::Texture::loadFormFile(
     return tex;
 }
 
-void wgfx::Texture::copyImageToTexture(const RenderContext& ctx, WGPUTexture texture, void* pixels,
+void wgfx::Texture::copyImageToTexture(const GpuContext& ctx, WGPUTexture texture, void* pixels,
     WGPUExtent3D size, uint32_t channels)
 {
     const u64 data_size = size.width * size.height * size.depthOrArrayLayers * channels;

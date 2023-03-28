@@ -23,7 +23,7 @@ using namespace std::literals::chrono_literals;
 struct WgpuRenderInterface
 {
     wgfx::Globals globals;
-    wgfx::RenderContext frame_data;
+    wgfx::GpuContext frame_data;
     WGPUSupportedLimits limits;
 
     bool initialized = false;
@@ -67,18 +67,18 @@ struct WgpuRenderInterface
             {
                 SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
                 
-                check_(false); 
+                check_(false);  
             };
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
-
+             
             globals.main_texture_fmt =
 #if defined(VEX_GFX_WEBGPU_DAWN) || defined(__EMSCRIPTEN__)
                 WGPUTextureFormat_BGRA8Unorm;
 #else
                 wgpuSurfaceGetPreferredFormat(globals.surface, globals.adapter);
-#endif
-
+#endif 
+              
             WGPUSwapChainDescriptor desc_swap_chain{
                 .nextInChain = nullptr,
                 .label = "chain",
@@ -94,7 +94,7 @@ struct WgpuRenderInterface
         }
         // default pipelines
         {
-            const char* debug_shader = R"(
+            const char* debug_shader = R"( 
             @vertex
             fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
 	            var p = vec2<f32>(0.0, 0.0);

@@ -74,7 +74,7 @@ namespace pl_init_data
 } // namespace pl_init_data
 
 static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
-    const RenderContext& context, u32 unibuf_size)
+    const GpuContext& context, u32 unibuf_size)
 {
     // Bind group layout
     WGPUBindGroupLayoutEntry bgl_entries[3] = {
@@ -123,7 +123,7 @@ static vex::Tuple<WGPUBindGroupLayout, WGPUPipelineLayout> createPipelineLayout(
     return {bgl, pl};
 }
 
-static WGPUBindGroup createBindGroups(const RenderContext& context,
+static WGPUBindGroup createBindGroups(const GpuContext& context,
     WGPUBindGroupLayout bind_group_layout, const GpuBuffer& unibuf, const TextureView& tex_view)
 {
     WGPUBindGroup out_bind_group = BGBuilder{} //
@@ -137,7 +137,7 @@ static WGPUBindGroup createBindGroups(const RenderContext& context,
 }
 
 static WGPURenderPipeline createPipeline(const TextShaderLib& shader_lib,
-    const RenderContext& context, WGPUPipelineLayout pipeline_layout)
+    const GpuContext& context, WGPUPipelineLayout pipeline_layout)
 {
     using namespace pl_init_data;
     auto* src = shader_lib.shad_src.find("content/shaders/wgsl/basic_unlit.wgsl"sv);
@@ -155,7 +155,7 @@ static WGPURenderPipeline createPipeline(const TextShaderLib& shader_lib,
 }
 // tmp hack, make it proper hot reload #fixme
 static WGPURenderPipeline realoadShaders(
-    TextShaderLib shader_lib, const RenderContext& context, WGPUPipelineLayout pipeline_layout)
+    TextShaderLib shader_lib, const GpuContext& context, WGPUPipelineLayout pipeline_layout)
 {
     shader_lib.reload();
 #ifdef VEX_GFX_WEBGPU_DAWN
@@ -223,7 +223,7 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
 
     vex::InlineBufferAllocator<32 * 1024> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
-    RenderContext ctx = {
+    GpuContext ctx = {
         .device = globals.device,
         .encoder = wgpuDeviceCreateCommandEncoder(globals.device, &ctx_desc),
         .queue = globals.queue,
@@ -557,7 +557,7 @@ void TexturedQuadDemo::drawUI(Application& owner)
         {
             auto& globals = wgpu_backend->getGlobalResources();
 
-            RenderContext ctx = {
+            GpuContext ctx = {
                 .device = globals.device,
                 .encoder = nullptr,
                 .queue = globals.queue,

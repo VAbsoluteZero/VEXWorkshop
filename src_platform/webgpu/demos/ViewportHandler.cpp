@@ -5,7 +5,7 @@
 #include <imgui_internal.h>
 #include <utils/ImGuiUtils.h>
 
-void wgfx::ui::ViewportHandler::add(const wgfx::RenderContext& wgpu_ctx, vex::ViewportOptions options)
+void wgfx::ui::ViewportHandler::add(const wgfx::GpuContext& wgpu_ctx, vex::ViewportOptions options)
 {
     wgfx::Viewport vex;
     vex.initialize(wgpu_ctx.device, options);

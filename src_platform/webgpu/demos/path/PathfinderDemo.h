@@ -6,8 +6,7 @@
 #include <webgpu/demos/ViewportHandler.h>
 #include <webgpu/render/WgpuApp.h>
 
-#include "GpuResources.h"
-#include "PFState.h"
+#include "GpuResources.h" 
 
 namespace vex::flow
 {
@@ -30,6 +29,12 @@ namespace vex::flow
         .info = "Show or hide overlay that shows number of neighbors",
         .default_val = true,
         .flags = 0,
+    };
+    static inline const auto opt_show_numbers = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.ShowCost",
+        .info = "Show or hide movement cost",
+        .default_val = true,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
 
     struct ProcessedData
@@ -105,8 +110,7 @@ namespace vex::flow
             };
             // struct
             vex::StaticRing<i32, 2024, true> frontier;
-            // std::vector<i32> frontier;
-            // frontier.reserve(2024)
+            out.size = grid.size;
             out.data.reserve(grid.size.x * grid.size.y);
             out.data.len = 0;
             for (u8 c : grid.source)
@@ -126,23 +130,25 @@ namespace vex::flow
                 -(i32)grid.size.x - 1, // top-left
             };
 
-            frontier.push(args.start.y * grid.size.x + args.start.x);
-            out[frontier.peekUnchecked()] = 0;
+            const auto start_cell = args.start.y * grid.size.x + args.start.x;
+            frontier.push(start_cell);
+            out[start_cell] = 0;
+
             constexpr auto dist_mask = ProcessedData::dist_mask;
             while (frontier.size() > 0)
             {
                 i32 current = (i32)frontier.dequeueUnchecked();
                 const u8 cell = grid.cellMask(current)  & diag_mask;
                 u32 dist_so_far = out[current];
-                for (u8 i = 0; (i < 8) && cell; ++i)
+                for (u8 i = 0; (i < 8) && cell; ++i) 
                 {
                     u8 cur_i = ((cell & (1u << i)) > 0);
                     if (cur_i)
                     {
-                        u32 next = current + neighbor_offsets[i];
+                        u32 next = current + neighbor_offsets[i]; 
                         // checkAlways_(next < grid.size.x * grid.size.y);
                         bool visited = (out.at(next) & dist_mask) > 0;
-                        if (visited)
+                        if (visited || (next == start_cell))
                             continue;
                         out[next] |= dist_so_far + 1; // add diagonal cost
                         frontier.push(next);
@@ -185,7 +191,12 @@ namespace vex::flow
         CellHeatmapV1 heatmap;
         CellHeatmapV1 debug_overlay;
 
+        ComputeFields compute_pass;
+        FlowFieldsOverlay flow_overlay;
+
         WebGpuBackend* wgpu_backend = nullptr;
+
+        v2u32 goal_cell = { 10, 10 };
 
         struct
         {

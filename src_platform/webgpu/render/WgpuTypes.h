@@ -59,7 +59,7 @@ namespace wgfx
     void wgpuWait(std::atomic_bool& flag);
     // microsec_timeout < 0 => no timeout
     void wgpuPollWait(
-        const struct RenderContext& context, std::atomic_bool& flag, double microsec_timeout = -1);
+        const struct GpuContext& context, std::atomic_bool& flag, double microsec_timeout = -1);
     WGPUInstance createInstance(WGPUInstanceDescriptor desc);
     void requestDevice(Globals& globals, WGPUDeviceDescriptor const* descriptor);
     void requestAdapter(Globals& globals, WGPURequestAdapterOptions& options);
@@ -67,7 +67,7 @@ namespace wgfx
     void swapchainPresent(WGPUSwapChain swap_chain);
 
 
-    struct RenderContext
+    struct GpuContext
     {
         WGPUDevice device = nullptr;
         WGPUCommandEncoder encoder = nullptr;
@@ -101,7 +101,7 @@ namespace wgfx
         auto isValid() const -> bool;
         void release();
 
-        RenderContext asContext() const { return RenderContext{.device = device, .queue = queue}; }
+        GpuContext asContext() const { return GpuContext{.device = device, .queue = queue}; }
     };
 
     struct Viewport
@@ -119,7 +119,7 @@ namespace wgfx
 
         WGPUTexture depth_texture = nullptr;
         WGPUTextureView depth_view = nullptr;
-        wgfx::RenderContext context;
+        wgfx::GpuContext context;
 
         WGPURenderPassColorAttachment color_attachment{
             .resolveTarget = nullptr,
@@ -140,7 +140,7 @@ namespace wgfx
         auto isValid() const -> bool { return texture && view; }
 
         void initialize(WGPUDevice device, const vex::ViewportOptions& args);
-        wgfx::RenderContext& setupForDrawing(const Globals& globals);
+        wgfx::GpuContext& setupForDrawing(const Globals& globals);
         void finishAndSubmit()
         {
             WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "viewport submit"};
@@ -193,7 +193,7 @@ namespace wgfx
 
     template <typename UBO>
     static void updateUniform(
-        const wgfx::RenderContext& context, GpuBuffer& unibuf, UBO ubo_transforms)
+        const wgfx::GpuContext& context, GpuBuffer& unibuf, UBO ubo_transforms)
     {
         wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBO));
     }
@@ -238,10 +238,10 @@ namespace wgfx
         };
 
         static Texture loadFormData(
-            const RenderContext& ctx, LoadImgResult& data, LoadArgs options);
+            const GpuContext& ctx, LoadImgResult& data, LoadArgs options);
         static Texture loadFormFile(
-            const RenderContext& ctx, const char* filename, LoadArgs options);
-        static void copyImageToTexture(const RenderContext& ctx, WGPUTexture texture, void* pixels,
+            const GpuContext& ctx, const char* filename, LoadArgs options);
+        static void copyImageToTexture(const GpuContext& ctx, WGPUTexture texture, void* pixels,
             WGPUExtent3D size, u32 channels);
     };
 
@@ -273,7 +273,7 @@ namespace wgfx
     WGPUShaderModule shaderFromSrc(WGPUDevice device, const char* src);
 
     WGPUShaderModule reloadShader(
-        vex::TextShaderLib& shader_lib, const RenderContext& context, const char* shader_name);
+        vex::TextShaderLib& shader_lib, const GpuContext& context, const char* shader_name);
 
     enum class ShaderOrigin : u32
     {

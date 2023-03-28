@@ -375,13 +375,13 @@ if (NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/build/bench/${CMAKE_BUILD_TYPE}"
     )  
     # POST BUILD 
-    if (TARGET mylib)
-
+    if (TARGET SDL2)
+        add_custom_command ( TARGET VEXWorkshop POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+             $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXWorkshop>
+        )  
+        message(STATUS "info : copying dlls to exe location ")
     endif()
-    add_custom_command ( TARGET VEXWorkshop POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-         $<TARGET_FILE:SDL2> $<TARGET_FILE_DIR:VEXWorkshop>
-    )  
     add_custom_command(TARGET VEXWorkshop POST_BUILD
        COMMAND ${CMAKE_COMMAND} -E copy_directory 
         ${CMAKE_SOURCE_DIR}/content/ $<TARGET_FILE_DIR:VEXWorkshop>/content/) 
@@ -394,8 +394,8 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang") 
     target_compile_options(VEXWorkshop PRIVATE -Wno-class-conversion)
 endif() 
-get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
-message(STATUS "  include dirs:  ")
-foreach(dir ${dirs})
-    message(STATUS " '${dir}' ")
-endforeach()
+# get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+# message(STATUS "  include dirs:  ")
+# foreach(dir ${dirs})
+#    message(STATUS " '${dir}' ")
+# endforeach()
