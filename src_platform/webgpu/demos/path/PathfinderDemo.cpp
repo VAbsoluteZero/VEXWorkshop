@@ -29,7 +29,6 @@ void Flow::Map1b::fromImage(Flow::Map1b& out, const char* img)
     check_(texture.channel_count == 4);
     const u32 rows = texture.height;
     const u32 cols = texture.width;
-    const u32 byte_len = bytes_per_row * rows;
     u32* data_as_u32 = reinterpret_cast<u32*>(texture.data);
 
     vex::Buffer<u8>& source = out.source;
@@ -129,7 +128,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     }
     // init webgpu stuff
     {
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -150,6 +149,11 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
             "content/shaders/wgsl/flow/flowfield_conv.wgsl", heatmap.storage_buf, init_data.size);
         flow_overlay.init(ctx, wgpu_backend->text_shad_lib, compute_pass.output_buf,
             "content/shaders/wgsl/flow/flowfield_overlay.wgsl");
+
+        part_sys.init(ctx, wgpu_backend->text_shad_lib,
+            ParticleSym::InitArgs{
+                .flow_v2f_buf = &compute_pass.output_buf,
+            });
     }
     // init console variables
     {
@@ -159,6 +163,10 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         opt_show_dbg_overlay.addTo(options);
         opt_allow_diagonal.addTo(options);
         opt_show_numbers.addTo(options);
+        opt_smooth_flow.addTo(options);
+        opt_wallbias_numbers.addTo(options);
+        opt_show_ff_overlay.addTo(options);
+
         defer_till_dtor.emplace_back(
             [&owner]
             {
@@ -168,6 +176,10 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 opt_show_dbg_overlay.removeFrom(options);
                 opt_allow_diagonal.removeFrom(options);
                 opt_show_numbers.removeFrom(options);
+
+                opt_smooth_flow.removeFrom(options);
+                opt_wallbias_numbers.removeFrom(options);
+                opt_show_ff_overlay.removeFrom(options);
             });
     }
     // add input hooks
@@ -181,6 +193,63 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
             },
         },
         true);
+}
+
+
+void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnArgs args)
+{
+    struct
+    {
+        vex::Dict<u32, u32> near;
+        i32 max_len = -1;
+        u32 max_dist = 0;
+        u32 cur_max_dist = 0;
+        void init(v2u32 size, ROSpan<u8> map) {}
+        FORCE_INLINE void setCellDist(u32 cell, u32 dist)
+        {
+            cur_max_dist = cur_max_dist < dist ? dist : cur_max_dist;
+            near.emplace(cell, dist);
+        }
+        FORCE_INLINE auto getCellDist(u32 cell) { return near[cell]; }
+        FORCE_INLINE bool shouldTerminate() const
+        {
+            return (max_len > 0 && near.size() >= max_len) || //
+                   (max_dist >= cur_max_dist);
+        }
+    } client{
+        .near = {32, frame_alloc},
+        .max_len = 37,
+    };
+
+    using Part = ParticleSym::Particle;
+    constexpr i32 num_particles = 80000;
+
+    Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
+
+    const u32 client_len = (u32)client.near.size();
+    vex::Buffer<v2f> cells = {frame_alloc, (i32)client_len};
+    const float sz = map_area.cell_size.x;
+    const v2f orig = map_area.top_left;
+
+    auto cell_cnt_xy = init_data.size;
+    for (auto [k, v] : client.near)
+    {
+        v2i32 cell_xy{k % cell_cnt_xy.x, k / cell_cnt_xy.x};
+        cells.add(orig + v2f(cell_xy.x * sz, -cell_xy.y * sz - sz));
+    }
+
+    vex::Buffer<Part> particles = {frame_alloc, num_particles};
+    particles.addUninitialized(num_particles);
+
+    for (auto i = 0; i < num_particles; ++i)
+    {
+        v2f rand_cell = cells[rng::Rand::randMod(client_len)];
+        volatile float rnd_x = rng::Rand::randFloat01() * sz;
+        volatile float rnd_y = rng::Rand::randFloat01() * sz;
+        particles[i].pos = rand_cell + v2f{rnd_x, rnd_y};
+        particles[i].vel = v2f_zero;
+    }
+    part_sys.spawnForSymulation(ctx, particles.constSpan());
 }
 
 void FlowfieldPF::update(Application& owner)
@@ -207,28 +276,27 @@ void FlowfieldPF::update(Application& owner)
                 spdlog::stopwatch sw;
                 defer_
                 {
-                    SPDLOG_WARN(ICON_CI_WARNING "shaders are realoded, it took: {} seconds", sw);
+                    SPDLOG_WARN(ICON_CI_WARNING "shaders are reloaded, it took: {} seconds", sw);
                 };
-                background.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
-                heatmap.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
-                debug_overlay.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
-                view_grid.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
-                flow_overlay.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
-                compute_pass.reloadShaders(wgpu_backend->text_shad_lib, globals.asContext());
+                auto gctx = globals.asContext();
+                background.reloadShaders(wgpu_backend->text_shad_lib, gctx);
+                heatmap.reloadShaders(wgpu_backend->text_shad_lib, gctx);
+                debug_overlay.reloadShaders(wgpu_backend->text_shad_lib, gctx);
+                view_grid.reloadShaders(wgpu_backend->text_shad_lib, gctx);
+                flow_overlay.reloadShaders(wgpu_backend->text_shad_lib, gctx);
+                compute_pass.reloadShaders(wgpu_backend->text_shad_lib, gctx);
+                part_sys.reloadShaders(wgpu_backend->text_shad_lib, gctx);
                 return true;
             });
     }
     {
-        // compute READS from storage buffer that contains search result
-
+        // #fixme - movable camera
         auto camera = BasicCamera::makeOrtho({0.f, 0.f, -4.0}, {12 * 1.333f, 16}, -10, 10);
-
         camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
         camera.update();
         auto model_view_proj = camera.mtx.projection * camera.mtx.view;
 
         auto& time = owner.getTime();
-
         auto int_sz = init_data.size;
 
         DrawContext draw_args{
@@ -249,6 +317,12 @@ void FlowfieldPF::update(Application& owner)
             auto mpos = camera.normalizedViewToWorld(viewports.imgui_views[0].mouse_pos_normalized);
 
             float r = init_data.size.y / camera.height;
+            float cell_w = camera.height / init_data.size.y;
+            // #fixme rewrite this mess to properly set up size indep. from camera
+            map_area.top_left = v2f{-camera.height, camera.height} * 0.5f;
+            map_area.bot_left = v2f{-camera.height, -camera.height} * 0.5f;
+            map_area.cell_size = {cell_w, cell_w};
+
             v2u32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
             owner.input.ifTriggered("MouseRightHeld"_trig,
                 [&](const input::Trigger& self)
@@ -257,20 +331,29 @@ void FlowfieldPF::update(Application& owner)
                         goal_cell = m_cell;
                     return true;
                 });
+            owner.input.ifTriggered("MouseLeftDown"_trig,
+                [&](const input::Trigger& self)
+                {
+                    if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
+                    {
+                        trySpawningParticlesAtLocation(
+                            wgpu_ctx, {.cell = m_cell, .world_pos = mpos});
+                    }
+                    return true;
+                });
 
             if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
             {
-                // spdlog::stopwatch sw;
-                // defer_ { SPDLOG_WARN(" bfs took approx {} ms", sw.elapsed() / 1ms); };
+                spdlog::stopwatch sw;
+                defer_ { bfs_search_dur_ms = sw.elapsed() / 1ms; };
                 if (draw_args.settings->valueOr(opt_allow_diagonal.key_name, true))
                     Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
                 else
                     Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
-
-                // ImGui::GetMainViewport()->DrawData->CmdLists[0]->AddText
             }
 
             // heatmap WRITES to storage buffer that contains search result
+            // #fixme - restructure whole thing.
             heatmap.draw(wgpu_ctx, draw_args,
                 HeatmapDynamicData{
                     .buffer = processed_map.data.constSpan(),
@@ -278,9 +361,47 @@ void FlowfieldPF::update(Application& owner)
                     .color1 = {0.340f, 0.740f, 0.707f, 1.f},
                     .color2 = {0.930f, 0.400f, 0.223f, 1.f},
                 });
-            compute_pass.compute(wgpu_ctx, ComputeArgs{
-                                               .map_size = int_sz,
-                                           });
+
+            u32 flags_comp = draw_args.settings->valueOr(opt_wallbias_numbers.key_name, false) //
+                             | (2 * draw_args.settings->valueOr(opt_smooth_flow.key_name, false));
+
+            {
+                auto encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
+
+                CompContext compute_ctx{
+                    .device = wgpu_ctx.device,
+                    .encoder = encoder,
+                    .queue = wgpu_ctx.queue,
+                    .comp_pass = wgpuCommandEncoderBeginComputePass(encoder, nullptr),
+                };
+                auto submit_cmp = [](CompContext& ctx) -> void
+                {
+                    WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "compute submit"};
+                    auto cmd_buf = wgpuCommandEncoderFinish(ctx.encoder, &ctx_desc_fin);
+                    wgpuQueueSubmit(ctx.queue, 1, &cmd_buf);
+                    wgpuDeviceTick(ctx.device);
+                };
+
+                compute_pass.compute(compute_ctx, ComputeArgs{
+                                                      .map_size = int_sz,
+                                                      .flags = flags_comp,
+                                                  });
+
+                submit_cmp(compute_ctx);
+
+                compute_ctx.encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
+                compute_ctx.comp_pass = wgpuCommandEncoderBeginComputePass(
+                    compute_ctx.encoder, nullptr);
+                part_sys.compute(compute_ctx, ParticleSym::CompArgs{
+                                                  .bounds = int_sz,
+                                                  .grid_min = map_area.bot_left,
+                                                  .grid_size = {camera.height, camera.height},
+                                                  .cell_size = map_area.cell_size,
+                                                  .time = (float)time.unscaled_runtime,
+                                                  .dt = time.delta_time_f32,
+                                              });
+                submit_cmp(compute_ctx);
+            }
 
             if (draw_args.settings->valueOr(opt_show_dbg_overlay.key_name, false))
             {
@@ -292,12 +413,15 @@ void FlowfieldPF::update(Application& owner)
                         .color2 = {0.930f, 0.400f, 0.223f, 1.f},
                     });
             }
+            if (draw_args.settings->valueOr(opt_show_ff_overlay.key_name, false))
+            {
+                flow_overlay.draw(wgpu_ctx, draw_args, {.bounds = int_sz});
+            }
 
             background.draw(wgpu_ctx, draw_args);
-        }
-        { // draw GRID
-            flow_overlay.draw(wgpu_ctx, draw_args, {.bounds = int_sz});
+
             view_grid.draw(wgpu_ctx, draw_args);
+            part_sys.draw(wgpu_ctx, draw_args, {.bounds = init_data.size});
         }
         // SUBMIT
         viewport.finishAndSubmit();
@@ -332,21 +456,29 @@ void FlowfieldPF::drawUI(Application& owner)
     }
     ui.drawStandardUI(owner, &viewports);
     // add items to top bar
-    if ((viewports.imgui_views.size() > 1) && ImGui::BeginMainMenuBar())
+    // if ((viewports.imgui_views.size() > 1) && ImGui::BeginMainMenuBar())
+    //{
+    //    defer_ { ImGui::EndMainMenuBar(); };
+    //    if (ImGui::BeginMenu("View"))
+    //    {
+    //        defer_ { ImGui::EndMenu(); };
+    //        ImGui::MenuItem("Debug Viewport", nullptr, &viewports.imgui_views[1].gui_enabled);
+    //        ImGui::Separator();
+    //    }
+    //}
+    if (ImGui::BeginMainMenuBar())
     {
         defer_ { ImGui::EndMainMenuBar(); };
-        if (ImGui::BeginMenu("View"))
-        {
-            defer_ { ImGui::EndMenu(); };
-            ImGui::MenuItem("Debug Viewport", nullptr, &viewports.imgui_views[1].gui_enabled);
-            ImGui::Separator();
-        }
+        ImGui::Bullet();
+        float bfs_time = (float)bfs_search_dur_ms;
+        ImGui::Text(" bfs: %.3f ms", bfs_search_dur_ms);
     }
 
     auto& options = owner.getSettings();
     if (ImGui::Begin(ids::main_vp_name))
     {
-        if (options.valueOr(opt_show_numbers.key_name, false) && processed_map.size.x > 0)
+        if (options.valueOr(opt_show_numbers.key_name, false) && processed_map.size.x > 0 &&
+            processed_map.size.x < 65) // messy on large map. #fixme test for visible size instead
         {
             const ImColor color = ImColor(1.0f, 1.0f, 1.0f, 1.0f);
             ImDrawList* dlist = ImGui::GetWindowDrawList();
@@ -371,6 +503,7 @@ void FlowfieldPF::drawUI(Application& owner)
             }
         }
 
+        // move diagonally toggle
         auto is_diag_move_allowed = options.settings.find(opt_allow_diagonal.key_name);
         if (is_diag_move_allowed && is_diag_move_allowed->value.getValueOr<bool>(true))
         {
@@ -382,7 +515,19 @@ void FlowfieldPF::drawUI(Application& owner)
             if (ImGui::Button(ICON_CI_DIFF_IGNORED " enable diagonal movement##pf_show_overlay"))
                 is_diag_move_allowed->value.set<bool>(true);
         }
-
+        // flow toggle
+        auto is_ff_overlay_active = options.settings.find(opt_show_ff_overlay.key_name);
+        if (is_ff_overlay_active && is_ff_overlay_active->value.getValueOr<bool>(false))
+        {
+            if (ImGui::Button(ICON_CI_DIFF_MODIFIED " disable fields overlay##pf_hide_overlay"))
+                is_ff_overlay_active->value.set<bool>(false);
+        }
+        else if (is_ff_overlay_active)
+        {
+            if (ImGui::Button(ICON_CI_DIFF_RENAMED " enable fields overlay##pf_show_overlay"))
+                is_ff_overlay_active->value.set<bool>(true);
+        }
+        // neighbors toggle
         auto should_show_overlay_opt = options.settings.find(opt_show_dbg_overlay.key_name);
         if (should_show_overlay_opt && should_show_overlay_opt->value.getValueOr<bool>(false))
         {
@@ -395,7 +540,7 @@ void FlowfieldPF::drawUI(Application& owner)
                 should_show_overlay_opt->value.set<bool>(true);
         }
 
-        if (ImGui::Button(ICON_CI_SETTINGS " presentation##pf_show_options"))
+        if (ImGui::Button(ICON_CI_SETTINGS " settings##pf_show_options"))
             gui_options.options_shown = !gui_options.options_shown;
         if (gui_options.options_shown)
         {
@@ -437,11 +582,11 @@ void FlowfieldPF::drawUI(Application& owner)
                     },
                     [&](v4f& a)
                     {
-                        //ImGui::BeginChild("Color picker");
+                        // ImGui::BeginChild("Color picker");
                         ImGui::TextUnformatted("GridColor");
-                        ImGui::SetNextItemWidth(256); 
+                        ImGui::SetNextItemWidth(256);
                         ImGui::ColorPicker4("##GridColor", (float*)&a.x);
-                        //ImGui::EndChild();
+                        // ImGui::EndChild();
                     });
             }
         }

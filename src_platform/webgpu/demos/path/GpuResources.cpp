@@ -422,58 +422,27 @@ void vex::flow::ComputeFields::init(const wgfx::GpuContext& ctx, const TextShade
     bind_group = binding;
 }
 
-void vex::flow::ComputeFields::compute(const wgfx::GpuContext& ctx, const ComputeArgs& args)
+void vex::flow::ComputeFields::compute(wgfx::CompContext& ctx, const ComputeArgs& args)
 { //
-    WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "compute submit"};
-
-    auto encoder = wgpuDeviceCreateCommandEncoder(ctx.device, nullptr);
-    auto compute_pass = wgpuCommandEncoderBeginComputePass(encoder, nullptr);
-    wgpuComputePassEncoderSetPipeline(compute_pass, pipeline);
-    wgpuComputePassEncoderSetBindGroup(compute_pass, 0, bind_group, 0, nullptr);
-
-    UBO vbo{.size = args.map_size};
+    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, pipeline);
+    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, bind_group, 0, nullptr);
+    UBO vbo{
+        .size = args.map_size,
+        .flags = args.flags,
+    };
     updateUniform(ctx, uniform_buf, vbo);
 
     const auto work_size = args.map_size.x * args.map_size.y;
     check_((work_size % 64) == 0);
 
-    wgpuComputePassEncoderDispatchWorkgroups(compute_pass, work_size / 64, 1, 1);
+    u32 num_groups = (work_size / (64 * 32));
 
-    wgpuComputePassEncoderEnd(compute_pass);
-    WGPU_REL(ComputePassEncoder, compute_pass);
-    // vex::Buffer<v2f> dbg;
-    // dbg.addZeroed(work_size);
+    wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
 
+    wgpuComputePassEncoderEnd(ctx.comp_pass);
+    WGPU_REL(ComputePassEncoder, ctx.comp_pass);
     wgpuCommandEncoderCopyBufferToBuffer(
-        encoder, output_buf.buffer, 0, staging_buf.buffer, 0, staging_buf.desc.size);
-
-    auto cmd_buf = wgpuCommandEncoderFinish(encoder, &ctx_desc_fin);
-    wgpuQueueSubmit(ctx.queue, 1, &cmd_buf);
-
-    if constexpr (false)
-    {
-        std::atomic_bool sync_ready = ATOMIC_VAR_INIT(false);
-        spdlog::stopwatch sw;
-        wgpuRequest(
-            wgpuBufferMapAsync,
-            [&, sw](WGPUBufferMapAsyncStatus status, void*)
-            {
-                defer_ { SPDLOG_WARN(" mapping took approx {} microsec", sw.elapsed() / 1us); };
-                if (status == 0)
-                {
-                    auto mapped_data = (f32*)wgpuBufferGetConstMappedRange(
-                        staging_buf.buffer, 0, staging_buf.desc.size);
-                    wgpuBufferUnmap(staging_buf.buffer);
-                }
-                sync_ready = true;
-            },
-            staging_buf.buffer, WGPUMapMode_Read, 0, staging_buf.desc.size);
-
-        wgpuQueueSubmit(ctx.queue, 0, nullptr);
-        wgpuPollWait(ctx, sync_ready, -1);
-    }
-
-    wgpuDeviceTick(ctx.device);
+        ctx.encoder, output_buf.buffer, 0, staging_buf.buffer, 0, staging_buf.desc.size);
 }
 
 bool vex::flow::ComputeFields::reloadShaders(
@@ -539,7 +508,7 @@ void vex::flow::FlowFieldsOverlay::draw(
     const float cell_h = (draw_ctx.camera_h / args.bounds.y);
     const float cell_w = cell_h;
     const v2f arrow_size = {cell_h * 0.2, cell_h};
-    //const v2f orig_loc_space = { cell_h * 0.2, cell_h };
+    // const v2f orig_loc_space = { cell_h * 0.2, cell_h };
 
     UBOHeatMap vbo{
         .camera_vp = draw_ctx.camera_mvp,
@@ -579,4 +548,217 @@ bool vex::flow::FlowFieldsOverlay::reloadShaders(
     check_(pipeline);
 
     return true;
+}
+
+void vex::flow::ParticleSym::spawnForSymulation(const wgfx::GpuContext& ctx, ROSpan<Particle> parts)
+{
+    sym_data.num_particles = parts.len;
+    wgpuQueueWriteBuffer(
+        ctx.queue, sym_data.particle_data_buf.buffer, 0, (u8*)parts.data, parts.byteSize());
+}
+
+void vex::flow::ParticleSym::init(
+    const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib, InitArgs args)
+{
+    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
+    // init compute
+    {
+        defer_ { temp_alloc_resource.reset(); };
+
+        sym_data.shader = args.shader_compute;
+
+        auto* src = text_shad_lib.shad_src.find(sym_data.shader);
+        if (!checkAlwaysRel(src, "shader not found"))
+            return;
+        WGPUShaderModule shad = shaderFromSrc(ctx.device, src->text.c_str());
+
+        sym_data.uniform_buf = GpuBuffer::create(
+            ctx.device, {
+                            .label = "ps uni buf",
+                            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+                            .size = sizeof(ComputeUBO),
+                        });
+        sym_data.particle_data_buf = GpuBuffer::create(
+            ctx.device, {
+                            .label = "particle buf",
+                            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Storage,
+                            .size = (u32)(args.max_particles * sizeof(Particle)),
+                        });
+
+        checkLethal(args.flow_v2f_buf != nullptr, "passed nullptr instead of input buffer");
+
+        auto [layout, binding] =
+            BGLCombinedBuilder{.al = tmp_alloc} //
+                .addUniform(sizeof(ComputeUBO), sym_data.uniform_buf, 0, WGPUShaderStage_Compute)
+                .addStorageBuffer(256, sym_data.particle_data_buf, WGPUShaderStage_Compute, false)
+                .addStorageBuffer(256, *(args.flow_v2f_buf), WGPUShaderStage_Compute, true)
+                .createLayoutAndGroup(ctx.device);
+
+        sym_data.bgl_layout = layout;
+        sym_data.pipeline = sym_data.pipeline_data.createPipeline(ctx, shad, layout);
+        sym_data.bind_group = binding;
+    }
+    // init visual
+    {
+        defer_ { temp_alloc_resource.reset(); };
+        auto texture = loadImage(args.particle_texture);
+        defer_ { texture.release(); };
+
+        auto bg_tex = Texture::loadFormData(ctx, texture,
+            {
+                .usage = (WGPUTextureUsage_CopyDst | WGPUTextureUsage_TextureBinding),
+            });
+        check_(bg_tex.isValid());
+        vis_data.tex_view = TextureView::create(ctx.device, bg_tex, {});
+
+
+        vis_data.shader = args.shader_visual;
+
+        auto* src = text_shad_lib.shad_src.find(vis_data.shader);
+        if (!checkAlwaysRel(src, "shader not found"))
+            return;
+        WGPUShaderModule shad = shaderFromSrc(ctx.device, src->text.c_str());
+
+        vis_data.uniform_buf = GpuBuffer::create(
+            ctx.device, {
+                            .label = "particles uni buf",
+                            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+                            .size = sizeof(VisualUBO),
+                        });
+
+        auto [layout, binding] = BGLCombinedBuilder{.al = tmp_alloc} //
+                                     .addUniform(sizeof(VisualUBO), vis_data.uniform_buf, 0,
+                                         WGPUShaderStage_Fragment | WGPUShaderStage_Vertex)
+                                     .addStorageBuffer(256, sym_data.particle_data_buf,
+                                         WGPUShaderStage_Fragment | WGPUShaderStage_Vertex)
+                                     .addTexView(vis_data.tex_view.view)
+                                     .addSampler(vis_data.tex_view.sampler)
+                                     .createLayoutAndGroup(ctx.device);
+
+        vis_data.bgl_layout = layout;
+        WGPUBlendState bl_state{
+            .color =
+                {
+                    .operation = WGPUBlendOperation_Add,
+                    .srcFactor = WGPUBlendFactor_SrcAlpha,
+                    .dstFactor = WGPUBlendFactor_One,
+                },
+            .alpha =
+                {
+                    .operation = WGPUBlendOperation_Add,
+                    .srcFactor = WGPUBlendFactor_Zero,
+                    .dstFactor = WGPUBlendFactor_One,
+                },
+        };
+
+        vis_data.pipeline_data.color_target_state.blend = &bl_state;
+
+        vis_data.pipeline_data.depth_stencil_state.depthWriteEnabled = false;
+        vis_data.pipeline_data.depth_stencil_state.depthCompare = WGPUCompareFunction_Always;
+
+        vis_data.pipeline_data.setShader(shad);
+        vis_data.pipeline_data.vert_state.bufferCount = 0;
+        vis_data.pipeline_data.vert_state.buffers = nullptr;
+        vis_data.pipeline = vis_data.pipeline_data.createPipeline(ctx, layout);
+        vis_data.bind_group = binding;
+    }
+}
+
+void vex::flow::ParticleSym::compute(wgfx::CompContext& ctx, CompArgs args)
+{
+    defer_
+    {
+        wgpuComputePassEncoderEnd(ctx.comp_pass);
+        WGPU_REL(ComputePassEncoder, ctx.comp_pass);
+    };
+    if (sym_data.num_particles < 1)
+        return;
+    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.pipeline);
+    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
+    ComputeUBO vbo{
+        .bounds = args.bounds,
+        .grid_min = args.grid_min,
+        .grid_size = args.grid_size,
+        .cell_size = args.cell_size,
+        .num_particles = sym_data.num_particles,
+        .delta_time = args.dt,
+    };
+    updateUniform(ctx, sym_data.uniform_buf, vbo);
+
+    const auto work_size = sym_data.num_particles;
+    u32 num_groups = (work_size / 64) + 1; //(work_size / (64 * 32));
+
+    wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
+}
+
+void vex::flow::ParticleSym::draw(
+    const wgfx::GpuContext& ctx, const DrawContext& draw_ctx, DrawArgs args)
+{
+    if (sym_data.num_particles < 1)
+        return;
+    const float cell_h = (draw_ctx.camera_h / args.bounds.y);
+    const float cell_w = cell_h;
+
+    VisualUBO vbo{
+        .camera_vp = draw_ctx.camera_mvp,
+        .color1 = Color::magenta(),
+        .color2 = Color::green(),
+        .size = {cell_w * 0.103f, cell_w * 0.103f, 1, 1},
+    };
+    updateUniform(ctx, vis_data.uniform_buf, vbo);
+    {
+        auto rpass_enc = ctx.render_pass;
+        wgpuRenderPassEncoderPushDebugGroup(rpass_enc, "draw particles");
+        wgpuRenderPassEncoderSetPipeline(rpass_enc, vis_data.pipeline);
+        wgpuRenderPassEncoderSetBindGroup(rpass_enc, 0, vis_data.bind_group, 0, 0);
+
+        wgpuRenderPassEncoderDraw(rpass_enc, sym_data.num_particles * 6, 1, 0, 0);
+        wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
+    }
+}
+
+bool vex::flow::ParticleSym::reloadShaders(
+    vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context)
+{
+    {
+        WGPUShaderModule shader = reloadShader(shader_lib, context, sym_data.shader);
+        if (!shader)
+            return false;
+
+        WGPU_REL(ComputePipeline, sym_data.pipeline);
+        sym_data.pipeline = sym_data.pipeline_data.createPipeline(
+            context, shader, sym_data.bgl_layout);
+        check_(sym_data.pipeline);
+
+        return true;
+    }
+    {
+        WGPUShaderModule shad_vert_frag = reloadShader(shader_lib, context, vis_data.shader);
+        if (!shad_vert_frag)
+            return false;
+
+        vis_data.pipeline_data.vert_state.module = shad_vert_frag;
+        vis_data.pipeline_data.frag_state.module = shad_vert_frag;
+        vis_data.pipeline_data.pipeline_desc.vertex = vis_data.pipeline_data.vert_state;
+        vis_data.pipeline_data.pipeline_desc.fragment = &vis_data.pipeline_data.frag_state;
+
+        WGPU_REL(RenderPipeline, vis_data.pipeline);
+        vis_data.pipeline = vis_data.pipeline_data.createPipeline(context, vis_data.bgl_layout);
+        check_(vis_data.pipeline);
+
+        return true;
+    }
+    return true;
+}
+
+void vex::flow::ParticleSym::release()
+{ //
+    SPDLOG_ERROR("#fixme - add release");
+}
+
+bool vex::flow::ParticleSym::isValid() const
+{ //
+    SPDLOG_ERROR("#fixme - add isValid");
+    return false;
 }

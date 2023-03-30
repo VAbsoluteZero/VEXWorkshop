@@ -50,7 +50,7 @@ namespace vex::flow
     struct ViewportGrid
     {
         static constexpr const char* grid_shader_file = "content/shaders/wgsl/grid.wgsl";
-        wgfx::GpuBuffer vtx_buf; 
+        wgfx::GpuBuffer vtx_buf;
         wgfx::GpuBuffer idx_buf;
         wgfx::GpuBuffer uniform_buf;
         WGPUBindGroup bind_group;
@@ -58,7 +58,7 @@ namespace vex::flow
         wgfx::SimplePipeline<PosNormUv> pipeline_data; // needed for reload
         WGPUBindGroupLayout bgl_layout;
         WGPURenderPipeline pipeline;
-         
+
         void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib);
 
         void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx);
@@ -200,17 +200,21 @@ namespace vex::flow
     struct ComputeArgs
     {
         v2u32 map_size{0, 0};
+        u32 flags = 0;
+        u32 flags2 = 0;
     };
     struct ComputeFields
     {
         struct UBO
         {
             v2u32 size;
+            u32 flags = 0;
+            u32 dummy = 0;
         };
-        struct ComputeContext
-        {
-            WGPUDevice device = nullptr;
-        };
+        // struct ComputeContext
+        //{
+        //     WGPUDevice device = nullptr;
+        // };
         const char* cf_shader_file = "content/shaders/wgsl/flow/flowfield_conv.wgsl";
 
         wgfx::GpuBuffer uniform_buf;
@@ -225,7 +229,7 @@ namespace vex::flow
         void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib,
             const char* in_shader_file, wgfx::GpuBuffer& map_data_buf, v2u32 size);
 
-        void compute(const wgfx::GpuContext& ctx, const ComputeArgs& args);
+        void compute(wgfx::CompContext& ctx, const ComputeArgs& args);
 
         bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
 
@@ -245,7 +249,7 @@ namespace vex::flow
         }
     };
     struct OverlayData
-    { 
+    {
         v2u32 bounds;
         v4f color1;
         v4f color2;
@@ -272,5 +276,95 @@ namespace vex::flow
             uniform_buf.release();
         }
         bool isValid() const { return uniform_buf.isValid() && bind_group && pipeline; }
+    };
+
+    struct ParticleSym
+    {
+        struct Particle
+        {
+            v2f pos;
+            v2f vel;
+        };
+        struct
+        {
+            const char* shader = nullptr;
+            wgfx::GpuBuffer uniform_buf;
+            wgfx::GpuBuffer particle_data_buf;
+            WGPUBindGroup bind_group;
+
+            wgfx::ComputePipeline pipeline_data;
+            WGPUBindGroupLayout bgl_layout;
+            WGPUComputePipeline pipeline;
+
+            u32 num_particles = 0;
+        } sym_data;
+
+        struct
+        {
+            const char* shader = nullptr;
+            wgfx::TextureView tex_view;
+
+            WGPUBindGroup bind_group;
+            wgfx::GpuBuffer uniform_buf;
+            wgfx::SimplePipeline<wgfx::EmptyVertex> pipeline_data;
+            WGPUBindGroupLayout bgl_layout;
+            WGPURenderPipeline pipeline;
+        } vis_data;
+
+        struct InitArgs
+        {
+            const char* shader_compute = "content/shaders/wgsl/flow/flowfield_ps_sym.wgsl";
+            const char* shader_visual = "content/shaders/wgsl/flow/flowfield_ps_quad_vf.wgsl";
+            const char* particle_texture = "content/sprites/flow/particle.png";
+            wgfx::GpuBuffer* flow_v2f_buf = nullptr;
+            u32 max_particles = 200'000;
+        };
+        struct VisualUBO
+        {
+            mtx4 camera_vp;
+            v4f color1;
+            v4f color2;
+            v4f size;
+            u32 flags;
+            u32 padding[4];
+        };
+
+        void spawnForSymulation(const wgfx::GpuContext& ctx, ROSpan<Particle> parts);
+
+        void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib, InitArgs args);
+
+        struct CompArgs
+        {
+            v2u32 bounds{};
+            v2f grid_min{};
+            v2f grid_size{};
+            v2f cell_size{};
+            float time = 0;
+            float dt = 0;
+        };
+        struct ComputeUBO
+        {
+            v2u32 bounds{};
+            v2f grid_min{};
+            v2f grid_size{};
+            v2f cell_size{};
+            u32 num_particles = 0;
+            f32 speed_base = 1.25f;
+            f32 radius = 0.01f;
+            f32 delta_time = 0.01f;
+            u32 flags = 0;
+            u32 padding[4];
+        };
+        void compute(wgfx::CompContext& ctx, CompArgs args);
+        struct DrawArgs
+        {
+            v2u32 bounds;
+        };
+        void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx, DrawArgs args);
+
+        bool reloadShaders(vex::TextShaderLib& shader_lib, const wgfx::GpuContext& context);
+
+        void release();
+        bool isValid() const;
     };
 } // namespace vex::flow

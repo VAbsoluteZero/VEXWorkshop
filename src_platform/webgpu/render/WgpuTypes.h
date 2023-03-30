@@ -83,6 +83,18 @@ namespace wgfx
             WGPU_REL(CommandEncoder, encoder);
         };
     };
+    struct CompContext
+    {
+        WGPUDevice device = nullptr;
+        WGPUCommandEncoder encoder = nullptr;
+        WGPUQueue queue = nullptr;
+        WGPUComputePassEncoder comp_pass = nullptr;
+
+        void release(bool release_view = false)
+        { 
+            WGPU_REL(CommandEncoder, encoder);
+        };
+    };
 
     struct Globals
     {
@@ -95,8 +107,8 @@ namespace wgfx
         WGPUSwapChain swap_chain = nullptr;
         WGPUTextureFormat main_texture_fmt{};
 
-        WGPUPipelineLayout debug_layout = nullptr;
-        WGPURenderPipeline debug_pipeline = nullptr;
+        //WGPUPipelineLayout debug_layout = nullptr;
+        //WGPURenderPipeline debug_pipeline = nullptr;
 
         auto isValid() const -> bool;
         void release();
@@ -191,9 +203,9 @@ namespace wgfx
         void release() { WGPU_REL(Buffer, buffer); }
     };
 
-    template <typename UBO>
+    template <typename CTX, typename UBO>
     static void updateUniform(
-        const wgfx::GpuContext& context, GpuBuffer& unibuf, UBO ubo_transforms)
+        const CTX& context, GpuBuffer& unibuf, UBO ubo_transforms)
     {
         wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBO));
     }

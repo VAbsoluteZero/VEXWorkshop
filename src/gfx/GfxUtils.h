@@ -6,7 +6,7 @@
 
 #include <span>
 #ifdef NDEBUG
-    #define VEX_SHADER_CONTENT_ROOT "../../"
+    #define VEX_SHADER_CONTENT_ROOT "../../../"
 #else
     #define VEX_SHADER_CONTENT_ROOT "../../../"
 #endif

@@ -6,7 +6,7 @@
 #include <webgpu/demos/ViewportHandler.h>
 #include <webgpu/render/WgpuApp.h>
 
-#include "GpuResources.h" 
+#include "GpuResources.h"
 
 namespace vex::flow
 {
@@ -24,6 +24,12 @@ namespace vex::flow
         .default_val = false,
         .flags = 0,
     };
+    static inline const auto opt_show_ff_overlay = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.FlowDirOverlay",
+        .info = "Show or hide flow field overlay",
+        .default_val = true,
+        .flags = 0,
+    };
     static inline const auto opt_allow_diagonal = SettingsContainer::EntryDesc<bool>{
         .key_name = "pf.AllowDiagonalMovement",
         .info = "Show or hide overlay that shows number of neighbors",
@@ -31,8 +37,20 @@ namespace vex::flow
         .flags = 0,
     };
     static inline const auto opt_show_numbers = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.ShowCost",
+        .key_name = "pf.ShowCostOnSmallMaps",
         .info = "Show or hide movement cost",
+        .default_val = false,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_wallbias_numbers = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.WallBias",
+        .info = "Walls will push flow vectors away a bit",
+        .default_val = true,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_smooth_flow = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.FlowFieldSmoothing",
+        .info = "Will run smoothing pass on flow field vectors",
         .default_val = true,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
@@ -80,7 +98,7 @@ namespace vex::flow
         {
             static void fromImage(Flow::Map1b& out, const char* img);
             // neighbors as bitmask, starting at 1 as Top and going clockwise (e.g.
-            // top+right:00000101 zero means blocked
+            // top+right => 00000101. zero means blocked, one - valid neighbor
             vex::Buffer<u8> source;
             vex::Buffer<u8> matrix;       // neighbor matrix
             vex::Buffer<u32> debug_layer; // 1st byte is the same as in matrix
@@ -103,21 +121,6 @@ namespace vex::flow
         inline static void gridSyncBFS(Args args, const Map1b& grid, ProcessedData& out)
         {
             constexpr u8 diag_mask = allow_diagonal ? 0xff : 0b01010101;
-            struct OffsetTableVal
-            {
-                i16 mul = 0;
-                i16 offset = 0;
-            };
-            // struct
-            vex::StaticRing<i32, 2024, true> frontier;
-            out.size = grid.size;
-            out.data.reserve(grid.size.x * grid.size.y);
-            out.data.len = 0;
-            for (u8 c : grid.source)
-                out.data.add(c ? 0 : ~ProcessedData::dist_mask);
-
-            [[maybe_unused]] u32 iter = 0;
-
             const i32 neighbor_offsets[8] = {
                 // only 4 would be used in case grid does not allow diag move
                 -(i32)grid.size.x + 0, // top (CW sart)
@@ -129,6 +132,16 @@ namespace vex::flow
                 /*same row      */ -1, // left
                 -(i32)grid.size.x - 1, // top-left
             };
+            // struct
+            vex::StaticRing<i32, 2024, true> frontier;
+            out.size = grid.size;
+            out.data.reserve(grid.size.x * grid.size.y);
+            out.data.len = 0;
+            for (u8 c : grid.source)
+                out.data.add(c ? 0 : ~ProcessedData::dist_mask);
+
+            [[maybe_unused]] u32 iter = 0;
+
 
             const auto start_cell = args.start.y * grid.size.x + args.start.x;
             frontier.push(start_cell);
@@ -138,19 +151,65 @@ namespace vex::flow
             while (frontier.size() > 0)
             {
                 i32 current = (i32)frontier.dequeueUnchecked();
-                const u8 cell = grid.cellMask(current)  & diag_mask;
+                const u8 cell = grid.cellMask(current) & diag_mask;
                 u32 dist_so_far = out[current];
-                for (u8 i = 0; (i < 8) && cell; ++i) 
+                for (u8 i = 0; (i < 8) && cell; ++i)
                 {
                     u8 cur_i = ((cell & (1u << i)) > 0);
                     if (cur_i)
                     {
-                        u32 next = current + neighbor_offsets[i]; 
+                        u32 next = current + neighbor_offsets[i];
                         // checkAlways_(next < grid.size.x * grid.size.y);
                         bool visited = (out.at(next) & dist_mask) > 0;
                         if (visited || (next == start_cell))
                             continue;
                         out[next] |= dist_so_far + 1; // add diagonal cost
+                        frontier.push(next);
+                    }
+                }
+            }
+        }
+
+        template <typename Client, bool allow_diagonal = false>
+        inline static void gridSyncBFSWithClient(Args args, const Map1b& grid, Client& client)
+        {
+            constexpr u8 diag_mask = allow_diagonal ? 0xff : 0b01010101;
+            const i32 neighbor_offsets[8] = {
+                // only 4 would be used in case grid does not allow diag move
+                -(i32)grid.size.x + 0, // top (CW sart)
+                -(i32)grid.size.x + 1, // top-right
+                /*same row       */ 1, // right
+                +(i32)grid.size.x + 1, // bot-right
+                +(i32)grid.size.x + 0, // bot
+                +(i32)grid.size.x - 1, // bot-left
+                /*same row      */ -1, // left
+                -(i32)grid.size.x - 1, // top-left
+            };
+            vex::StaticRing<i32, 2024, true> frontier;
+            client.init(grid.size, grid.source.constSpan());
+
+            const auto start_cell = args.start.y * grid.size.x + args.start.x;
+            frontier.push(start_cell);
+            client.setCellDist(start_cell, 0);
+
+            constexpr auto dist_mask = ProcessedData::dist_mask;
+            while (frontier.size() > 0)
+            {
+                i32 current = (i32)frontier.dequeueUnchecked();
+                const u8 cell = grid.cellMask(current) & diag_mask;
+                u32 dist_so_far = client.getCellDist(current);
+                for (u8 i = 0; (i < 8) && cell; ++i)
+                {
+                    u8 cur_i = ((cell & (1u << i)) > 0);
+                    if (cur_i)
+                    {
+                        u32 next = current + neighbor_offsets[i];
+                        bool visited = client.getCellDist(next) > 0;
+                        if (visited || (next == start_cell))
+                            continue;
+                        client.setCellDist(next, dist_so_far + 1);
+                        if (client.shouldTerminate())
+                            return;
                         frontier.push(next);
                     }
                 }
@@ -172,8 +231,12 @@ namespace vex::flow
         virtual ~FlowfieldPF();
 
     private:
-        // void drawMainViewport(Application& owner);
-        // void drawDebugViewport(Application& owner);
+        struct SpawnArgs
+        {
+            v2u32 cell;
+            v3f world_pos;
+        };
+        void trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnArgs args);
 
         wgfx::ui::ViewportHandler viewports;
         wgfx::ui::BasicDemoUI ui;
@@ -193,14 +256,23 @@ namespace vex::flow
 
         ComputeFields compute_pass;
         FlowFieldsOverlay flow_overlay;
+        ParticleSym part_sys;
 
         WebGpuBackend* wgpu_backend = nullptr;
 
-        v2u32 goal_cell = { 10, 10 };
+        v2u32 goal_cell = {10, 10};
+        double bfs_search_dur_ms = 0;
 
         struct
         {
-            v4f grid_color = Color::gray();
+            v2f top_left{};
+            v2f bot_left{};
+            v2f center{0, 0};
+            v2f cell_size{};
+        } map_area;
+
+        struct
+        {
             bool options_shown = false;
         } gui_options;
 
