@@ -51,7 +51,7 @@ namespace wgfx::ui
 
         void add(const wgfx::GpuContext& wgpu_ctx, vex::ViewportOptions options);
         void draw();
-        void update(v2i32 wnd_mouse_pos);
+        void updateMouseLoc(v2i32 wnd_mouse_pos);
         void postFrame();
 
         void release()

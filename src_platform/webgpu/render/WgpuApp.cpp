@@ -68,7 +68,7 @@ struct WgpuRenderInterface
                 SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
                 
                 check_(false);  
-            }; 
+            };  
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
               

@@ -593,11 +593,14 @@ void vex::flow::ParticleSym::init(
                 .addUniform(sizeof(ComputeUBO), sym_data.uniform_buf, 0, WGPUShaderStage_Compute)
                 .addStorageBuffer(256, sym_data.particle_data_buf, WGPUShaderStage_Compute, false)
                 .addStorageBuffer(256, *(args.flow_v2f_buf), WGPUShaderStage_Compute, true)
+                .addStorageBuffer(256, *(args.cells_buf), WGPUShaderStage_Compute, true)
                 .createLayoutAndGroup(ctx.device);
 
         sym_data.bgl_layout = layout;
-        sym_data.pipeline = sym_data.pipeline_data.createPipeline(ctx, shad, layout);
+        sym_data.move_pipeline = sym_data.move_pipeline_data.createPipeline(ctx, shad, layout);
         sym_data.bind_group = binding;
+
+        sym_data.solve_pipeline = sym_data.solve_pipeline_data.createPipeline(ctx, shad, layout);
     }
     // init visual
     {
@@ -674,14 +677,13 @@ void vex::flow::ParticleSym::compute(wgfx::CompContext& ctx, CompArgs args)
     };
     if (sym_data.num_particles < 1)
         return;
-    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.pipeline);
-    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
     ComputeUBO vbo{
         .bounds = args.bounds,
         .grid_min = args.grid_min,
         .grid_size = args.grid_size,
         .cell_size = args.cell_size,
         .num_particles = sym_data.num_particles,
+        .radius = 0.1f, // #fixme one constant
         .delta_time = args.dt,
     };
     updateUniform(ctx, sym_data.uniform_buf, vbo);
@@ -689,7 +691,17 @@ void vex::flow::ParticleSym::compute(wgfx::CompContext& ctx, CompArgs args)
     const auto work_size = sym_data.num_particles;
     u32 num_groups = (work_size / 64) + 1; //(work_size / (64 * 32));
 
+    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.solve_pipeline);
+    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
     wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
+
+    static bool dbg = true; 
+    if (dbg)
+    {
+        wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.move_pipeline);
+        wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
+        wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
+    }
 }
 
 void vex::flow::ParticleSym::draw(
@@ -702,9 +714,9 @@ void vex::flow::ParticleSym::draw(
 
     VisualUBO vbo{
         .camera_vp = draw_ctx.camera_mvp,
-        .color1 = Color::magenta(),
-        .color2 = Color::green(),
-        .size = {cell_w * 0.103f, cell_w * 0.103f, 1, 1},
+        .color1 = Color::green(),
+        .color2 = Color::red(),
+        .size = {cell_w * 0.2f, cell_w * 0.2f, 1, 1},
     };
     updateUniform(ctx, vis_data.uniform_buf, vbo);
     {
@@ -726,10 +738,16 @@ bool vex::flow::ParticleSym::reloadShaders(
         if (!shader)
             return false;
 
-        WGPU_REL(ComputePipeline, sym_data.pipeline);
-        sym_data.pipeline = sym_data.pipeline_data.createPipeline(
+        WGPU_REL(ComputePipeline, sym_data.move_pipeline);
+        sym_data.move_pipeline = sym_data.move_pipeline_data.createPipeline(
             context, shader, sym_data.bgl_layout);
-        check_(sym_data.pipeline);
+        check_(sym_data.move_pipeline);
+
+
+        WGPU_REL(ComputePipeline, sym_data.solve_pipeline);
+        sym_data.solve_pipeline = sym_data.solve_pipeline_data.createPipeline(
+            context, shader, sym_data.bgl_layout);
+        check_(sym_data.solve_pipeline);
 
         return true;
     }

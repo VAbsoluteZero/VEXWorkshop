@@ -42,13 +42,13 @@ const bot_r: u32 = 7u;
 // 1.00001 mult is for selection bias to avoid vectors canceling out
 const vecs: array<v2f, 8> = array<v2f, 8>( 
     v2f(-1, 1), // top-left
-    v2f(0, 1)*1.00001, // top (CW sart)
-    v2f(1, 1)*1.00001, // top-right
+    v2f(0, 1), // top (CW sart)
+    v2f(1, 1), // top-right
     v2f(-1, 0), // left
-    v2f(1, 0)*1.00001, // right
+    v2f(1, 0), // right
     v2f(-1, -1), // bot-left
-    v2f(0, -1) *1.00001, // bot
-    v2f(1, -1)*1.00001, // bot-right
+    v2f(0, -1) , // bot
+    v2f(1, -1), // bot-right
 );
 
 override disabled:bool = false;

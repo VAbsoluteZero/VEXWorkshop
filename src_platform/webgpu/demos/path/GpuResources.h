@@ -292,9 +292,16 @@ namespace vex::flow
             wgfx::GpuBuffer particle_data_buf;
             WGPUBindGroup bind_group;
 
-            wgfx::ComputePipeline pipeline_data;
+            wgfx::ComputePipeline move_pipeline_data;
+            wgfx::ComputePipeline solve_pipeline_data{
+                .descriptor =
+                    {
+                        .entryPoint = "cs_solve",
+                    },
+            };
             WGPUBindGroupLayout bgl_layout;
-            WGPUComputePipeline pipeline;
+            WGPUComputePipeline move_pipeline;
+            WGPUComputePipeline solve_pipeline;
 
             u32 num_particles = 0;
         } sym_data;
@@ -317,6 +324,7 @@ namespace vex::flow
             const char* shader_visual = "content/shaders/wgsl/flow/flowfield_ps_quad_vf.wgsl";
             const char* particle_texture = "content/sprites/flow/particle.png";
             wgfx::GpuBuffer* flow_v2f_buf = nullptr;
+            wgfx::GpuBuffer* cells_buf = nullptr;
             u32 max_particles = 200'000;
         };
         struct VisualUBO
@@ -350,7 +358,7 @@ namespace vex::flow
             v2f cell_size{};
             u32 num_particles = 0;
             f32 speed_base = 1.25f;
-            f32 radius = 0.01f;
+            f32 radius = 0.03f;
             f32 delta_time = 0.01f;
             u32 flags = 0;
             u32 padding[4];

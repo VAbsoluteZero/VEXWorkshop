@@ -128,7 +128,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     }
     // init webgpu stuff
     {
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -153,6 +153,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         part_sys.init(ctx, wgpu_backend->text_shad_lib,
             ParticleSym::InitArgs{
                 .flow_v2f_buf = &compute_pass.output_buf,
+                .cells_buf = &heatmap.storage_buf
             });
     }
     // init console variables
@@ -222,7 +223,7 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     };
 
     using Part = ParticleSym::Particle;
-    constexpr i32 num_particles = 80000;
+    constexpr i32 num_particles = 16000;
 
     Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
 
@@ -265,11 +266,26 @@ void FlowfieldPF::update(Application& owner)
         return;
     }
 
-    auto& globals = wgpu_backend->getGlobalResources();
-    { // update viewports
-        const v2i32 pos = owner.input.global.mouse_pos_window;
-        viewports.update(pos);
+    if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
+    {
+        spdlog::stopwatch sw;
+        defer_ { bfs_search_dur_ms = sw.elapsed() / 1ms; };
+        if (owner.getSettings().valueOr(opt_allow_diagonal.key_name, true))
+            Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
+        else
+            Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
+    }
 
+    // #fixme - movable camera
+    auto camera = BasicCamera::makeOrtho({0.f, 0.f, -4.0}, {12 * 1.333f, 16}, -10, 10);
+    camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
+    camera.update();
+
+    const v2i32 pos = owner.input.global.mouse_pos_window;
+    viewports.updateMouseLoc(pos);
+
+    auto& globals = wgpu_backend->getGlobalResources();
+    { // process input
         owner.input.ifTriggered("DEBUG"_trig,
             [&](const input::Trigger& self)
             {
@@ -288,14 +304,38 @@ void FlowfieldPF::update(Application& owner)
                 part_sys.reloadShaders(wgpu_backend->text_shad_lib, gctx);
                 return true;
             });
+
+        auto mpos = camera.normalizedViewToWorld(viewports.imgui_views[0].mouse_pos_normalized);
+
+        float r = init_data.size.y / camera.height;
+        float cell_w = camera.height / init_data.size.y;
+        // #fixme rewrite this mess to properly set up size indep. from camera
+        map_area.top_left = v2f{-camera.height, camera.height} * 0.5f;
+        map_area.bot_left = v2f{-camera.height, -camera.height} * 0.5f;
+        map_area.cell_size = {cell_w, cell_w};
+
+        v2u32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
+        owner.input.ifTriggered("MouseRightHeld"_trig,
+            [&](const input::Trigger& self)
+            {
+                if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
+                    goal_cell = m_cell;
+                return true;
+            });
+        owner.input.ifTriggered("MouseLeftDown"_trig,
+            [&](const input::Trigger& self)
+            {
+                if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
+                {
+                    trySpawningParticlesAtLocation(
+                        globals.asContext(), {.cell = m_cell, .world_pos = mpos});
+                }
+                return true;
+            });
     }
     {
-        // #fixme - movable camera
-        auto camera = BasicCamera::makeOrtho({0.f, 0.f, -4.0}, {12 * 1.333f, 16}, -10, 10);
-        camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
-        camera.update();
+        auto& wgpu_ctx = viewport.setupForDrawing(globals);
         auto model_view_proj = camera.mtx.projection * camera.mtx.view;
-
         auto& time = owner.getTime();
         auto int_sz = init_data.size;
 
@@ -311,49 +351,10 @@ void FlowfieldPF::update(Application& owner)
             .grid_half_size = init_data.size.x / 2.0f,
             .camera_h = camera.height,
         };
-        auto& wgpu_ctx = viewport.setupForDrawing(globals);
-        wgpuDeviceTick(wgpu_ctx.device);
         { // draw HEATMAP & background
-            auto mpos = camera.normalizedViewToWorld(viewports.imgui_views[0].mouse_pos_normalized);
-
-            float r = init_data.size.y / camera.height;
-            float cell_w = camera.height / init_data.size.y;
-            // #fixme rewrite this mess to properly set up size indep. from camera
-            map_area.top_left = v2f{-camera.height, camera.height} * 0.5f;
-            map_area.bot_left = v2f{-camera.height, -camera.height} * 0.5f;
-            map_area.cell_size = {cell_w, cell_w};
-
-            v2u32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
-            owner.input.ifTriggered("MouseRightHeld"_trig,
-                [&](const input::Trigger& self)
-                {
-                    if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
-                        goal_cell = m_cell;
-                    return true;
-                });
-            owner.input.ifTriggered("MouseLeftDown"_trig,
-                [&](const input::Trigger& self)
-                {
-                    if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
-                    {
-                        trySpawningParticlesAtLocation(
-                            wgpu_ctx, {.cell = m_cell, .world_pos = mpos});
-                    }
-                    return true;
-                });
-
-            if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
-            {
-                spdlog::stopwatch sw;
-                defer_ { bfs_search_dur_ms = sw.elapsed() / 1ms; };
-                if (draw_args.settings->valueOr(opt_allow_diagonal.key_name, true))
-                    Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
-                else
-                    Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
-            }
 
             // heatmap WRITES to storage buffer that contains search result
-            // #fixme - restructure whole thing.
+            // #fixme - restructure whole thing so buffers and layers are separated
             heatmap.draw(wgpu_ctx, draw_args,
                 HeatmapDynamicData{
                     .buffer = processed_map.data.constSpan(),
@@ -361,48 +362,47 @@ void FlowfieldPF::update(Application& owner)
                     .color1 = {0.340f, 0.740f, 0.707f, 1.f},
                     .color2 = {0.930f, 0.400f, 0.223f, 1.f},
                 });
+        }
+        { // compute pass
+            auto encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
+
+            CompContext compute_ctx{
+                .device = wgpu_ctx.device,
+                .encoder = encoder,
+                .queue = wgpu_ctx.queue,
+                .comp_pass = wgpuCommandEncoderBeginComputePass(encoder, nullptr),
+            };
+            auto submit_cmp = [](CompContext& ctx) -> void
+            {
+                WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "compute submit"};
+                auto cmd_buf = wgpuCommandEncoderFinish(ctx.encoder, &ctx_desc_fin);
+                wgpuQueueSubmit(ctx.queue, 1, &cmd_buf);
+                wgpuDeviceTick(ctx.device);
+            };
 
             u32 flags_comp = draw_args.settings->valueOr(opt_wallbias_numbers.key_name, false) //
                              | (2 * draw_args.settings->valueOr(opt_smooth_flow.key_name, false));
-
-            {
-                auto encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
-
-                CompContext compute_ctx{
-                    .device = wgpu_ctx.device,
-                    .encoder = encoder,
-                    .queue = wgpu_ctx.queue,
-                    .comp_pass = wgpuCommandEncoderBeginComputePass(encoder, nullptr),
-                };
-                auto submit_cmp = [](CompContext& ctx) -> void
-                {
-                    WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "compute submit"};
-                    auto cmd_buf = wgpuCommandEncoderFinish(ctx.encoder, &ctx_desc_fin);
-                    wgpuQueueSubmit(ctx.queue, 1, &cmd_buf);
-                    wgpuDeviceTick(ctx.device);
-                };
-
-                compute_pass.compute(compute_ctx, ComputeArgs{
-                                                      .map_size = int_sz,
-                                                      .flags = flags_comp,
-                                                  });
-
-                submit_cmp(compute_ctx);
-
-                compute_ctx.encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
-                compute_ctx.comp_pass = wgpuCommandEncoderBeginComputePass(
-                    compute_ctx.encoder, nullptr);
-                part_sys.compute(compute_ctx, ParticleSym::CompArgs{
-                                                  .bounds = int_sz,
-                                                  .grid_min = map_area.bot_left,
-                                                  .grid_size = {camera.height, camera.height},
-                                                  .cell_size = map_area.cell_size,
-                                                  .time = (float)time.unscaled_runtime,
-                                                  .dt = time.delta_time_f32,
+            compute_pass.compute(compute_ctx, ComputeArgs{
+                                                  .map_size = int_sz,
+                                                  .flags = flags_comp,
                                               });
-                submit_cmp(compute_ctx);
-            }
 
+            submit_cmp(compute_ctx);
+
+            compute_ctx.encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
+            compute_ctx.comp_pass = wgpuCommandEncoderBeginComputePass(
+                compute_ctx.encoder, nullptr);
+            part_sys.compute(compute_ctx, ParticleSym::CompArgs{
+                                              .bounds = int_sz,
+                                              .grid_min = map_area.bot_left,
+                                              .grid_size = {camera.height, camera.height},
+                                              .cell_size = map_area.cell_size,
+                                              .time = (float)time.unscaled_runtime,
+                                              .dt = time.delta_time_f32,
+                                          });
+            submit_cmp(compute_ctx);
+        }
+        { // overlays
             if (draw_args.settings->valueOr(opt_show_dbg_overlay.key_name, false))
             {
                 debug_overlay.draw(wgpu_ctx, draw_args,
@@ -419,10 +419,11 @@ void FlowfieldPF::update(Application& owner)
             }
 
             background.draw(wgpu_ctx, draw_args);
-
             view_grid.draw(wgpu_ctx, draw_args);
-            part_sys.draw(wgpu_ctx, draw_args, {.bounds = init_data.size});
         }
+        // particle system - draw
+        part_sys.draw(wgpu_ctx, draw_args, {.bounds = init_data.size});
+
         // SUBMIT
         viewport.finishAndSubmit();
         wgpuDeviceTick(wgpu_ctx.device);
@@ -434,11 +435,11 @@ void FlowfieldPF::drawUI(Application& owner)
     ImGui::PushFont(vex::g_view_hub.visuals.fnt_accent);
     defer_ { ImGui::PopFont(); };
 
+    // setup dockspaces
     [[maybe_unused]] ImGuiID main_dockspace = ImGui::DockSpaceOverViewport(nullptr);
     static ImGuiDockNodeFlags dockspace_flags =
         ImGuiDockNodeFlags_NoDockingInCentralNode |
         ImGuiDockNodeFlags_AutoHideTabBar; // ImGuiDockNodeFlags_KeepAliveOnly;
-
     if (std::exchange(docking_not_configured, false))
     {
         ImGuiID dockspace_id = main_dockspace;
@@ -454,18 +455,9 @@ void FlowfieldPF::drawUI(Application& owner)
         ImGui::DockBuilderDockWindow(ids::debug_vp_name, dockspace_id);
         ImGui::DockBuilderFinish(main_dockspace);
     }
+
     ui.drawStandardUI(owner, &viewports);
-    // add items to top bar
-    // if ((viewports.imgui_views.size() > 1) && ImGui::BeginMainMenuBar())
-    //{
-    //    defer_ { ImGui::EndMainMenuBar(); };
-    //    if (ImGui::BeginMenu("View"))
-    //    {
-    //        defer_ { ImGui::EndMenu(); };
-    //        ImGui::MenuItem("Debug Viewport", nullptr, &viewports.imgui_views[1].gui_enabled);
-    //        ImGui::Separator();
-    //    }
-    //}
+
     if (ImGui::BeginMainMenuBar())
     {
         defer_ { ImGui::EndMainMenuBar(); };

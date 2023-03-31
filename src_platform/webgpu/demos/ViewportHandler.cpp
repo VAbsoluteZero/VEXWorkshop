@@ -57,7 +57,7 @@ void wgfx::ui::ViewportHandler::draw()
     }
 }
 
-void wgfx::ui::ViewportHandler::update(v2i32 wnd_mouse_pos)
+void wgfx::ui::ViewportHandler::updateMouseLoc(v2i32 wnd_mouse_pos)
 {
     for (auto& vp : imgui_views)
     {
