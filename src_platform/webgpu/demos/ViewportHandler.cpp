@@ -5,7 +5,7 @@
 #include <imgui_internal.h>
 #include <utils/ImGuiUtils.h>
 
-void wgfx::ui::ViewportHandler::add(const wgfx::RenderContext& wgpu_ctx, vex::ViewportOptions options)
+void wgfx::ui::ViewportHandler::add(const wgfx::GpuContext& wgpu_ctx, vex::ViewportOptions options)
 {
     wgfx::Viewport vex;
     vex.initialize(wgpu_ctx.device, options);
@@ -57,7 +57,7 @@ void wgfx::ui::ViewportHandler::draw()
     }
 }
 
-void wgfx::ui::ViewportHandler::update(v2i32 wnd_mouse_pos)
+void wgfx::ui::ViewportHandler::updateMouseLoc(v2i32 wnd_mouse_pos)
 {
     for (auto& vp : imgui_views)
     {

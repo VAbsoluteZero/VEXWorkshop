@@ -2,12 +2,14 @@
 
 #include <flags.h>
 #include <spdlog/spdlog.h>
+
 #include "ImGuiUtils.h"
- 
+
 
 vex::console::CmdCtx::~CmdCtx() {}
 
-void vex::console::tokenize(const std::string& args_as_text, std::vector<std::string_view>& out_args)
+void vex::console::tokenize(
+    const std::string& args_as_text, std::vector<std::string_view>& out_args)
 {
     auto eptr = args_as_text.c_str() + args_as_text.size();
 
@@ -102,8 +104,8 @@ vex::console::ConsoleWindow::ConsoleWindow()
     memset(input_buf, 0, sizeof(input_buf));
     history_pos = -1;
     auto_scroll = true;
-    scroll_to_bottom = false;  
-}  
+    scroll_to_bottom = false;
+}
 
 inline void Strtrim(char* s)
 {
@@ -140,7 +142,7 @@ void vex::console::ConsoleWindow::Draw(const char* title)
         if (ImGui::MenuItem("Close Console"))
             is_open = false;
         ImGui::EndPopup();
-    } 
+    }
 
     if (ImGui::SmallButton("Clear"))
     {
@@ -239,15 +241,15 @@ void vex::console::ConsoleWindow::Draw(const char* title)
 
 void vex::console::ConsoleWindow::ExecCommand(const char* command_line)
 {
-    //static bool tst = false;
-    //if (!tst)
+    // static bool tst = false;
+    // if (!tst)
     //{
-    //    tst = true;
-    //    vex::console::makeAndRegisterCmd("test", "blah blah", true,
-    //        [](const vex::console::CmdCtx& ctx)
-    //        {
-    //            return true;
-    //        });
+    //     tst = true;
+    //     vex::console::makeAndRegisterCmd("test", "blah blah", true,
+    //         [](const vex::console::CmdCtx& ctx)
+    //         {
+    //             return true;
+    //         });
 
     //    vex::console::makeAndRegisterCmd("cmd", " I am cmd!\n desc desc.\n", true,
     //        [](const vex::console::CmdCtx& ctx)
@@ -315,7 +317,7 @@ void vex::console::ConsoleWindow::ExecCommand(const char* command_line)
     // On command input, we scroll to bottom even if AutoScroll==false
     scroll_to_bottom = true;
 }
- 
+
 int vex::console::ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
 {
     switch (data->EventFlag)
@@ -337,18 +339,44 @@ int vex::console::ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* da
             using CmdMap = vex::Dict<const char*, vex::console::ClCommand>;
             const CmdMap& cmd_dict = vex::console::CmdRunner::global().commands;
 
+            const bool is_cmd_name = word_start == data->Buf;
+
             // Build a list of candidates
             // #fixme : frame allocator
             static std::vector<const char*> candidates;
             candidates.clear();
-            for ([[maybe_unused]] const auto& [key, cmd] : cmd_dict)
+            if (is_cmd_name)
             {
-                // as it is case sensetive impl, we can just compare bytes
-                if (std::memcmp(key, word_start, (int)(word_end - word_start)) == 0)
+                for ([[maybe_unused]] const auto& [key, cmd] : cmd_dict)
                 {
-                    candidates.push_back(key);
+                    // as it is case sensetive impl, we can just compare bytes
+                    if (std::memcmp(key, word_start, (int)(word_end - word_start)) == 0)
+                    {
+                        candidates.push_back(key);
+                    }
                 }
             }
+            //else if (data->Buf) #todo - declare and register args
+            //{
+            //    const char* wb = data->Buf;
+            //    const char* we = wb;
+            //    while (we < word_end && *we != ' ')
+            //    {
+            //        we++;
+            //    }
+            //    vex::console::ClCommand* cmd = cmd_dict.find(std::string_view(wb, wb - we));  
+            //    if (cmd)
+            //    {
+            //        for ([[maybe_unused]] const auto& [key, cmd] : cmd->registered)
+            //        {
+            //            // as it is case sensetive impl, we can just compare bytes
+            //            if (std::memcmp(key, word_start, (int)(word_end - word_start)) == 0)
+            //            {
+            //                candidates.push_back(key);
+            //            }
+            //        }
+            //    }
+            //}
 
             const i32 canditate_count = candidates.size();
             if (canditate_count == 0)

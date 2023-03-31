@@ -49,9 +49,9 @@ namespace wgfx::ui
     {
         std::vector<UiViewport> imgui_views;
 
-        void add(const wgfx::RenderContext& wgpu_ctx, vex::ViewportOptions options);
+        void add(const wgfx::GpuContext& wgpu_ctx, vex::ViewportOptions options);
         void draw();
-        void update(v2i32 wnd_mouse_pos);
+        void updateMouseLoc(v2i32 wnd_mouse_pos);
         void postFrame();
 
         void release()

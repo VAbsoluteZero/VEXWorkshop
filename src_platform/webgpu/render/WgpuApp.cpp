@@ -23,7 +23,7 @@ using namespace std::literals::chrono_literals;
 struct WgpuRenderInterface
 {
     wgfx::Globals globals;
-    wgfx::RenderContext frame_data;
+    wgfx::GpuContext frame_data;
     WGPUSupportedLimits limits;
 
     bool initialized = false;
@@ -67,18 +67,18 @@ struct WgpuRenderInterface
             {
                 SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
                 
-                check_(false); 
-            };
+                check_(false);  
+            };  
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
-
+              
             globals.main_texture_fmt =
 #if defined(VEX_GFX_WEBGPU_DAWN) || defined(__EMSCRIPTEN__)
                 WGPUTextureFormat_BGRA8Unorm;
 #else
                 wgpuSurfaceGetPreferredFormat(globals.surface, globals.adapter);
-#endif
-
+#endif 
+              
             WGPUSwapChainDescriptor desc_swap_chain{
                 .nextInChain = nullptr,
                 .label = "chain",
@@ -91,106 +91,7 @@ struct WgpuRenderInterface
 
             globals.swap_chain = wgpuDeviceCreateSwapChain(
                 globals.device, globals.surface, &desc_swap_chain);
-        }
-        // default pipelines
-        {
-            const char* debug_shader = R"(
-            @vertex
-            fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	            var p = vec2<f32>(0.0, 0.0);
-	            if (in_vertex_index == 0u) {
-		            p = vec2<f32>(-0.5, -0.5);
-	            } else if (in_vertex_index == 1u) {
-		            p = vec2<f32>(0.5, -0.5);
-	            } else {
-		            p = vec2<f32>(0.0, 0.5);
-	            }
-	            return vec4<f32>(p, 0.0, 1.0);
-            }
-            @fragment
-            fn fs_main() -> @location(0) vec4<f32> {
-                return vec4<f32>(0.5, 0.4, 4.0, 1.0);
-            }
-)";
-
-            WGPUShaderModuleDescriptor shaderDesc{};
-            WGPUShaderModuleWGSLDescriptor shaderCodeDesc{};
-            shaderCodeDesc.chain.next = nullptr;
-            shaderCodeDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
-            shaderDesc.nextInChain = &shaderCodeDesc.chain;
-
-#ifdef VEX_GFX_WEBGPU_DAWN
-            shaderCodeDesc.source = debug_shader;
-#else
-            shaderCodeDesc.code = debug_shader;
-#endif
-
-            WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(
-                globals.device, &shaderDesc);
-            WGPURenderPipelineDescriptor pipelineDesc{};
-
-            // Vertex fetch
-            // (We don't use any input buffer so far)
-            pipelineDesc.vertex.bufferCount = 0;
-            pipelineDesc.vertex.buffers = nullptr;
-
-            // Vertex shader
-            pipelineDesc.vertex.module = shaderModule;
-            pipelineDesc.vertex.entryPoint = "vs_main";
-            pipelineDesc.vertex.constantCount = 0;
-            pipelineDesc.vertex.constants = nullptr;
-            pipelineDesc.primitive.topology = WGPUPrimitiveTopology_TriangleList;
-            pipelineDesc.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
-            pipelineDesc.primitive.frontFace = WGPUFrontFace_CCW;
-            pipelineDesc.primitive.cullMode = WGPUCullMode_None;
-
-            // Fragment shader
-            WGPUFragmentState fragmentState{};
-            fragmentState.nextInChain = nullptr;
-            fragmentState.module = shaderModule;
-            fragmentState.entryPoint = "fs_main";
-            fragmentState.constantCount = 0;
-            fragmentState.constants = nullptr;
-
-            // Configure blend state
-            WGPUBlendState blendState{};
-            // Usual alpha blending for the color:
-            blendState.color.srcFactor = WGPUBlendFactor_SrcAlpha;
-            blendState.color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-            blendState.color.operation = WGPUBlendOperation_Add;
-            // We leave the target alpha untouched:
-            blendState.alpha.srcFactor = WGPUBlendFactor_Zero;
-            blendState.alpha.dstFactor = WGPUBlendFactor_One;
-            blendState.alpha.operation = WGPUBlendOperation_Add;
-
-            WGPUColorTargetState colorTarget{};
-            colorTarget.nextInChain = nullptr;
-            colorTarget.format = globals.main_texture_fmt;
-            colorTarget.blend = &blendState;
-            colorTarget.writeMask = WGPUColorWriteMask_All;
-
-            // We have only one target because our render pass has only one output color
-            // attachment.
-            fragmentState.targetCount = 1;
-            fragmentState.targets = &colorTarget;
-
-            // Depth and stencil tests are not used here
-            pipelineDesc.depthStencil = nullptr;
-            pipelineDesc.fragment = &fragmentState;
-            pipelineDesc.multisample.count = 1;
-            pipelineDesc.multisample.mask = ~0u;
-            pipelineDesc.multisample.alphaToCoverageEnabled = false;
-
-            // Pipeline layout
-            WGPUPipelineLayoutDescriptor layoutDesc{};
-            layoutDesc.nextInChain = nullptr;
-            layoutDesc.bindGroupLayoutCount = 0;
-            layoutDesc.bindGroupLayouts = nullptr;
-            globals.debug_layout = wgpuDeviceCreatePipelineLayout(globals.device, &layoutDesc);
-            pipelineDesc.layout = globals.debug_layout;
-
-            globals.debug_pipeline = wgpuDeviceCreateRenderPipeline(globals.device, &pipelineDesc);
-        }
+        } 
 
         bool valid = checkRel(globals.isValid(), "wgpu initialization failed");
         return valid ? 0 : 1;

@@ -19,10 +19,10 @@ void vex::TextShaderLib::build(const char* rel_path)
     vex::InlineBufferAllocator<1024 * 20> stackbuf;
     auto al = stackbuf.makeAllocatorHandle();
 
-    for (const auto& entry : std::filesystem::directory_iterator(path_to_dir))
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(path_to_dir))
     {
         const auto& path = entry.path();
-        auto file_name = path.string();
+        auto file_name = path.generic_string();
 
         auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
         std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
