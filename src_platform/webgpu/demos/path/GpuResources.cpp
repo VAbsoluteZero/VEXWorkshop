@@ -11,7 +11,7 @@ using namespace std::literals::chrono_literals;
 
 void ViewportGrid::init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib)
 {
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
     auto* src = text_shad_lib.shad_src.find(grid_shader_file);
@@ -131,7 +131,7 @@ bool ViewportGrid::reloadShaders(TextShaderLib& shader_lib, const GpuContext& co
 
 void vex::flow::TempGeometry::init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib)
 {
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
     auto* src = text_shad_lib.shad_src.find("content/shaders/wgsl/gizmo_color.wgsl"sv);
     if (!check(src, "shader not found"))
@@ -207,7 +207,7 @@ void vex::flow::TempGeometry::draw(const wgfx::GpuContext& ctx, const DrawContex
 
 void vex::flow::ColorQuad::init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib)
 {
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
     auto* src = text_shad_lib.shad_src.find(bg_shader_file);
@@ -287,7 +287,7 @@ void vex::flow::CellHeatmapV1::init(const wgfx::GpuContext& ctx, const TextShade
     ROSpan<u32> heatmap, const char* in_shader_file)
 {
     hm_shader_file = in_shader_file;
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
     auto* src = text_shad_lib.shad_src.find(hm_shader_file);
@@ -382,7 +382,7 @@ void vex::flow::ComputeFields::init(const wgfx::GpuContext& ctx, const TextShade
     const char* in_shader_file, wgfx::GpuBuffer& map_data_buf, v2u32 size)
 {
     cf_shader_file = in_shader_file;
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
     auto* src = text_shad_lib.shad_src.find(cf_shader_file);
@@ -462,7 +462,7 @@ void vex::flow::FlowFieldsOverlay::init(const wgfx::GpuContext& ctx,
     const TextShaderLib& text_shad_lib, wgfx::GpuBuffer& flow_v2f_buf, const char* in_shader_file)
 {
     shader_file = in_shader_file;
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
 
     auto* src = text_shad_lib.shad_src.find(shader_file);
@@ -560,7 +560,7 @@ void vex::flow::ParticleSym::spawnForSymulation(const wgfx::GpuContext& ctx, ROS
 void vex::flow::ParticleSym::init(
     const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib, InitArgs args)
 {
-    vex::InlineBufferAllocator<1024> temp_alloc_resource;
+    vex::InlineBufferAllocator<4096> temp_alloc_resource;
     auto tmp_alloc = temp_alloc_resource.makeAllocatorHandle();
     // init compute
     {
@@ -683,25 +683,25 @@ void vex::flow::ParticleSym::compute(wgfx::CompContext& ctx, CompArgs args)
         .grid_size = args.grid_size,
         .cell_size = args.cell_size,
         .num_particles = sym_data.num_particles,
-        .radius = 0.1f, // #fixme one constant
+        .radius = particle_rel_radius, // #fixme one constant
         .delta_time = args.dt,
     };
     updateUniform(ctx, sym_data.uniform_buf, vbo);
 
     const auto work_size = sym_data.num_particles;
-    u32 num_groups = (work_size / 64) + 1; //(work_size / (64 * 32));
+    u32 num_groups = (work_size / 64) + 1; //(work_size / (64 * 32)); 
 
-    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.solve_pipeline);
-    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
-    wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
-
-    static bool dbg = true; 
+    static bool dbg = true;
     if (dbg)
     {
         wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.move_pipeline);
         wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
         wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
     }
+
+    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, sym_data.solve_pipeline);
+    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, sym_data.bind_group, 0, nullptr);
+    wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, 32, 1, 1);
 }
 
 void vex::flow::ParticleSym::draw(
@@ -716,7 +716,7 @@ void vex::flow::ParticleSym::draw(
         .camera_vp = draw_ctx.camera_mvp,
         .color1 = Color::green(),
         .color2 = Color::red(),
-        .size = {cell_w * 0.2f, cell_w * 0.2f, 1, 1},
+        .size = {cell_w * 0.25f, cell_w * 0.25f, 1, 1},
     };
     updateUniform(ctx, vis_data.uniform_buf, vbo);
     {
@@ -741,16 +741,15 @@ bool vex::flow::ParticleSym::reloadShaders(
         WGPU_REL(ComputePipeline, sym_data.move_pipeline);
         sym_data.move_pipeline = sym_data.move_pipeline_data.createPipeline(
             context, shader, sym_data.bgl_layout);
-        check_(sym_data.move_pipeline);
-
+        check_(sym_data.move_pipeline); 
 
         WGPU_REL(ComputePipeline, sym_data.solve_pipeline);
         sym_data.solve_pipeline = sym_data.solve_pipeline_data.createPipeline(
             context, shader, sym_data.bgl_layout);
-        check_(sym_data.solve_pipeline);
-
-        return true;
+        check_(sym_data.solve_pipeline); 
     }
+
+    if(false)
     {
         WGPUShaderModule shad_vert_frag = reloadShader(shader_lib, context, vis_data.shader);
         if (!shad_vert_frag)
@@ -763,9 +762,7 @@ bool vex::flow::ParticleSym::reloadShaders(
 
         WGPU_REL(RenderPipeline, vis_data.pipeline);
         vis_data.pipeline = vis_data.pipeline_data.createPipeline(context, vis_data.bgl_layout);
-        check_(vis_data.pipeline);
-
-        return true;
+        check_(vis_data.pipeline); 
     }
     return true;
 }

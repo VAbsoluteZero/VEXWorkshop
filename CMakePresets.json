@@ -103,7 +103,7 @@
                 "CMAKE_CXX_COMPILER": "em++",
                 "CMAKE_C_COMPILER": "emcc",
                 "VEX_USE_EMSCRIPTEN": true,
-                "VEX_USE_BIN_DIR" :  true
+                "VEX_USE_BIN_DIR": true
             }
         },
         {
@@ -115,6 +115,18 @@
                 "VEX_MSVC_CLANG": false,
                 "CMAKE_CXX_COMPILER": "MSVC",
                 "VEX_USE_DX11": true
+            }
+        },
+        {
+            "name": "MSVCDebugDawn",
+            "displayName": "MSVC Debug",
+            "hidden": false,
+            "inherits": "MSVC",
+            "cacheVariables": {
+                "VEX_MSVC_CLANG": false,
+                "CMAKE_BUILD_TYPE": "Debug",
+                "VEX_USE_DX11": false,
+                "VEX_USE_DAWN": true
             }
         },
         {

@@ -49,6 +49,7 @@ const drag = f32(0.05);
 
 override disabled:bool = false;
 override solver_disabled:bool = false;
+override buckets_disabled:bool = false;
 
 
 fn wall_collide(center: v2f, cell: v2i32, delta_vec: v2f) -> v2f {
@@ -79,39 +80,31 @@ fn wall_collide(center: v2f, cell: v2i32, delta_vec: v2f) -> v2f {
 
     return  out_v;
 } 
-// @compute @workgroup_size(64)  
-// fn cs_bucket_particles(@builtin(global_invocation_id)  gid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
-//     if disabled { return;}
-//     let idx: u32 = gid.x;
-//     let offsets: array<i32, 4> = array<i32, 4>(
-//         -i32(args.size.x) + 0, // top (CW sart) 
-//         -1, // left
-//         1, // right 
-//         i32(args.size.x) + 0, // bot 
-//     );
-//     if idx > args.num_particles { return;}
 
-//     let size_1d: u32 = args.size.x * args.size.y;
-
-//     let grid_min = args.grid_min;
-//     let cell_sz = args.cell_size;
-//     let pos = particles.data[idx].pos;
-//     let pos_rel_to_min = pos - grid_min; 
-
-//     // #fixme  
-//     var cell_x = u32((pos_rel_to_min.x / cell_sz.x));
-//     var cell_y = args.size.y - u32(((pos_rel_to_min.y / cell_sz.y) + 1.0));
-//     cell_x = min(cell_x, args.size.x);
-//     cell_y = min(cell_y, args.size.y);
-//     let this_cell: v2i32 = v2i32(i32(cell_x), i32(cell_y));
-//     let cell_idx = cell_y * args.size.x + cell_x; 
-// }
+@compute @workgroup_size(64)  
+fn cs_bucket_particles(@builtin(global_invocation_id)  gid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
+    if buckets_disabled { return;}
+    let idx: u32 = gid.x;
+}
 
 // #fixme - spatial collisons instead of avoidance
 @compute @workgroup_size(64)  
 fn cs_solve(@builtin(global_invocation_id)  gid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
    // if solver_disabled { return;}
-    let idx: u32 = gid.x; 
+    let idx: u32 = gid.x;
+
+    let rsq = args.radius * args.radius;
+    let mpos = particles.data[idx].pos;
+    let mvel = particles.data[idx].vel;
+    var separate: v2f = v2f(0, 0);
+    let l = arrayLength(&particles.data);
+    var ni = 8;
+    for (var i = 0u; i < l; i++) {
+        let pos = particles.data[i].pos.xy;
+        let diff = pos - mpos;
+        separate -= f32((diff.x * diff.x + diff.y * diff.y) < rsq * 1.102 ) * f32(i != idx) * diff;
+    }
+    particles.data[idx].vel += select(v2f(), normalize(separate) * args.radius * 0.5, separate.x != 0);
 }
 
 @compute @workgroup_size(64)  
@@ -145,13 +138,13 @@ fn cs_main(@builtin(global_invocation_id)  gid: vec3u, @builtin(local_invocation
     var flow_dir: v2f = flow_directions.cells[cell_idx];
 
     let cur_vel = particles.data[idx].vel;
-    let target_vel = flow_dir * args.speed_base ;
+    let target_vel = flow_dir * args.speed_base * 3 ;
 
     var vel = cur_vel * (1.0 - drag * args.delta_time);
     vel = select(vel, target_vel, vel.x == 0 && vel.y == 0);
-    vel = lerpVec(vel, target_vel,  args.delta_time * 0.8);
+    vel = lerpVec(vel, target_vel, args.delta_time * 2.8);
 
-    particles.data[idx].vel = clamp(vel, v2f(-1.5, -1.5), v2f(1.5, 1.5));
+    particles.data[idx].vel = clamp(vel, v2f(-3, -3), v2f(3, 3));
     var delta_vec = particles.data[idx].vel * args.delta_time ; 
 
     // #fixme only check in direction of movement

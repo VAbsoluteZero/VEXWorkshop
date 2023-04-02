@@ -350,7 +350,7 @@ WGPUShaderModule wgfx::reloadShader(
     shader_lib.reload(shader_name);
     auto* src = shader_lib.shad_src.find(shader_name);
     if (!check(src, "shader not found"))
-        return false;
+        return nullptr;
     WGPUShaderModule shad_vert_frag = shaderFromSrc(context.device, src->text.c_str());
     std::atomic_bool sync_ready = ATOMIC_VAR_INIT(false);
     bool success = false;

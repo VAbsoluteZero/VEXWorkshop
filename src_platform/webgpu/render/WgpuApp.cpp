@@ -157,7 +157,10 @@ struct WgpuRenderInterface
 
             wgfx::swapchainPresent(globals.swap_chain);
 
-            frame_data.release();
+            frame_data.release(); 
+            WGPU_REL(RenderPassEncoder, frame_data.render_pass);
+            WGPU_REL(CommandBuffer, command);
+            WGPU_REL(TextureView, frame_data.cur_tex_view);
         }
         wgpuDeviceTick(globals.device);
     }

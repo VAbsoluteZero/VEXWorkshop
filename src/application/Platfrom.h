@@ -119,7 +119,7 @@ namespace vex
                     key, callable, last_observed_version);
             }
             template <typename T>
-            T valueOr(std::string_view key, T alternative)
+            T valueOr(SettingsContainer& container, std::string_view key, T alternative)
             {
                 return container.valueOr<T>(key, alternative, &last_observed_version);
             }

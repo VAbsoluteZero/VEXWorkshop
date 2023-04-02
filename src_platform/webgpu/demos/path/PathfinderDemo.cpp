@@ -128,7 +128,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     }
     // init webgpu stuff
     {
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -152,9 +152,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
 
         part_sys.init(ctx, wgpu_backend->text_shad_lib,
             ParticleSym::InitArgs{
-                .flow_v2f_buf = &compute_pass.output_buf,
-                .cells_buf = &heatmap.storage_buf
-            });
+                .flow_v2f_buf = &compute_pass.output_buf, .cells_buf = &heatmap.storage_buf});
     }
     // init console variables
     {
@@ -219,18 +217,19 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
         }
     } client{
         .near = {32, frame_alloc},
-        .max_len = 37,
+        .max_len = init_data.size.y < 129 ? 37 : 488,
     };
 
+    const float sz = map_area.cell_size.x;
+    const v2f orig = map_area.top_left;
     using Part = ParticleSym::Particle;
-    constexpr i32 num_particles = 16000;
+    const i32 max_per_cell = 1 / (ParticleSym::particle_rel_radius * sz * 2);
+    const i32 num_particles = (client.max_len * max_per_cell);
 
     Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
 
     const u32 client_len = (u32)client.near.size();
     vex::Buffer<v2f> cells = {frame_alloc, (i32)client_len};
-    const float sz = map_area.cell_size.x;
-    const v2f orig = map_area.top_left;
 
     auto cell_cnt_xy = init_data.size;
     for (auto [k, v] : client.near)
@@ -240,13 +239,27 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     }
 
     vex::Buffer<Part> particles = {frame_alloc, num_particles};
+    vex::Buffer<i32> rejection = {frame_alloc, (i32)client_len};
+    rejection.addUninitialized(client_len);
+    for (auto& it : rejection)
+        it = max_per_cell;
     particles.addUninitialized(num_particles);
 
+    const float padding = ParticleSym::particle_rel_radius * sz * 0.5f;
     for (auto i = 0; i < num_particles; ++i)
     {
-        v2f rand_cell = cells[rng::Rand::randMod(client_len)];
-        volatile float rnd_x = rng::Rand::randFloat01() * sz;
-        volatile float rnd_y = rng::Rand::randFloat01() * sz;
+        i32 repeat_cnt = 4;
+    repeat:
+        auto entry_idx = rng::Rand::randMod(client_len);
+        v2f rand_cell = cells[entry_idx];
+        rejection[entry_idx]--;
+        if (rejection[entry_idx] < 0 && repeat_cnt > 0)
+        {
+            repeat_cnt--;
+            goto repeat;
+        } 
+        volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding);
+        volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding);
         particles[i].pos = rand_cell + v2f{rnd_x, rnd_y};
         particles[i].vel = v2f_zero;
     }
@@ -335,6 +348,7 @@ void FlowfieldPF::update(Application& owner)
     }
     {
         auto& wgpu_ctx = viewport.setupForDrawing(globals);
+
         auto model_view_proj = camera.mtx.projection * camera.mtx.view;
         auto& time = owner.getTime();
         auto int_sz = init_data.size;
@@ -584,9 +598,15 @@ void FlowfieldPF::drawUI(Application& owner)
         }
     }
     ImGui::End();
+    if (ImGui::BeginMainMenuBar())
+    {
+        defer_ { ImGui::EndMainMenuBar(); };
+        ImGui::Bullet();
+        ImGui::Text(" dbg: %d ", frame_alloc_resource.bump.state.top);
+    }
 }
 void FlowfieldPF::postFrame(Application& owner)
 {
-    viewports.postFrame();
     frame_alloc_resource.reset();
+    viewports.postFrame();
 }

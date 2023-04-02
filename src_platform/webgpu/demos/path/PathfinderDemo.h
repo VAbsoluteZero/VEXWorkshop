@@ -215,8 +215,7 @@ namespace vex::flow
                 }
             }
         }
-    };
-
+    }; 
 
     struct FlowfieldPF : public IDemoImpl
     {

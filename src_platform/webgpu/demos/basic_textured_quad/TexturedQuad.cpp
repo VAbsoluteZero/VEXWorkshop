@@ -316,7 +316,7 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
         if (!check(src, "shader not found"))
             return;
         WGPUShaderModule shad = shaderFromSrc(globals.device, src->text.c_str());
-
+         
         temp_geom.uniform_buf = [&]() -> GpuBuffer
         {
             UBOMvp ubo_transforms;

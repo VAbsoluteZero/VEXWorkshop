@@ -280,6 +280,7 @@ namespace vex::flow
 
     struct ParticleSym
     {
+        static constexpr float particle_rel_radius = 0.1f; // relative to cell size
         struct Particle
         {
             v2f pos;
@@ -358,7 +359,7 @@ namespace vex::flow
             v2f cell_size{};
             u32 num_particles = 0;
             f32 speed_base = 1.25f;
-            f32 radius = 0.03f;
+            f32 radius = particle_rel_radius;
             f32 delta_time = 0.01f;
             u32 flags = 0;
             u32 padding[4];
