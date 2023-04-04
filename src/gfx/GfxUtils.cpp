@@ -26,9 +26,12 @@ void vex::TextShaderLib::build(const char* rel_path)
 
         auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
         std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
-
-        if (m_stream.fail() ||  m_stream.bad())
+         
+        if (m_stream.fail() || m_stream.bad())
             continue;
+
+        auto f_time = std::filesystem::last_write_time(adjusted_name);
+        u64 timestamp = f_time.time_since_epoch().count();
 
         size_t size = std::filesystem::file_size(adjusted_name);
 
@@ -47,8 +50,12 @@ void vex::TextShaderLib::build(const char* rel_path)
                 return ShaderSourceType::HLSL;
             return ShaderSourceType::Invalid;
         }(ext);
+
+        if (type == ShaderSourceType::Invalid)
+            continue;
+
         buffer[size] = '\0';
-        this->shad_src.emplace(std::move(file_name), ShaderSource{buffer, type});
+        this->shad_src.emplace(std::move(file_name), ShaderSource{buffer, type, timestamp});
 
         stackbuf.reset();
     }
@@ -69,20 +76,28 @@ void vex::TextShaderLib::reload()
         auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
         std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
         size_t size = std::filesystem::file_size(adjusted_name);
+        if (size == 0)
+            continue;
+
+        auto f_time = std::filesystem::last_write_time(adjusted_name);
+        u64 timestamp = f_time.time_since_epoch().count();
+
+        if (timestamp == entry.timestamp)
+            continue;
 
         char* buffer = (char*)al.alloc(size + 1, 1);
         m_stream.seekg(0);
         m_stream.read(buffer, size);
-        if (size == 0)
-            continue;
         buffer[size] = '\0';
 
         entry.text = buffer;
+        entry.timestamp = timestamp;
+        entry.reloaded_dirty_flag = true;
 
         stackbuf.reset();
     }
 }
-void vex::TextShaderLib::reload(const char* file_name)
+void vex::TextShaderLib::reloadIfNewer(const char* file_name)
 {
     vex::InlineBufferAllocator<1024 * 20> stackbuf;
     auto al = stackbuf.makeAllocatorHandle();
@@ -92,14 +107,20 @@ void vex::TextShaderLib::reload(const char* file_name)
         std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
         size_t size = std::filesystem::file_size(adjusted_name);
 
+        auto f_time = std::filesystem::last_write_time(adjusted_name);
+        u64 timestamp = f_time.time_since_epoch().count();
+
+        if (timestamp == entry->timestamp || size == 0)
+            return;
+
         char* buffer = (char*)al.alloc(size + 1, 1);
         m_stream.seekg(0);
-        m_stream.read(buffer, size);
-        if (size == 0)
-            return;
+        m_stream.read(buffer, size); 
         buffer[size] = '\0';
 
         entry->text = buffer;
+        entry->timestamp= timestamp;
+        entry->reloaded_dirty_flag = true;
 
         stackbuf.reset();
     }

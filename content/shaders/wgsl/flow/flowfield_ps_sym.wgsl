@@ -14,14 +14,23 @@ struct Args {
     grid_min: v2f,
     grid_size: v2f,
     cell_size: v2f,
+
     num_particles: u32,
+    table_depth: u32,
+
     speed_base: f32,
     radius: f32,
+
+    separation: f32,
+    inertia: f32,
+
+    drag: f32,
+    speed_max: f32,
+
     delta_time: f32,
-    flags: u32,
-   // padding: u32,   
-    table_depth: u32,
-} 
+    flags: u32,     
+};
+
 struct Vectors {
     cells: array<v2f>,
 }; 
@@ -57,8 +66,7 @@ fn lerp(s: f32, e: f32, t: f32) -> f32 {
 }
 fn lerpVec(s: v2f, e: v2f, t: f32) -> v2f {
     return s + ((e - s) * t);
-} 
-const drag = f32(0.05);
+}  
 
 override disabled:bool = false;
 override solver_disabled:bool = false;
@@ -307,12 +315,12 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
 
     let cur_vel = particles.data[idx].vel;
     let target_vel = flow_dir * args.speed_base * 2 ;
-
-    // for (let i = 0; i < 4;)
-
-    var vel = cur_vel * (1.0 - drag * dt);
+ 
+    // for (let i = 0; i < 4;)      
+ 
+    var vel = cur_vel * (1.0 - args.drag * dt);
     vel = select(vel, target_vel, vel.x == 0 && vel.y == 0);
-    vel = lerpVec(vel, target_vel, dt * 2.8);
+    vel = lerpVec(vel, target_vel, dt * ((2 - args.inertia) * 2 + 0.5));
 
     particles.data[idx].vel = clamp(vel, v2f(-4, -4), v2f(4, 4));
     var delta_vec = particles.data[idx].vel * dt * 0.5 ; 
@@ -322,7 +330,7 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     delta_vec = wall_collide(pos, this_cell + v2i32(0, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 0), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(1, 0), delta_vec);
-
+ 
     delta_vec = wall_collide(pos, this_cell + v2i32(1, 1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
@@ -338,6 +346,6 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(1, -1), delta_vec);
-
+  
     particles.data[idx].pos += delta_vec;
 }

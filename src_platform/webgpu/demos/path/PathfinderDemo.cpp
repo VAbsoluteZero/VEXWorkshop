@@ -128,8 +128,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     }
     // init webgpu stuff
     {
-       //Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
-       Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
+        // Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -166,9 +166,19 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         opt_show_dbg_overlay.addTo(options);
         opt_allow_diagonal.addTo(options);
         opt_show_numbers.addTo(options);
-        opt_smooth_flow.addTo(options);
+        // opt_smooth_flow.addTo(options);
         opt_wallbias_numbers.addTo(options);
         opt_show_ff_overlay.addTo(options);
+
+        opt_part_auto_color.addTo(options);
+        opt_part_color.addTo(options);
+
+        opt_part_speed.addTo(options);
+        opt_part_speed_max.addTo(options);
+        opt_part_inertia.addTo(options);
+        opt_part_radius.addTo(options);
+        opt_part_drag.addTo(options);
+        opt_part_sep.addTo(options);
 
         defer_till_dtor.emplace_back(
             [&owner]
@@ -180,9 +190,19 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 opt_allow_diagonal.removeFrom(options);
                 opt_show_numbers.removeFrom(options);
 
-                opt_smooth_flow.removeFrom(options);
+                // opt_smooth_flow.removeFrom(options);
                 opt_wallbias_numbers.removeFrom(options);
                 opt_show_ff_overlay.removeFrom(options);
+
+                opt_part_auto_color.removeFrom(options);
+                opt_part_color.removeFrom(options);
+
+                opt_part_speed.removeFrom(options);
+                opt_part_speed_max.removeFrom(options);
+                opt_part_inertia.removeFrom(options);
+                opt_part_radius.removeFrom(options);
+                opt_part_drag.removeFrom(options);
+                opt_part_sep.removeFrom(options);
             });
     }
     // add input hooks
@@ -220,19 +240,18 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
         }
     } client{
         .near = {32, frame_alloc},
-        .max_len = (i32)init_data.size.y * 2,
+        .max_len = (i32)init_data.size.y * 2, // 4000 , //
     };
 
     const float sz = map_area.cell_size.x;
     const v2f orig = map_area.top_left;
     using Part = ParticleSym::Particle;
-    const i32 max_per_cell = 1.5f / ParticleSym::particle_rel_radius ;
-    const i32 num_particles = (client.max_len * max_per_cell); // 160'000; //
+    const i32 max_per_cell = 1.5f / ParticleSym::default_rel_radius;
+    const i32 num_to_spawn = (client.max_len * max_per_cell); // 160'000; //
 
-    SPDLOG_INFO("spawning {} particles", num_particles);
+    SPDLOG_INFO("spawning {} particles", num_to_spawn);
 
     Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
-
     const u32 client_len = (u32)client.near.size();
     vex::Buffer<v2f> cells = {frame_alloc, (i32)client_len};
 
@@ -243,15 +262,15 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
         cells.add(orig + v2f(cell_xy.x * sz, -cell_xy.y * sz - sz));
     }
 
-    vex::Buffer<Part> particles = {frame_alloc, num_particles};
+    vex::Buffer<Part> particles = {frame_alloc, num_to_spawn};
     vex::Buffer<i32> rejection = {frame_alloc, (i32)client_len};
     rejection.addUninitialized(client_len);
     for (auto& it : rejection)
         it = max_per_cell;
-    particles.addUninitialized(num_particles);
+    particles.addUninitialized(num_to_spawn);
 
-    const float padding = ParticleSym::particle_rel_radius * sz * 0.5f;
-    for (auto i = 0; i < num_particles; ++i)
+    const float padding = ParticleSym::default_rel_radius * sz * 0.5f;
+    for (auto i = 0; i < num_to_spawn; ++i)
     {
         i32 repeat_cnt = 4;
     repeat:
@@ -268,6 +287,8 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
         particles[i].pos = rand_cell + v2f{rnd_x, rnd_y};
         particles[i].vel = v2f_zero;
     }
+
+    num_particles = num_to_spawn;
     part_sys.spawnForSymulation(ctx, particles.constSpan());
 }
 
@@ -278,7 +299,8 @@ void FlowfieldPF::update(Application& owner)
         return;
     if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         return;
-    Viewport& viewport = viewports.imgui_views[0].render_target;
+    auto& vp_wrapper = viewports.imgui_views[0];
+    Viewport& viewport = vp_wrapper.render_target;
     if (viewport.options.size.x <= 1 || viewport.options.size.y <= 1)
     {
         return;
@@ -299,10 +321,12 @@ void FlowfieldPF::update(Application& owner)
     camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
     camera.update();
 
+    auto& globals = wgpu_backend->getGlobalResources();
+
     const v2i32 pos = owner.input.global.mouse_pos_window;
     viewports.updateMouseLoc(pos);
-
-    auto& globals = wgpu_backend->getGlobalResources();
+    bool has_focus = vp_wrapper.mouse_over && vp_wrapper.gui_visible;
+    if (has_focus)
     { // process input
         owner.input.ifTriggered("DEBUG"_trig,
             [&](const input::Trigger& self)
@@ -400,8 +424,8 @@ void FlowfieldPF::update(Application& owner)
                 wgpuDeviceTick(ctx.device);
             };
 
-            u32 flags_comp = draw_args.settings->valueOr(opt_wallbias_numbers.key_name, false) //
-                             | (2 * draw_args.settings->valueOr(opt_smooth_flow.key_name, false));
+            u32 flags_comp = draw_args.settings->valueOr(opt_wallbias_numbers.key_name, false); //
+            /* | (2 * draw_args.settings->valueOr(opt_smooth_flow.key_name, false));*/
             compute_pass.compute(compute_ctx, ComputeArgs{
                                                   .map_size = int_sz,
                                                   .flags = flags_comp,
@@ -413,6 +437,7 @@ void FlowfieldPF::update(Application& owner)
             compute_ctx.comp_pass = wgpuCommandEncoderBeginComputePass(
                 compute_ctx.encoder, nullptr);
             part_sys.compute(compute_ctx, ParticleSym::CompArgs{
+                                              .settings = &owner.getSettings(),
                                               .bounds = int_sz,
                                               .grid_min = map_area.bot_left,
                                               .grid_size = {camera.height, camera.height},
@@ -422,6 +447,7 @@ void FlowfieldPF::update(Application& owner)
                                           });
             submit_cmp(compute_ctx);
         }
+
         { // overlays
             if (draw_args.settings->valueOr(opt_show_dbg_overlay.key_name, false))
             {
@@ -442,7 +468,11 @@ void FlowfieldPF::update(Application& owner)
             view_grid.draw(wgpu_ctx, draw_args);
         }
         // particle system - draw
-        part_sys.draw(wgpu_ctx, draw_args, {.bounds = init_data.size});
+        part_sys.draw(wgpu_ctx, draw_args,
+            {
+                .settings = &owner.getSettings(),
+                .bounds = init_data.size,
+            });
 
         // SUBMIT
         viewport.finishAndSubmit();
@@ -515,51 +545,71 @@ void FlowfieldPF::drawUI(Application& owner)
             }
         }
 
-        // move diagonally toggle
-        auto is_diag_move_allowed = options.settings.find(opt_allow_diagonal.key_name);
-        if (is_diag_move_allowed && is_diag_move_allowed->value.getValueOr<bool>(true))
-        {
-            if (ImGui::Button(ICON_CI_DIFF_ADDED " disable diagonal movement##pf_hide_overlay"))
-                is_diag_move_allowed->value.set<bool>(false);
-        }
-        else if (is_diag_move_allowed)
-        {
-            if (ImGui::Button(ICON_CI_DIFF_IGNORED " enable diagonal movement##pf_show_overlay"))
-                is_diag_move_allowed->value.set<bool>(true);
-        }
-        // flow toggle
-        auto is_ff_overlay_active = options.settings.find(opt_show_ff_overlay.key_name);
-        if (is_ff_overlay_active && is_ff_overlay_active->value.getValueOr<bool>(false))
-        {
-            if (ImGui::Button(ICON_CI_DIFF_MODIFIED " disable fields overlay##pf_hide_overlay"))
-                is_ff_overlay_active->value.set<bool>(false);
-        }
-        else if (is_ff_overlay_active)
-        {
-            if (ImGui::Button(ICON_CI_DIFF_RENAMED " enable fields overlay##pf_show_overlay"))
-                is_ff_overlay_active->value.set<bool>(true);
-        }
-        // neighbors toggle
-        auto should_show_overlay_opt = options.settings.find(opt_show_dbg_overlay.key_name);
-        if (should_show_overlay_opt && should_show_overlay_opt->value.getValueOr<bool>(false))
-        {
-            if (ImGui::Button(ICON_CI_DEBUG " debug: walls nearby##pf_hide_overlay"))
-                should_show_overlay_opt->value.set<bool>(false);
-        }
-        else if (should_show_overlay_opt)
-        {
-            if (ImGui::Button(ICON_CI_DEBUG " debug: walls nearby##pf_show_overlay"))
-                should_show_overlay_opt->value.set<bool>(true);
-        }
-
         if (ImGui::Button(ICON_CI_SETTINGS " settings##pf_show_options"))
             gui_options.options_shown = !gui_options.options_shown;
+
+        ImGui::SameLine();
+        auto is_pause_enabled_cv = options.settings.find("gfx.pause");
+        if (is_pause_enabled_cv && !is_pause_enabled_cv->value.getValueOr<bool>(false))
+        {
+            if (ImGui::Button(ICON_CI_DEBUG_PAUSE "##pf_pause"))
+                is_pause_enabled_cv->value.set<bool>(true);
+        }
+        else if (is_pause_enabled_cv)
+        {
+            if (ImGui::Button(ICON_CI_DEBUG_START "##pf_pause"))
+                is_pause_enabled_cv->value.set<bool>(false);
+        }
+
+        std::string item_id;
+        item_id.reserve(80);
+
         if (gui_options.options_shown)
         {
-            ImGui::PushFont(vex::g_view_hub.visuals.fnt_log);
+            // move diagonally toggle
+            auto is_diag_move_allowed = options.settings.find(opt_allow_diagonal.key_name);
+            if (is_diag_move_allowed && is_diag_move_allowed->value.getValueOr<bool>(true))
+            {
+                if (ImGui::Button(ICON_CI_DIFF_ADDED " disable diagonal movement##pf_hide_overlay"))
+                    is_diag_move_allowed->value.set<bool>(false);
+            }
+            else if (is_diag_move_allowed)
+            {
+                if (ImGui::Button(
+                        ICON_CI_DIFF_IGNORED " enable diagonal movement##pf_show_overlay"))
+                    is_diag_move_allowed->value.set<bool>(true);
+            }
+            // flow toggle
+            auto is_ff_overlay_active = options.settings.find(opt_show_ff_overlay.key_name);
+            if (is_ff_overlay_active && is_ff_overlay_active->value.getValueOr<bool>(false))
+            {
+                if (ImGui::Button(ICON_CI_DIFF_MODIFIED " disable fields overlay##pf_hide_overlay"))
+                    is_ff_overlay_active->value.set<bool>(false);
+            }
+            else if (is_ff_overlay_active)
+            {
+                if (ImGui::Button(ICON_CI_DIFF_RENAMED " enable fields overlay##pf_show_overlay"))
+                    is_ff_overlay_active->value.set<bool>(true);
+            }
+            // neighbors toggle
+            auto should_show_overlay_opt = options.settings.find(opt_show_dbg_overlay.key_name);
+            if (should_show_overlay_opt && should_show_overlay_opt->value.getValueOr<bool>(false))
+            {
+                if (ImGui::Button(ICON_CI_DEBUG " debug: walls nearby##pf_hide_overlay"))
+                    should_show_overlay_opt->value.set<bool>(false);
+            }
+            else if (should_show_overlay_opt)
+            {
+                if (ImGui::Button(ICON_CI_DEBUG " debug: walls nearby##pf_show_overlay"))
+                    should_show_overlay_opt->value.set<bool>(true);
+            }
+
+            ImGui::PushFont(vex::g_view_hub.visuals.fnt_tiny);
             defer_ { ImGui::PopFont(); };
+            ImVec2 side_panel_size = {350, 0};
+            // side_panel_size.x = max(side_panel_size.x, 200.0f);GuiRelVec{ 0.25, 0 };
             [[maybe_unused]] bool visible = ImGui::BeginChild(
-                "##pf_options", GuiRelVec{0.25, 0}, false);
+                "##pf_options", side_panel_size, false);
             defer_ { ImGui::EndChild(); };
             ImGui::Indent(4);
             defer_ { ImGui::Unindent(); };
@@ -570,23 +620,39 @@ void FlowfieldPF::drawUI(Application& owner)
                 if (!k.starts_with("pf.") || k.length() < 4)
                     continue;
 
+                item_id.clear();
+
                 const bool has_min = v.min.hasAnyValue();
                 const bool has_max = v.max.hasAnyValue();
                 const char* name_adj = k.data() + 3;
+                fmt::format_to(std::back_inserter(item_id), "##a{}", name_adj);
+
                 v.value.match(
                     [&, &vv = v](i32& a)
                     {
+                        ImGui::TextUnformatted(name_adj);
+                        // ImGui::SameLine();
+                        // ImGui::PushItemWidth(-40);
                         if (has_min && has_max)
-                            ImGui::SliderInt(name_adj, &a, vv.min.get<i32>(), vv.max.get<i32>());
+                            ImGui::SliderInt(
+                                item_id.c_str(), &a, vv.min.get<i32>(), vv.max.get<i32>());
                         else
-                            ImGui::InputInt(name_adj, &a);
+                            ImGui::InputInt(item_id.c_str(), &a);
                     },
                     [&, &vv = v](f32& a)
                     {
+                        ImGui::TextUnformatted(name_adj);
+                        // ImGui::SameLine();
+                        // ImGui::PushItemWidth(-40);
                         if (has_min && has_max)
-                            ImGui::SliderFloat(name_adj, &a, vv.min.get<f32>(), vv.max.get<f32>());
+                        {
+                            ImGui::SliderFloat(item_id.c_str(), &a, vv.min.get<f32>(),
+                                vv.max.get<f32>(), "%.3f", ImGuiSliderFlags_AlwaysClamp);
+                            if ((SettingsContainer::Flags::k_ui_min_as_step & vv.flags) != 0)
+                                a = round(a / vv.min.get<f32>()) * vv.min.get<f32>();
+                        }
                         else
-                            ImGui::InputFloat(name_adj, &a);
+                            ImGui::InputFloat(item_id.c_str(), &a);
                     },
                     [&](bool& a)
                     {
@@ -595,9 +661,12 @@ void FlowfieldPF::drawUI(Application& owner)
                     [&](v4f& a)
                     {
                         // ImGui::BeginChild("Color picker");
-                        ImGui::TextUnformatted("GridColor");
-                        ImGui::SetNextItemWidth(256);
-                        ImGui::ColorPicker4("##GridColor", (float*)&a.x);
+                        ImGui::TextUnformatted(name_adj);
+                        ImGui::SetNextItemWidth(128);
+                        ImGui::ColorPicker4(item_id.c_str(), (float*)&a.x, //
+                            ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoLabel |
+                                ImGuiColorEditFlags_NoSmallPreview | ImGuiColorEditFlags_AlphaBar |
+                                ImGuiColorEditFlags_NoInputs);
                         // ImGui::EndChild();
                     });
             }
@@ -607,21 +676,9 @@ void FlowfieldPF::drawUI(Application& owner)
     if (ImGui::BeginMainMenuBar())
     {
         defer_ { ImGui::EndMainMenuBar(); };
-        // ImGui::Bullet();
-        // ImGui::Text(" mem alloc: %d ", frame_alloc_resource.bump.state.top);
         ImGui::Bullet();
-
-        auto is_pause_enabled_cv = options.settings.find("gfx.pause");
-        if (is_pause_enabled_cv && !is_pause_enabled_cv->value.getValueOr<bool>(false))
-        {
-            if (ImGui::Button(ICON_CI_DEBUG_PAUSE " pause##pf_pause"))
-                is_pause_enabled_cv->value.set<bool>(true);
-        }
-        else if (is_pause_enabled_cv)
-        {
-            if (ImGui::Button(ICON_CI_DEBUG_START " unpause##pf_pause"))
-                is_pause_enabled_cv->value.set<bool>(false);
-        }
+        ImGui::Text("[particles:%d/%d] ", num_particles, max_particles);
+        ImGui::Bullet();
     }
 }
 void FlowfieldPF::postFrame(Application& owner)

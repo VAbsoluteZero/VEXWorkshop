@@ -21,14 +21,71 @@ namespace vex::flow
     static inline const auto opt_grid_color = SettingsContainer::EntryDesc<v4f>{
         .key_name = "pf.GridColor",
         .info = "Color of the grid.",
-        .default_val = v4f(Color::gray()) * 0.5f,
+        .default_val = v4f(Color::gray()) * 0.7f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
-
+    static inline const auto opt_part_color = SettingsContainer::EntryDesc<v4f>{
+        .key_name = "pf.ParticleColor",
+        .info = "Color of a particle.",
+        .default_val = v4f(Color::green()),
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_part_auto_color = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.AutoParticleColor",
+        .info = "Color of a particle determined by its generation.",
+        .default_val = false,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    /*
+        add to particle  : force, reserved
+    */
     static inline const auto opt_part_speed = SettingsContainer::EntryDesc<float>{
-        .key_name = "pf.BoidSpeed",
-        .info = "Base speed of boid in units per second.",
+        .key_name = "pf.PtSym_BaseSpeed",
+        .info = "Base speed of a particle in units per second.",
         .default_val = 2.0f,
+        .min = 0.00f,
+        .max = 8.00f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_part_speed_max = SettingsContainer::EntryDesc<float>{
+        .key_name = "pf.PtSym_SpeedClamp",
+        .info = "Max normalized speed value.",
+        .default_val = 2.0f,
+        .min = 0.00f,
+        .max = 12.00f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_part_inertia = SettingsContainer::EntryDesc<float>{
+        .key_name = "pf.PtSym_Inertia",
+        .info = "Constant that determins how quickly velocity may change.",
+        .default_val = 1.00f,
+        .min = 0.00f,
+        .max = 2.00f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_part_radius = SettingsContainer::EntryDesc<float>{
+        .key_name = "pf.PtSym_PhysicalRadius",
+        .info = "Radius of a particle relative to cell size.",
+        .default_val = 0.25f,
+        .min = 0.125f,
+        .max = 0.5f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui |
+                 SettingsContainer::Flags::k_ui_min_as_step,
+    };
+    static inline const auto opt_part_drag = SettingsContainer::EntryDesc<float>{
+        .key_name = "pf.PtSym_Drag",
+        .info = "How fast particle should deccelarate.",
+        .default_val = 0.05f,
+        .min = 0.00f,
+        .max = 0.75f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_part_sep = SettingsContainer::EntryDesc<float>{
+        .key_name = "pf.PtSym_Separation",
+        .info = "Force that pushes particles away when they get too close.",
+        .default_val = 0.05f,
+        .min = 0.00f,
+        .max = 0.75f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
 
@@ -284,8 +341,8 @@ namespace vex::flow
     {
         static constexpr u32 spatial_table_depth = 4;
         static constexpr bool experimental = true;         // enable spatial experimental stuff
-        static constexpr float particle_rel_radius = 0.25f; // relative to cell size
-        static constexpr u32 spatial_subdiv = u32(1 / particle_rel_radius);
+        static constexpr float default_rel_radius = 0.25f; // relative to cell size
+                                                           // static constexpr
         struct Particle
         {
             v2f pos;
@@ -308,11 +365,19 @@ namespace vex::flow
             v2f grid_size{};
             v2f cell_size{};
             u32 num_particles = 0;
+            u32 table_depth = spatial_table_depth;
+
             f32 speed_base = 1.25f;
-            f32 radius = particle_rel_radius;
+            f32 radius = 0.25;
+
+            f32 separation = 0.2f;
+            f32 inertia = 1.2f;
+
+            f32 drag = 0.05f;
+            f32 speed_max = 8.0f;
+
             f32 delta_time = 0.01f;
             u32 flags = 0;
-            u32 table_depth = spatial_table_depth;
             u32 padding[4];
         };
         struct
@@ -338,7 +403,7 @@ namespace vex::flow
                         .entryPoint = "cs_count",
                     },
             };
-            WGPUComputePipeline count_pipeline; 
+            WGPUComputePipeline count_pipeline;
 
             u32 num_particles = 0;
         } hash_data;
@@ -356,14 +421,14 @@ namespace vex::flow
             };
             wgfx::ComputePipeline solve_pass2_data{
                 .descriptor =
-                {
-                    .entryPoint =   "cs_solve_second_pass",
-                },
+                    {
+                        .entryPoint = "cs_solve_second_pass",
+                    },
             };
             WGPUBindGroupLayout bgl_layout;
-            WGPUComputePipeline move_pipeline;
             WGPUComputePipeline solve_pipeline;
             WGPUComputePipeline solve_pass2_pipeline;
+            WGPUComputePipeline move_pipeline;
 
             u32 num_particles = 0;
         } sym_data;
@@ -398,6 +463,7 @@ namespace vex::flow
 
         struct CompArgs
         {
+            SettingsContainer* settings = nullptr;
             v2u32 bounds{};
             v2f grid_min{};
             v2f grid_size{};
@@ -408,6 +474,7 @@ namespace vex::flow
         void compute(wgfx::CompContext& ctx, CompArgs args);
         struct DrawArgs
         {
+            SettingsContainer* settings = nullptr;
             v2u32 bounds;
         };
         void draw(const wgfx::GpuContext& ctx, const DrawContext& draw_ctx, DrawArgs args);

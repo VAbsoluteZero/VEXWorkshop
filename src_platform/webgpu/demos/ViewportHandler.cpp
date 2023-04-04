@@ -119,7 +119,7 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
         }
         ImGui::Bullet();
         const i32 target_fps = app.getMaxFps();
-        ImGui::Text(" perf: %.3f ms/frame (%.1f FPS) / limit: %d", 1000.0f / ImGui::GetIO().Framerate,
+        ImGui::Text("[frame:%.3fms (%.1f FPS/%d)]", 1000.0f / ImGui::GetIO().Framerate,
             ImGui::GetIO().Framerate, target_fps);
     }
 

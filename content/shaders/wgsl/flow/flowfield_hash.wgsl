@@ -14,12 +14,21 @@ struct Args {
     grid_min: v2f,
     grid_size: v2f,
     cell_size: v2f,
+
     num_particles: u32,
+    table_depth: u32,
+
     speed_base: f32,
     radius: f32,
+
+    separation: f32,
+    inertia: f32,
+
+    drag: f32,
+    speed_max: f32,
+
     delta_time: f32,
-    flags: u32,    
-    table_depth: u32,
+    flags: u32,     
 };
 
 struct Vectors {
@@ -59,7 +68,7 @@ fn hash(pos: v2i32) -> u32 {
 fn cs_zero(@builtin(workgroup_id) wgid: vec3u, @builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) num_groups: vec3u) {
 
     let total_size_1d = u.spatial_table_size.x * u.spatial_table_size.y;
-    let per_invo = total_size_1d / (num_groups.x * 64);
+    let per_invo = total_size_1d / (num_groups.x * 64) + 1;
     let start = gid.x * per_invo;
     for (var line_idx = u32(start); line_idx < start + per_invo; line_idx++) {
         if line_idx >= total_size_1d {return;}

@@ -69,6 +69,7 @@ namespace vex
         struct Flags // predefined flags
         {
             static constexpr u32 k_visible_in_ui = 0x0000'0001u;
+            static constexpr u32 k_ui_min_as_step = 0x0000'0002u;
         };
         struct Entry
         {

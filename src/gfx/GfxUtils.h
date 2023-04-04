@@ -30,6 +30,8 @@ namespace vex
     {
         std::string text;
         ShaderSourceType type;
+        u64 timestamp = 0;
+        bool reloaded_dirty_flag = false;
     };
     struct TextShaderLib
     { 
@@ -37,7 +39,7 @@ namespace vex
         std::string path_to_dir;
         void build(const char* rel_path);
         void reload();
-        void reload(const char* name);
+        void reloadIfNewer(const char* name);
     };
 
     static constexpr v2i32 vp_default_sz{800, 600};
