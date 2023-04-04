@@ -9,10 +9,6 @@
 
 namespace vex::flow
 {
-    // struct SettingsFlags // predefined flags
-    //{
-    //     static constexpr u32 k_pf_demo_setting = 0x0001'0000u;
-    // };
     static inline const auto opt_grid_thickness = SettingsContainer::EntryDesc<i32>{
         .key_name = "pf.GridSize",
         .info = "Thickness of the grid. Value less than 2 disables the grid.",
@@ -21,12 +17,21 @@ namespace vex::flow
         .max = 8,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
+
     static inline const auto opt_grid_color = SettingsContainer::EntryDesc<v4f>{
         .key_name = "pf.GridColor",
         .info = "Color of the grid.",
         .default_val = v4f(Color::gray()) * 0.5f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
+
+    static inline const auto opt_part_speed = SettingsContainer::EntryDesc<float>{
+        .key_name = "pf.BoidSpeed",
+        .info = "Base speed of boid in units per second.",
+        .default_val = 2.0f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+
     struct DrawContext
     {
         SettingsContainer* settings = nullptr;

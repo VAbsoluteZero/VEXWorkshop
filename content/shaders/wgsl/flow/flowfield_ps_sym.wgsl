@@ -133,6 +133,13 @@ const solver_chunk  = v2i32(4,4);
 override use_solver_v1 = false;
 // quads 8 * 8  
 
+// dbg.cells[va * 6] = i32(va);
+// dbg.cells[va * 6 + 1] = i32(a_idx);
+// dbg.cells[va * 6 + 2] = i32(b_idx);
+// dbg.cells[va * 6 + 3] = i32(separate * 100);
+// dbg.cells[va * 6 + 4] = i32(11111111);
+// dbg.cells[va * 6 + 5] = i32(invalid_cycle);
+
 fn cell_to_idx(cell: v2i32, offset: i32) -> i32 {
     let v = cell.x + cell.y * i32(args.spatial_table_size.y) + offset;
     return v;
@@ -163,13 +170,7 @@ fn cell_to_cell_collision(a: v2i32, b: v2i32, cap: u32) {
             let separate: f32 = (length(diff) - 3.5 * args.radius);
 
             invalid_cycle = invalid_cycle || (separate > 0) || (diff.x == 0);
-            
-    // dbg.cells[va * 6] = i32(va);
-    // dbg.cells[va * 6 + 1] = i32(a_idx);
-    // dbg.cells[va * 6 + 2] = i32(b_idx);
-    // dbg.cells[va * 6 + 3] = i32(separate * 100);
-    // dbg.cells[va * 6 + 4] = i32(11111111);
-    // dbg.cells[va * 6 + 5] = i32(invalid_cycle);
+
 
             let diff_norm = normalize(diff);
             let sep_mag = args.radius * 0.15;
@@ -179,13 +180,6 @@ fn cell_to_cell_collision(a: v2i32, b: v2i32, cap: u32) {
             }
         }
     }
-
-    // let pos_other = particles.data[cell_to_idx(b, 0)].pos;
-    // let diff = pos_other - particles.data[cell_to_idx(a, 0)].pos;
-    // let separate: f32 = (length(diff) - 2 * args.radius) * 0.15;
-
-    // particles.data[cell_to_idx(a, 0)].vel += select(v2f(), normalize(-diff) * abs(separate), diff.x != 0 && separate < 0);
-    // particles.data[cell_to_idx(b, 0)].vel += select(v2f(), normalize(diff) * abs(separate), diff.x != 0 && separate < 0);
 }
 
 fn solve_v2(gid: u32, num_groups: u32, dbg_val: i32) {
@@ -201,13 +195,6 @@ fn solve_v2(gid: u32, num_groups: u32, dbg_val: i32) {
 
     let limit_x: i32 = min(i32(quad_tl.x) + solver_chunk.x, i32(args.spatial_table_size.x - 1));
     let limit_y: i32 = min(i32(quad_tl.y) + solver_chunk.y, i32(args.spatial_table_size.y - 1));
-    
-    // dbg.cells[gid * 6] = i32(gid);
-    // dbg.cells[gid * 6 + 1] = i32(box_x);
-    // dbg.cells[gid * 6 + 2] = i32(box_y);
-    // dbg.cells[gid * 6 + 3] = i32(quad_tl.x);
-    // dbg.cells[gid * 6 + 4] = i32(quad_tl.y);
-    // dbg.cells[gid * 6 + 5] = i32(dbg_val);
 
     for (var x: i32 = quad_tl.x; x < limit_x; x++) {
         for (var y: i32 = quad_tl.y; y < limit_y; y++) {
@@ -328,7 +315,7 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     vel = lerpVec(vel, target_vel, dt * 2.8);
 
     particles.data[idx].vel = clamp(vel, v2f(-4, -4), v2f(4, 4));
-    var delta_vec = particles.data[idx].vel * dt ; 
+    var delta_vec = particles.data[idx].vel * dt * 0.5 ; 
 
     // #fixme only check in direction of movement
     delta_vec = wall_collide(pos, this_cell + v2i32(0, 1), delta_vec);
@@ -340,6 +327,17 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(1, -1), delta_vec);
+    // split into two to reduce chance of glitching out
+    delta_vec = particles.data[idx].vel * dt * 0.5 ;
+    delta_vec = wall_collide(pos, this_cell + v2i32(0, 1), delta_vec);
+    delta_vec = wall_collide(pos, this_cell + v2i32(0, -1), delta_vec);
+    delta_vec = wall_collide(pos, this_cell + v2i32(-1, 0), delta_vec);
+    delta_vec = wall_collide(pos, this_cell + v2i32(1, 0), delta_vec);
 
-    particles.data[idx].pos += delta_vec;  
+    delta_vec = wall_collide(pos, this_cell + v2i32(1, 1), delta_vec);
+    delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
+    delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
+    delta_vec = wall_collide(pos, this_cell + v2i32(1, -1), delta_vec);
+
+    particles.data[idx].pos += delta_vec;
 }
