@@ -219,8 +219,6 @@ i32 vex::Application::runLoop()
             using namespace std::chrono_literals;
             framerate.frame_number++;
             auto ft_elapsed = g_frame_sw.elapsed();
-            double dt_sec = ft_elapsed / 1.0s;
-            ftime.update(dt_sec);
 
             // dumb implementation #fixme - rewrite
             if (!framerate.fpsUnconstrained())
@@ -233,7 +231,9 @@ i32 vex::Application::runLoop()
                     std::this_thread::sleep_for(std::chrono::milliseconds((i64)(left_ms - 0.05f)));
                 }
             }
-
+            ft_elapsed = g_frame_sw.elapsed();
+            double dt_sec = ft_elapsed / 1.0s;
+            ftime.update(dt_sec);
             g_frame_sw.reset();
         }
 #if __EMSCRIPTEN__

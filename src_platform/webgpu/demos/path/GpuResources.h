@@ -211,10 +211,6 @@ namespace vex::flow
             u32 flags = 0;
             u32 dummy = 0;
         };
-        // struct ComputeContext
-        //{
-        //     WGPUDevice device = nullptr;
-        // };
         const char* cf_shader_file = "content/shaders/wgsl/flow/flowfield_conv.wgsl";
 
         wgfx::GpuBuffer uniform_buf;
@@ -278,31 +274,91 @@ namespace vex::flow
         bool isValid() const { return uniform_buf.isValid() && bind_group && pipeline; }
     };
 
+    // #todo : select solve pipeline based on part cnt
     struct ParticleSym
     {
-        static constexpr float particle_rel_radius = 0.1f; // relative to cell size
+        static constexpr u32 spatial_table_depth = 4;
+        static constexpr bool experimental = true;         // enable spatial experimental stuff
+        static constexpr float particle_rel_radius = 0.25f; // relative to cell size
+        static constexpr u32 spatial_subdiv = u32(1 / particle_rel_radius);
         struct Particle
         {
             v2f pos;
             v2f vel;
+        };
+        struct VisualUBO
+        {
+            mtx4 camera_vp;
+            v4f color1;
+            v4f color2;
+            v4f size;
+            u32 flags;
+            u32 padding[4];
+        };
+        struct SimulateUBO
+        {
+            v2u32 spatial_table_size;
+            v2u32 bounds{};
+            v2f grid_min{};
+            v2f grid_size{};
+            v2f cell_size{};
+            u32 num_particles = 0;
+            f32 speed_base = 1.25f;
+            f32 radius = particle_rel_radius;
+            f32 delta_time = 0.01f;
+            u32 flags = 0;
+            u32 table_depth = spatial_table_depth;
+            u32 padding[4];
         };
         struct
         {
             const char* shader = nullptr;
             wgfx::GpuBuffer uniform_buf;
             wgfx::GpuBuffer particle_data_buf;
+            wgfx::GpuBuffer spatial_table;
+            wgfx::GpuBuffer counters;
+            WGPUBindGroup bind_group;
+            WGPUBindGroupLayout bgl_layout;
+
+            wgfx::ComputePipeline zero_pipeline_data{
+                .descriptor =
+                    {
+                        .entryPoint = "cs_zero",
+                    },
+            };
+            WGPUComputePipeline zero_pipeline;
+            wgfx::ComputePipeline count_pipeline_data{
+                .descriptor =
+                    {
+                        .entryPoint = "cs_count",
+                    },
+            };
+            WGPUComputePipeline count_pipeline; 
+
+            u32 num_particles = 0;
+        } hash_data;
+        struct
+        {
+            const char* shader = nullptr;
             WGPUBindGroup bind_group;
 
             wgfx::ComputePipeline move_pipeline_data;
             wgfx::ComputePipeline solve_pipeline_data{
                 .descriptor =
                     {
-                        .entryPoint = "cs_solve",
+                        .entryPoint = experimental ? "cs_solve" : "cs_solve_few",
                     },
+            };
+            wgfx::ComputePipeline solve_pass2_data{
+                .descriptor =
+                {
+                    .entryPoint =   "cs_solve_second_pass",
+                },
             };
             WGPUBindGroupLayout bgl_layout;
             WGPUComputePipeline move_pipeline;
             WGPUComputePipeline solve_pipeline;
+            WGPUComputePipeline solve_pass2_pipeline;
 
             u32 num_particles = 0;
         } sym_data;
@@ -321,21 +377,14 @@ namespace vex::flow
 
         struct InitArgs
         {
+            const char* shader_hash = "content/shaders/wgsl/flow/flowfield_hash.wgsl";
             const char* shader_compute = "content/shaders/wgsl/flow/flowfield_ps_sym.wgsl";
             const char* shader_visual = "content/shaders/wgsl/flow/flowfield_ps_quad_vf.wgsl";
             const char* particle_texture = "content/sprites/flow/particle.png";
             wgfx::GpuBuffer* flow_v2f_buf = nullptr;
             wgfx::GpuBuffer* cells_buf = nullptr;
             u32 max_particles = 200'000;
-        };
-        struct VisualUBO
-        {
-            mtx4 camera_vp;
-            v4f color1;
-            v4f color2;
-            v4f size;
-            u32 flags;
-            u32 padding[4];
+            v2u32 bounds{};
         };
 
         void spawnForSymulation(const wgfx::GpuContext& ctx, ROSpan<Particle> parts);
@@ -350,19 +399,6 @@ namespace vex::flow
             v2f cell_size{};
             float time = 0;
             float dt = 0;
-        };
-        struct ComputeUBO
-        {
-            v2u32 bounds{};
-            v2f grid_min{};
-            v2f grid_size{};
-            v2f cell_size{};
-            u32 num_particles = 0;
-            f32 speed_base = 1.25f;
-            f32 radius = particle_rel_radius;
-            f32 delta_time = 0.01f;
-            u32 flags = 0;
-            u32 padding[4];
         };
         void compute(wgfx::CompContext& ctx, CompArgs args);
         struct DrawArgs

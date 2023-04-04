@@ -20,6 +20,7 @@ struct Uniforms {
 struct VertexOutput {
   @builtin(position) pos: vec4<f32>,
   @location(0) uv: vec2<f32>,
+  @location(1) @interpolate(flat) vert_idx: u32,
 }
 
 struct Vectors {
@@ -45,15 +46,18 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
     let size: v2f = v2f(u.data1.z, u.data1.w);
 
     let v_end = dir * size.y * 0.6;
-    let dx = dir.x * size.x * 0.05;
-    let dy = dir.y * size.x * 0.05;
+
+    let main = (i % 6) >= 3;
+
+    let dx = dir.x * size.x * select(0.09, 0.05, main);
+    let dy = dir.y * size.x * select(0.09, 0.05, main);
 
     let pos2 = array(
-        vec2(dy, -dx),
-        v_end + vec2(dy, -dx),
-        v_end + vec2(-dy, dx),
+        // vec2(dy , -dx),
+        // v_end + vec2(0, -dx),
+        // v_end + vec2(0, dx),
         vec2(dy, -dx), // second tri
-        v_end + vec2(-dy, dx),
+        v_end,
         vec2(-dy, dx),
     );
     let cell_offset = v2f(size.x * f32(cell_xy.x), -size.y * f32(cell_xy.y));
@@ -64,17 +68,20 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
     output.uv = v2f(-10, -10);
     if dir.x == 0 && dir.y == 0 {
         return output;
-    } 
-    let p: v2f = orig + pos2[i % 6];
+    }
+    let p: v2f = orig + pos2[i % 3];
 
     output.pos = u.camera_vp * v4f(p.x, p.y, 1, 1);
     output.uv = uv[i];
+    output.vert_idx = i;
     return output;
 } 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if in.uv.x < -1 {discard;}
-    return v4f(0.50, 0.99, 0.6, 0.99);
+    let main = (in.vert_idx % 6) >= 3;
+    return v4f(0.50, 0.99, 0.6, select(0.25, 0.7, main));
+
     // var p: v2u32 = v2u32(u32(in.uv.x * f32(u.bounds.x)), u32(in.uv.y * f32(u.bounds.y)));
     // var tile: v2f = vecmap.cells[p.y * u.bounds.x + p.x];
     // if tile.x == 0 && tile.y == 0 {

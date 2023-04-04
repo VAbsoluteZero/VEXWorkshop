@@ -239,7 +239,7 @@ namespace vex::flow
 
         wgfx::ui::ViewportHandler viewports;
         wgfx::ui::BasicDemoUI ui;
-        vex::InlineBufferAllocator<2 * 1024 * 1024> frame_alloc_resource;
+        vex::InlineBufferAllocator<20 * 1024 * 1024> frame_alloc_resource;
         // bump allocator that resets each frame
         vex::Allocator frame_alloc = frame_alloc_resource.makeAllocatorHandle();
         bool docking_not_configured = true;

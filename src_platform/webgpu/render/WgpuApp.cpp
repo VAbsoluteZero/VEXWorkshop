@@ -84,7 +84,7 @@ struct WgpuRenderInterface
                 .label = "chain",
                 .usage = WGPUTextureUsage_RenderAttachment,
                 .format = globals.main_texture_fmt,
-                .width = (u32)wnd_x,
+                .width = (u32)wnd_x, 
                 .height = (u32)wnd_y,
                 .presentMode = WGPUPresentMode_Immediate,
             };

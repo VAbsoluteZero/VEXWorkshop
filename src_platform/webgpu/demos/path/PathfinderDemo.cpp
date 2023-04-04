@@ -128,7 +128,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     }
     // init webgpu stuff
     {
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
+       //Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
+       Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -152,7 +153,10 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
 
         part_sys.init(ctx, wgpu_backend->text_shad_lib,
             ParticleSym::InitArgs{
-                .flow_v2f_buf = &compute_pass.output_buf, .cells_buf = &heatmap.storage_buf});
+                .flow_v2f_buf = &compute_pass.output_buf,
+                .cells_buf = &heatmap.storage_buf,
+                .bounds = init_data.size,
+            });
     }
     // init console variables
     {
@@ -194,7 +198,6 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         true);
 }
 
-
 void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnArgs args)
 {
     struct
@@ -217,14 +220,16 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
         }
     } client{
         .near = {32, frame_alloc},
-        .max_len = init_data.size.y < 129 ? 37 : 488,
+        .max_len = (i32)init_data.size.y * 2,
     };
 
     const float sz = map_area.cell_size.x;
     const v2f orig = map_area.top_left;
     using Part = ParticleSym::Particle;
-    const i32 max_per_cell = 1 / (ParticleSym::particle_rel_radius * sz * 2);
-    const i32 num_particles = (client.max_len * max_per_cell);
+    const i32 max_per_cell = 1.5f / ParticleSym::particle_rel_radius ;
+    const i32 num_particles = (client.max_len * max_per_cell); // 160'000; //
+
+    SPDLOG_INFO("spawning {} particles", num_particles);
 
     Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
 
@@ -257,7 +262,7 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
         {
             repeat_cnt--;
             goto repeat;
-        } 
+        }
         volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding);
         volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding);
         particles[i].pos = rand_cell + v2f{rnd_x, rnd_y};
@@ -378,6 +383,7 @@ void FlowfieldPF::update(Application& owner)
                 });
         }
         { // compute pass
+            wgpuDeviceTick(wgpu_ctx.device);
             auto encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
 
             CompContext compute_ctx{
@@ -537,12 +543,12 @@ void FlowfieldPF::drawUI(Application& owner)
         auto should_show_overlay_opt = options.settings.find(opt_show_dbg_overlay.key_name);
         if (should_show_overlay_opt && should_show_overlay_opt->value.getValueOr<bool>(false))
         {
-            if (ImGui::Button(ICON_CI_DEBUG " debug overlay##pf_hide_overlay"))
+            if (ImGui::Button(ICON_CI_DEBUG " debug: walls nearby##pf_hide_overlay"))
                 should_show_overlay_opt->value.set<bool>(false);
         }
         else if (should_show_overlay_opt)
         {
-            if (ImGui::Button(ICON_CI_DEBUG " debug overlay##pf_show_overlay"))
+            if (ImGui::Button(ICON_CI_DEBUG " debug: walls nearby##pf_show_overlay"))
                 should_show_overlay_opt->value.set<bool>(true);
         }
 
@@ -601,8 +607,21 @@ void FlowfieldPF::drawUI(Application& owner)
     if (ImGui::BeginMainMenuBar())
     {
         defer_ { ImGui::EndMainMenuBar(); };
+        // ImGui::Bullet();
+        // ImGui::Text(" mem alloc: %d ", frame_alloc_resource.bump.state.top);
         ImGui::Bullet();
-        ImGui::Text(" dbg: %d ", frame_alloc_resource.bump.state.top);
+
+        auto is_pause_enabled_cv = options.settings.find("gfx.pause");
+        if (is_pause_enabled_cv && !is_pause_enabled_cv->value.getValueOr<bool>(false))
+        {
+            if (ImGui::Button(ICON_CI_DEBUG_PAUSE " pause##pf_pause"))
+                is_pause_enabled_cv->value.set<bool>(true);
+        }
+        else if (is_pause_enabled_cv)
+        {
+            if (ImGui::Button(ICON_CI_DEBUG_START " unpause##pf_pause"))
+                is_pause_enabled_cv->value.set<bool>(false);
+        }
     }
 }
 void FlowfieldPF::postFrame(Application& owner)
