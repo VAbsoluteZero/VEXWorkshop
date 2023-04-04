@@ -345,7 +345,7 @@ namespace wgfx
             .entryPoint = "cs_main",
             .constantCount = 0,
             .constants = nullptr,
-        }; 
+        };
 
         inline WGPUComputePipeline createPipeline(
             const GpuContext& context, WGPUShaderModule shader, WGPUBindGroupLayout layout)
@@ -356,7 +356,27 @@ namespace wgfx
             };
             auto pipeline_layout = wgpuDeviceCreatePipelineLayout(context.device, &pl_desc);
             check_(pipeline_layout);
-            descriptor.module  = shader;
+            descriptor.module = shader;
+            check_(descriptor.module);
+            WGPUComputePipelineDescriptor pipeline_desc{
+                .label = label,
+                .layout = pipeline_layout,
+                .compute = descriptor,
+            };
+            auto pl = wgpuDeviceCreateComputePipeline(context.device, &pipeline_desc);
+            check_(pl);
+            return pl;
+        }
+        inline WGPUComputePipeline createPipeline(const GpuContext& context,
+            WGPUShaderModule shader, const vex::Buffer<WGPUBindGroupLayout>& layouts)
+        {
+            WGPUPipelineLayoutDescriptor pl_desc{
+                .bindGroupLayoutCount = (u32)layouts.size(),
+                .bindGroupLayouts = (WGPUBindGroupLayout*)layouts.data(),
+            };
+            auto pipeline_layout = wgpuDeviceCreatePipelineLayout(context.device, &pl_desc);
+            check_(pipeline_layout);
+            descriptor.module = shader;
             check_(descriptor.module);
             WGPUComputePipelineDescriptor pipeline_desc{
                 .label = label,

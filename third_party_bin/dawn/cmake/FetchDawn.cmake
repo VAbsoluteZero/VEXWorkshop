@@ -83,9 +83,10 @@ function(make_dawn_available)
 		webgpu_headers_gen
 		dawn_public_config
 	)
-	
+	 
 	foreach (Target ${AllDawnTargets})
 		set_property(TARGET ${Target} PROPERTY FOLDER "Dawn")
+		set_property(TARGET ${Target} PROPERTY COMPILE_WARNING_AS_ERROR NO) 
 	endforeach()
 	# set_property(TARGET glfw PROPERTY FOLDER "External/GLFW3")
 	# set_property(TARGET update_mappings PROPERTY FOLDER "External/GLFW3")

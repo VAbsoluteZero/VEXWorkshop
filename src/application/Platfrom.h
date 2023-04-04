@@ -69,6 +69,7 @@ namespace vex
         struct Flags // predefined flags
         {
             static constexpr u32 k_visible_in_ui = 0x0000'0001u;
+            static constexpr u32 k_ui_min_as_step = 0x0000'0002u;
         };
         struct Entry
         {
@@ -78,6 +79,21 @@ namespace vex
             OptNumValue max; // only make sense if both limist are set
             u32 flags = 0;
             u32 current_version = 0; // used as 'dirty flag' variant
+
+            template <typename T>
+            void setValue(T val)
+            { 
+                OptNumValue& opt_min = this->min;
+                OptNumValue& opt_mix = this->max;
+                if (T* stored_val = this->value.find<std::decay_t<T>>(); nullptr != stored_val)
+                {
+                    if (T* min = opt_min.find<std::decay_t<T>>(); nullptr != min)
+                        val = val < *min ? *min : val;
+                    if (T* max = opt_mix.find<std::decay_t<T>>(); nullptr != max)
+                        val = val > *max ? *max : val;
+                    *stored_val = val;
+                }
+            }
         };
         template <typename T>
         struct EntryDesc
@@ -119,7 +135,7 @@ namespace vex
                     key, callable, last_observed_version);
             }
             template <typename T>
-            T valueOr(std::string_view key, T alternative)
+            T valueOr(SettingsContainer& container, std::string_view key, T alternative)
             {
                 return container.valueOr<T>(key, alternative, &last_observed_version);
             }

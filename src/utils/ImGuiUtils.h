@@ -61,7 +61,7 @@ namespace vex
         std::vector<ImGuiDrawFn> delayed_gui_drawcalls;
         bool enabled = true; 
     };
-
+     
     struct ImViewHub
     {
         void onFirstPaintCall(v2f window_size, i32 display_h);
@@ -72,7 +72,7 @@ namespace vex
         template <typename TCallable>
         inline bool tryPushCall(const char* key, TCallable&& callback)
         {
-            auto view = views.tryGet(key);
+            auto view = views.find(key);
             if (view)
             {
                 view->delayed_gui_drawcalls.push_back(callback);

@@ -26,10 +26,7 @@ namespace vex
         {
             return glm::clamp<i32>(desiredFramerate(), Min, Max);
         }
-        inline double desiredFrameDurationMs() const
-        {
-            return 1000.0f / framerateClamped();
-        }
+        inline double desiredFrameDurationMs() const { return 1000.0f / framerateClamped(); }
     };
     /*
      * Scaled time exists for situations when whole simulation runs with time multiplier.
@@ -92,6 +89,7 @@ namespace vex
         i32 runLoop();
 
         input::InputSystem input;
+
     private:
         void showAppLevelUI();
         bool showDemoSelection();
@@ -117,7 +115,7 @@ namespace vex
         bool created = false;
         bool allow_demo_transition = false;
         // #todo ! demo reset is experimental and unsafe
-        vex::Option<DemoSamples::Entry> pending_demo; 
+        vex::Option<DemoSamples::Entry> pending_demo;
     };
 
     template <typename T>
@@ -136,6 +134,15 @@ namespace vex
 
     //=====================================================================================
     // variables
-    inline FrameTime g_time = {};
+    // inline FrameTime g_time = {};
+
+    static inline const auto opt_time_scale = SettingsContainer::EntryDesc<float>{
+        .key_name = "app.TimeScale",
+        .info = "Factor by which delta time is adjusted.",
+        .default_val = 1.0f,
+        .min = 0.0f,
+        .max = 10.0f,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
 
 } // namespace vex

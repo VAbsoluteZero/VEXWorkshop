@@ -125,6 +125,7 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
     setupSettings(self);
     self.all_demos = samples;
     opt_imgui_demo.addTo(self.getSettings());
+    opt_time_scale.addTo(self.getSettings());
 
     return self;
 }
@@ -205,6 +206,11 @@ i32 vex::Application::runLoop()
         // imgui draw callbacks
         {
             showAppLevelUI();
+            settings.ifHasValue<float>(opt_time_scale.key_name,
+                [&](float scale)
+                {
+                    ftime.setTimeMutlipier(scale);
+                });
         }
         //-----------------------------------------------------------------------------
         // post frame
@@ -219,8 +225,6 @@ i32 vex::Application::runLoop()
             using namespace std::chrono_literals;
             framerate.frame_number++;
             auto ft_elapsed = g_frame_sw.elapsed();
-            double dt_sec = ft_elapsed / 1.0s;
-            ftime.update(dt_sec);
 
             // dumb implementation #fixme - rewrite
             if (!framerate.fpsUnconstrained())
@@ -233,7 +237,9 @@ i32 vex::Application::runLoop()
                     std::this_thread::sleep_for(std::chrono::milliseconds((i64)(left_ms - 0.05f)));
                 }
             }
-
+            ft_elapsed = g_frame_sw.elapsed();
+            double dt_sec = ft_elapsed / 1.0s;
+            ftime.update(dt_sec);
             g_frame_sw.reset();
         }
 #if __EMSCRIPTEN__
@@ -472,21 +478,21 @@ void setupSettings(vex::Application& app)
                     matched = true;
                     auto cmd_value = ctx.parsed_args->get<i32>(1);
                     if (cmd_value)
-                        v = cmd_value.value();
+                        entry->setValue<i32>(*cmd_value);
                 },
                 [&](f32& v)
                 {
                     matched = true;
                     auto cmd_value = ctx.parsed_args->get<f32>(1);
                     if (cmd_value)
-                        v = cmd_value.value();
+                        entry->setValue<f32>(*cmd_value);
                 },
                 [&](bool& v)
                 {
                     matched = true;
                     auto cmd_value = ctx.parsed_args->get<bool>(1);
                     if (cmd_value)
-                        v = cmd_value.value();
+                        entry->setValue<bool>(*cmd_value);
                 });
 
             entry->current_version++;

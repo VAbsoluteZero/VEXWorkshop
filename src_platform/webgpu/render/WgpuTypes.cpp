@@ -347,10 +347,10 @@ WGPUShaderModule wgfx::shaderFromSrc(WGPUDevice device, const char* src)
 WGPUShaderModule wgfx::reloadShader(
     vex::TextShaderLib& shader_lib, const GpuContext& context, const char* shader_name)
 {
-    shader_lib.reload(shader_name);
+    shader_lib.reloadIfNewer(shader_name);
     auto* src = shader_lib.shad_src.find(shader_name);
-    if (!check(src, "shader not found"))
-        return false;
+    if (!check(src, "shader not found") || !std::exchange( src->reloaded_dirty_flag , false))
+        return nullptr;
     WGPUShaderModule shad_vert_frag = shaderFromSrc(context.device, src->text.c_str());
     std::atomic_bool sync_ready = ATOMIC_VAR_INIT(false);
     bool success = false;

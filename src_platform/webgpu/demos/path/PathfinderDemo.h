@@ -27,7 +27,7 @@ namespace vex::flow
     static inline const auto opt_show_ff_overlay = SettingsContainer::EntryDesc<bool>{
         .key_name = "pf.FlowDirOverlay",
         .info = "Show or hide flow field overlay",
-        .default_val = true,
+        .default_val = false,
         .flags = 0,
     };
     static inline const auto opt_allow_diagonal = SettingsContainer::EntryDesc<bool>{
@@ -48,12 +48,12 @@ namespace vex::flow
         .default_val = true,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
-    static inline const auto opt_smooth_flow = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.FlowFieldSmoothing",
-        .info = "Will run smoothing pass on flow field vectors",
-        .default_val = true,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
-    };
+    //static inline const auto opt_smooth_flow = SettingsContainer::EntryDesc<bool>{
+    //    .key_name = "pf.FlowFieldSmoothing",
+    //    .info = "Will run smoothing pass on flow field vectors",
+    //    .default_val = true,
+    //    .flags = SettingsContainer::Flags::k_visible_in_ui,
+    //};
 
     struct ProcessedData
     {
@@ -215,11 +215,11 @@ namespace vex::flow
                 }
             }
         }
-    };
-
+    }; 
 
     struct FlowfieldPF : public IDemoImpl
-    {
+    { 
+        static constexpr i32 max_particles = 200'000;
         struct InitArgs
         {
         };
@@ -240,9 +240,10 @@ namespace vex::flow
 
         wgfx::ui::ViewportHandler viewports;
         wgfx::ui::BasicDemoUI ui;
-        vex::InlineBufferAllocator<2 * 1024 * 1024> frame_alloc_resource;
+        vex::InlineBufferAllocator<20 * 1024 * 1024> frame_alloc_resource;
         // bump allocator that resets each frame
         vex::Allocator frame_alloc = frame_alloc_resource.makeAllocatorHandle();
+        WebGpuBackend* wgpu_backend = nullptr;
         bool docking_not_configured = true;
 
         Flow::Map1b init_data;
@@ -256,12 +257,11 @@ namespace vex::flow
 
         ComputeFields compute_pass;
         FlowFieldsOverlay flow_overlay;
-        ParticleSym part_sys;
+        ParticleSym part_sys; 
 
-        WebGpuBackend* wgpu_backend = nullptr;
-
-        v2u32 goal_cell = {10, 10};
         double bfs_search_dur_ms = 0;
+        v2u32 goal_cell = {10, 10};
+        i32 num_particles = 0;
 
         struct
         {

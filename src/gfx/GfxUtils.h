@@ -5,11 +5,16 @@
 #include <VFramework/VEXBase.h>
 
 #include <span>
+
+#if VEX_MSVC == 0
 #ifdef NDEBUG
-    #define VEX_SHADER_CONTENT_ROOT "../../../"
+#define VEX_SHADER_CONTENT_ROOT "../../../"
 #else
-    #define VEX_SHADER_CONTENT_ROOT "../../../"
+#define VEX_SHADER_CONTENT_ROOT "../../../"
 #endif
+#else
+#define VEX_SHADER_CONTENT_ROOT ""
+#endif // !_MSC_VER 
 
 namespace vex
 {
@@ -25,14 +30,16 @@ namespace vex
     {
         std::string text;
         ShaderSourceType type;
+        u64 timestamp = 0;
+        bool reloaded_dirty_flag = false;
     };
     struct TextShaderLib
-    {
+    { 
         vex::Dict<std::string, ShaderSource> shad_src;
         std::string path_to_dir;
         void build(const char* rel_path);
         void reload();
-        void reload(const char* name);
+        void reloadIfNewer(const char* name);
     };
 
     static constexpr v2i32 vp_default_sz{800, 600};
