@@ -90,4 +90,36 @@ namespace vex
         .max = 0.75f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
+
+
+    static inline const auto opt_show_dbg_overlay = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.NeighborNumOverlay",
+        .info = "Show or hide overlay that shows number of neighbors",
+        .default_val = false,
+        .flags = 0,
+    };
+    static inline const auto opt_show_ff_overlay = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.FlowDirOverlay",
+        .info = "Show or hide flow field overlay",
+        .default_val = false,
+        .flags = 0,
+    };
+    static inline const auto opt_allow_diagonal = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.AllowDiagonalMovement",
+        .info = "Show or hide overlay that shows number of neighbors",
+        .default_val = true,
+        .flags = 0,
+    };
+    static inline const auto opt_show_numbers = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.ShowCostOnSmallMaps",
+        .info = "Show or hide movement cost",
+        .default_val = false,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
+    static inline const auto opt_wallbias_numbers = SettingsContainer::EntryDesc<bool>{
+        .key_name = "pf.WallBias",
+        .info = "Walls will push flow vectors away a bit",
+        .default_val = true,
+        .flags = SettingsContainer::Flags::k_visible_in_ui,
+    };
 } // namespace vex

@@ -41,7 +41,7 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
         vec2(0.0, 0.0),
     );
 
-    let use_subdiv =  u.data2.y > 0;
+    let use_subdiv = u.data2.y > 0;
 
     let point_div: u32 = 6u;
     let num_cell: u32 = i / point_div;

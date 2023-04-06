@@ -7,6 +7,11 @@
 #include <webgpu/render/WgpuApp.h>
 
 #include "GpuResources.h"
+#ifndef __EMSCRIPTEN__
+#define VEX_PF_StressPreset 0
+#else
+#define VEX_PF_StressPreset 0
+#endif
 
 namespace vex::flow
 {
@@ -17,43 +22,6 @@ namespace vex::flow
 
         // static inline const char* setting_grid_sz = "pf.grid_size";
     } // namespace ids
-
-    static inline const auto opt_show_dbg_overlay = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.NeighborNumOverlay",
-        .info = "Show or hide overlay that shows number of neighbors",
-        .default_val = false,
-        .flags = 0,
-    };
-    static inline const auto opt_show_ff_overlay = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.FlowDirOverlay",
-        .info = "Show or hide flow field overlay",
-        .default_val = false,
-        .flags = 0,
-    };
-    static inline const auto opt_allow_diagonal = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.AllowDiagonalMovement",
-        .info = "Show or hide overlay that shows number of neighbors",
-        .default_val = true,
-        .flags = 0,
-    };
-    static inline const auto opt_show_numbers = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.ShowCostOnSmallMaps",
-        .info = "Show or hide movement cost",
-        .default_val = false,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
-    };
-    static inline const auto opt_wallbias_numbers = SettingsContainer::EntryDesc<bool>{
-        .key_name = "pf.WallBias",
-        .info = "Walls will push flow vectors away a bit",
-        .default_val = true,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
-    };
-    //static inline const auto opt_smooth_flow = SettingsContainer::EntryDesc<bool>{
-    //    .key_name = "pf.FlowFieldSmoothing",
-    //    .info = "Will run smoothing pass on flow field vectors",
-    //    .default_val = true,
-    //    .flags = SettingsContainer::Flags::k_visible_in_ui,
-    //};
 
     struct ProcessedData
     {
@@ -142,7 +110,7 @@ namespace vex::flow
 
             const auto start_cell = args.start.y * grid.size.x + args.start.x;
             frontier.push(start_cell);
-            out[start_cell] = 0;
+            out[start_cell] = 1;
 
             constexpr auto dist_mask = ProcessedData::dist_mask;
             while (frontier.size() > 0)
@@ -158,7 +126,7 @@ namespace vex::flow
                         u32 next = current + neighbor_offsets[i];
                         // checkAlways_(next < grid.size.x * grid.size.y);
                         bool visited = (out.at(next) & dist_mask) > 0;
-                        if (visited || (next == start_cell))
+                        if (visited)
                             continue;
                         out[next] |= dist_so_far + 1; // add diagonal cost
                         frontier.push(next);
@@ -187,7 +155,7 @@ namespace vex::flow
 
             const auto start_cell = args.start.y * grid.size.x + args.start.x;
             frontier.push(start_cell);
-            client.setCellDist(start_cell, 0);
+            client.setCellDist(start_cell, client.startDist());
 
             constexpr auto dist_mask = ProcessedData::dist_mask;
             while (frontier.size() > 0)
@@ -215,8 +183,12 @@ namespace vex::flow
     }; 
 
     struct FlowfieldPF : public IDemoImpl
-    { 
+    {
+#if VEX_PF_StressPreset
+        static constexpr i32 max_particles = 1'200'000;;
+#else
         static constexpr i32 max_particles = 200'000;
+#endif
         struct InitArgs
         {
         };
@@ -258,6 +230,7 @@ namespace vex::flow
 
         double bfs_search_dur_ms = 0;
         v2u32 goal_cell = {10, 10};
+        vex::StaticRing<v2u32, 3> sub_goals;
         i32 num_particles = 0;
 
         struct

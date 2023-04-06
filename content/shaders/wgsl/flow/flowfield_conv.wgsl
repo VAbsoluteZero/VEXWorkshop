@@ -140,28 +140,51 @@ const box_kernel: array<f32, 9> =  array<f32, 9>(
 
 
 const c14 = 1.0 /4.0; 
+const mid = 1.0 /2.0; 
 const box_kernel_TL: array<f32, 9> =  array<f32, 9>(
     c14, c14, 0.0,
-    c14,  c14, 0.0,
+    c14,  mid, 0.0,
     0.0,  0.0, 0.0
 );
 const box_kernel_TR: array<f32, 9> =  array<f32, 9>(
     0.0, c14, c14,
-    0.0, c14, c14,
+    0.0, mid, c14,
     0.0, 0.0, 0.0
 );
 const box_kernel_BR: array<f32, 9> =  array<f32, 9>(
     0.0, 0.0, 0.0,
-    0.0, c14, c14,
+    0.0, mid, c14,
     0.0, c14, c14
 );
 const box_kernel_BL: array<f32, 9> =  array<f32, 9>(
     0.0, 0.0, 0.0,
-    c14, c14, 0.0,
+    c14, mid, 0.0,
     c14, c14, 0.0
 );
+const box_kernel_TL_fx: array<f32, 9> =  array<f32, 9>(
+    c14, c14, c14,
+    c14,  c14, 0.0,
+    0.0,  0.0, 0.0
+);
+const box_kernel_TR_fx: array<f32, 9> =  array<f32, 9>(
+    c14, c14, c14,
+    0.0, c14, c14,
+    0.0, 0.0, 0.0
+);
+const box_kernel_BR_fx: array<f32, 9> =  array<f32, 9>(
+    0.0, 0.0, 0.0,
+    0.0, c14, c14,
+    c14, c14, c14
+);
+const box_kernel_BL_fx: array<f32, 9> =  array<f32, 9>(
+    0.0, 0.0, 0.0,
+    c14, c14, 0.0,
+    c14, c14, c14
+);
+
 
 const kernles = array(box_kernel_TL, box_kernel_TR, box_kernel_BL, box_kernel_BR);
+const kernles_fx = array(box_kernel_TL_fx, box_kernel_TR_fx, box_kernel_BL_fx, box_kernel_BR_fx);
 
 const repell =array(
     normalize(v2f(1.0, -1.0)) * 0.0,
@@ -252,7 +275,7 @@ fn cs_postprocess_main(@builtin(global_invocation_id) gid: vec3u) {
             sum += fixup;
             //if kernles[i][j] > 0 && neighbor_wall {sum += kernles[i][j] * select(cell_val, repell[j] * 14, neighbor_wall); }// repell[j]
 
-            sum += kernles[i][j] * select(cell_val, repell[j] * 0.752, neighbor_wall);
+            sum += kernles[i][j] * select(cell_val, repell[j] * 0.72 * f32(1 + i32(point_to_wall) * 1), neighbor_wall);
         }
         flow_sub2.cells[idx_to_write] = select(normalize(sum), v2f(), sum.x == 0 && sum.y == 0);
     }

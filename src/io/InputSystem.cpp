@@ -88,6 +88,7 @@ vex::input::InputSystem::InputSystem()
             {
                 if (state.this_frame[sid(MouseRBK)].state == SignalState::Started)
                 {
+                    self.input_data[SignalId::KeyModCtrl] = state.this_frame[sid(KeyModCtrl)];
                     return true;
                 }
                 return false;
@@ -101,6 +102,7 @@ vex::input::InputSystem::InputSystem()
                 if (state.this_frame[sid(MouseRBK)].state == SignalState::Started ||
                     state.this_frame[sid(MouseRBK)].state == SignalState::Going)
                 {
+                    self.input_data[SignalId::KeyModCtrl] = state.this_frame[sid(KeyModCtrl)];
                     return true;
                 }
                 return false;
@@ -111,6 +113,7 @@ vex::input::InputSystem::InputSystem()
             .fn_logic =
                 [](Trigger& self, const InputState& state)
             {
+                //self.input_data[sid(KeyEscape)]
                 if (state.this_frame[sid(KeyEscape)].state == SignalState::Started)
                 {
                     return true;

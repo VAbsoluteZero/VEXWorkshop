@@ -60,11 +60,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var tile = heatmap.cells[p.y * u.bounds.x + p.x];
     if (tile & 0xf000) > 0 {
-        return v4f(0.64342, 0.85543, 0.8349, 1.0);
+        return v4f(0.04342, 0.05543, 0.00349, 1.0);
+        //return v4f(0.54342, 0.65543, 0.6349, 1.0);
     }
     var part = tile & 0x7fff;
     if part == 0 {
-        return v4f(0.5342, 0.9543, 0.9, 1.0);
+        return v4f(0.2342, 0.3543, 0.9, 1.0);
     }
     let expected_extreme = f32(u.bounds.x + u.bounds.y);
     var fpart = clamp(0., 1., f32(part) / expected_extreme);

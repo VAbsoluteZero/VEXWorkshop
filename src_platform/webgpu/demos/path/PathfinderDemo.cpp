@@ -17,11 +17,6 @@ using namespace std::literals::string_view_literals;
 using namespace std::literals::chrono_literals;
 constexpr const char* console_name = "Console##pathfind";
 
-#ifndef __EMSCRIPTEN__
-    #define VEX_PF_StressPreset 0
-#else
-    #define VEX_PF_StressPreset 0
-#endif
 
 void Flow::Map1b::fromImage(Flow::Map1b& out, const char* img)
 {
@@ -158,8 +153,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
 
         compute_pass.init(ctx, wgpu_backend->text_shad_lib,
             "content/shaders/wgsl/flow/flowfield_conv.wgsl", heatmap.storage_buf, init_data.size);
-        flow_overlay.init(ctx, wgpu_backend->text_shad_lib, compute_pass.output_buf, compute_pass.subdiv_buf,
-            "content/shaders/wgsl/flow/flowfield_overlay.wgsl");
+        flow_overlay.init(ctx, wgpu_backend->text_shad_lib, compute_pass.output_buf,
+            compute_pass.subdiv_buf, "content/shaders/wgsl/flow/flowfield_overlay.wgsl");
 
         part_sys.init(ctx, wgpu_backend->text_shad_lib,
             ParticleSym::InitArgs{
@@ -167,6 +162,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 .flow_sub_v2f_buf = &compute_pass.subdiv_buf,
                 .cells_buf = &heatmap.storage_buf,
                 .bounds = init_data.size,
+                .max_particles = max_particles,
             });
     }
     // init console variables
@@ -233,29 +229,33 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         true);
 }
 
+struct NearSearchClient
+{
+    vex::Dict<u32, u32> near;
+    i32 max_len = -1;
+    u32 max_dist = 0x0fff;
+    u32 start_dist = 1;
+    u32 cur_max_dist = 0;
+    void init(v2u32 size, ROSpan<u8> map) {}
+    FORCE_INLINE void setCellDist(u32 cell, u32 dist)
+    {
+        cur_max_dist = cur_max_dist < dist ? dist : cur_max_dist;
+        near.emplace(cell, dist);
+    }
+    FORCE_INLINE auto getCellDist(u32 cell) { return near[cell]; }
+    FORCE_INLINE bool shouldTerminate() const
+    {
+        return (max_len > 0 && near.size() >= max_len) || //
+               (max_dist <= cur_max_dist);
+    }
+    FORCE_INLINE u32 startDist() const { return start_dist; }
+};
+
 void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnArgs args)
 {
-    struct
+    NearSearchClient client
     {
-        vex::Dict<u32, u32> near;
-        i32 max_len = -1;
-        u32 max_dist = 0;
-        u32 cur_max_dist = 0;
-        void init(v2u32 size, ROSpan<u8> map) {}
-        FORCE_INLINE void setCellDist(u32 cell, u32 dist)
-        {
-            cur_max_dist = cur_max_dist < dist ? dist : cur_max_dist;
-            near.emplace(cell, dist);
-        }
-        FORCE_INLINE auto getCellDist(u32 cell) { return near[cell]; }
-        FORCE_INLINE bool shouldTerminate() const
-        {
-            return (max_len > 0 && near.size() >= max_len) || //
-                   (max_dist >= cur_max_dist);
-        }
-    } client
-    {
-        .near = {32, frame_alloc},
+        .near = {(u32)(init_data.size.y * 4), frame_alloc},
 #if VEX_PF_StressPreset
         .max_len = (i32)glm::round(init_data.size.y * init_data.size.y * 0.25f),
 #else
@@ -269,7 +269,7 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     const i32 max_per_cell = 1.5f / ParticleSym::default_rel_radius;
 
 #if VEX_PF_StressPreset
-    const i32 num_to_spawn = 120'000;
+    const i32 num_to_spawn = 1'000'000;
 #else
     const i32 num_to_spawn = (client.max_len * max_per_cell) * 2;
 #endif
@@ -327,12 +327,22 @@ void FlowfieldPF::update(Application& owner)
         return;
     if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         return;
+
     auto& vp_wrapper = viewports.imgui_views[0];
     Viewport& viewport = vp_wrapper.render_target;
     if (viewport.options.size.x <= 1 || viewport.options.size.y <= 1)
     {
         return;
     }
+
+    // owner.input.ifTriggered("EscDown"_trig,
+    //     [&](const input::Trigger& self)
+    //     {
+    //         goal_cell = { 1024, 1024 };
+    //         num_particles = 0;
+    //         sub_goals.clear();
+    //         return true;
+    //     });
 
     auto& options = owner.getSettings();
     if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
@@ -343,6 +353,32 @@ void FlowfieldPF::update(Application& owner)
             Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
         else
             Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
+
+        NearSearchClient client{
+            .near = {32, frame_alloc},
+            .max_len = (i32)(init_data.size.y * 3),
+        };
+        for (auto it : sub_goals)
+        {
+            auto s_cell = it;
+            auto d_old = processed_map[s_cell];
+            if (d_old < 3)
+                continue;
+            client.start_dist = 2;
+            client.max_dist = client.start_dist + 6;
+            Flow::gridSyncBFSWithClient<decltype(client), false>({it}, init_data, client);
+            for (auto [n_cell, n_dist] : client.near)
+            {
+                if (processed_map[n_cell] > n_dist)
+                {
+                    auto v = processed_map[n_cell] + (((i32)client.start_dist) - ((i32)n_dist));
+                    processed_map[n_cell] = (v > 1) ? v : 1;
+                }
+            }
+
+            client.near.clear();
+            client.cur_max_dist = 0;
+        }
     }
 
     // #fixme - movable camera
@@ -386,11 +422,27 @@ void FlowfieldPF::update(Application& owner)
         map_area.cell_size = {cell_w, cell_w};
 
         v2u32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
+        ;
+        owner.input.ifTriggered("MouseRightDown"_trig,
+            [&](const input::Trigger& self)
+            {
+                auto trig = self.input_data.find(vex::input::SignalId::KeyModCtrl);
+                auto ctrl_down = trig && trig->isActive();
+                bool valid = init_data.contains(m_cell) && !init_data.isBlocked(m_cell);
+                if (ctrl_down && valid)
+                    sub_goals.push(m_cell);
+
+                return true;
+            });
         owner.input.ifTriggered("MouseRightHeld"_trig,
             [&](const input::Trigger& self)
             {
-                if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
+                auto trig = self.input_data.find(vex::input::SignalId::KeyModCtrl);
+                auto ctrl_down = trig && trig->isActive();
+                bool valid = init_data.contains(m_cell) && !init_data.isBlocked(m_cell);
+                if (!ctrl_down && valid)
                     goal_cell = m_cell;
+
                 return true;
             });
         owner.input.ifTriggered("MouseLeftDown"_trig,
