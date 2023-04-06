@@ -48,14 +48,15 @@ struct Cells {
 @group(0) @binding(0) var<uniform> args : Args;  
 @group(0) @binding(1) var<storage, read_write> particles: ParticleData;
 @group(0) @binding(2) var<storage, read> flow_directions : Vectors;   
-@group(0) @binding(3) var<storage, read> map_data : Cells; 
+@group(0) @binding(3) var<storage, read> flow_sub2 : Vectors;
+@group(0) @binding(4) var<storage, read> map_data : Cells; 
 
 
 struct Table {
     cells: array<i32>,
 };   
-@group(0) @binding(4) var<storage, read> table : Table;  
-@group(0) @binding(5) var<storage, read_write> dbg : Table; 
+@group(0) @binding(5) var<storage, read> table : Table;  
+@group(0) @binding(6) var<storage, read_write> dbg : Table; 
 //@group(0) @binding(4) var<storage, read_write> particles: ParticleData;
 
 fn hash(pos: v2i32) -> u32 {
@@ -156,36 +157,40 @@ fn cell_to_idx(cell: v2i32, offset: i32) -> i32 {
 fn cell_to_cell_collision(a: v2i32, b: v2i32, cap: u32) {
     let dummy_particle: i32 = (i32(args.num_particles) - 1);
     let iter_cnt = i32(args.table_depth);
+
+    var start_a = a.x + a.y * i32(args.spatial_table_size.y);
+    var start_b = b.x + b.y * i32(args.spatial_table_size.y);
+
     for (var sx = 0; sx <= iter_cnt; sx++) {
-        var va = cell_to_idx(a, 0); 
+        var va = start_a + sx;// cell_to_idx(a, sx); 
         // #todo check validity
         var a_idx: i32 = table.cells[va];
 
         var invalid_cycle: bool = (a_idx < 0) || (a_idx > dummy_particle);
-        a_idx = select(a_idx, dummy_particle, invalid_cycle);
+        if invalid_cycle {return;}
+
         let pos = particles.data[a_idx].pos;
 
         for (var sy = 0; sy <= iter_cnt; sy++) {
-            let ba = cell_to_idx(b, sy);
+            let ba = start_b + sy;
 
             var b_idx: i32 = table.cells[ba];
             invalid_cycle = invalid_cycle || (b_idx < 0) || (b_idx > dummy_particle);
             invalid_cycle = invalid_cycle || (b_idx == a_idx);
-            b_idx = select(b_idx, dummy_particle, invalid_cycle);
+            if invalid_cycle {return;}
 
             let pos_other = particles.data[b_idx].pos;
             let diff = pos_other - pos;
             let separate: f32 = (length(diff) - 3.5 * args.radius);
 
             invalid_cycle = invalid_cycle || (separate > 0) || (diff.x == 0);
-
+            if invalid_cycle {return;}
 
             let diff_norm = normalize(diff);
-            let sep_mag = args.radius * 0.15;
-            if !invalid_cycle {
-                particles.data[a_idx].vel += (v2f(-diff_norm.x, -diff_norm.y)) * sep_mag;
-                particles.data[b_idx].vel += diff_norm * sep_mag;
-            }
+            let sep_mag = args.radius * 0.5 * args.separation;
+
+            particles.data[a_idx].vel += (v2f(-diff_norm.x, -diff_norm.y)) * sep_mag;
+            particles.data[b_idx].vel += diff_norm * sep_mag;
         }
     }
 }
@@ -296,14 +301,13 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     );
     if idx > args.num_particles { return;}
 
-    let dt = select(args.delta_time, 0.032, args.delta_time > 0.032);
+    let dt = select(args.delta_time, 0.062, args.delta_time > 0.062);
 
     let grid_min = args.grid_min;
-    let cell_sz = args.cell_size;
     let pos = particles.data[idx].pos;
-    let pos_rel_to_min = pos - grid_min;
-    //pos_rel_to_min.y = args.grid_size.y - pos_rel_to_min.y; // flip y;
-
+    let pos_rel_to_min = pos - grid_min; 
+    //===================================================== 
+    let cell_sz = args.cell_size;   
     var cell_x = u32((pos_rel_to_min.x / cell_sz.x));
     var cell_y = args.size.y - u32(((pos_rel_to_min.y / cell_sz.y) + 1.0));
     cell_x = min(cell_x, args.size.x);
@@ -311,18 +315,29 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     let this_cell: v2i32 = v2i32(i32(cell_x), i32(cell_y));
     let cell_idx = cell_y * args.size.x + cell_x;
 
-    var flow_dir: v2f = flow_directions.cells[cell_idx];
+    //var flow_dir: v2f = flow_directions.cells[cell_idx];
+
+    //=====================================================
+    let subdiv_cell_sz = args.cell_size * 0.5;
+    var sub_cell_x = u32((pos_rel_to_min.x / subdiv_cell_sz.x));
+    var sub_cell_y = (args.size.y * 2) - u32(((pos_rel_to_min.y / subdiv_cell_sz.y) + 1.0));
+    sub_cell_x = min(sub_cell_x, args.size.x * 2);
+    sub_cell_y = min(sub_cell_y, args.size.y * 2); 
+    let sub_cell_idx = sub_cell_y * args.size.x * 2  + sub_cell_x; 
+    var flow_dir: v2f = flow_sub2.cells[sub_cell_idx]; 
+    //=====================================================
 
     let cur_vel = particles.data[idx].vel;
     let target_vel = flow_dir * args.speed_base * 2 ;
- 
-    // for (let i = 0; i < 4;)      
- 
+
     var vel = cur_vel * (1.0 - args.drag * dt);
     vel = select(vel, target_vel, vel.x == 0 && vel.y == 0);
-    vel = lerpVec(vel, target_vel, dt * ((2 - args.inertia) * 2 + 0.5));
+    vel = lerpVec(vel, target_vel, dt * ((2 - args.inertia) * 3 + 0.01));
+    vel = select(vel, target_vel, args.inertia == 0.0);//#fixme
 
-    particles.data[idx].vel = clamp(vel, v2f(-4, -4), v2f(4, 4));
+    vel = select(normalize(vel) * args.speed_max, v2f(), vel.x == 0 && vel.y == 0);
+
+    particles.data[idx].vel = vel;
     var delta_vec = particles.data[idx].vel * dt * 0.5 ; 
 
     // #fixme only check in direction of movement
@@ -330,7 +345,7 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     delta_vec = wall_collide(pos, this_cell + v2i32(0, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 0), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(1, 0), delta_vec);
- 
+
     delta_vec = wall_collide(pos, this_cell + v2i32(1, 1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
@@ -346,6 +361,6 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
     delta_vec = wall_collide(pos, this_cell + v2i32(1, -1), delta_vec);
-  
+
     particles.data[idx].pos += delta_vec;
 }

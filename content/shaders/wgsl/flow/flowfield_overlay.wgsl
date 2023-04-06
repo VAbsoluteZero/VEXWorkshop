@@ -29,6 +29,7 @@ struct Vectors {
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var<storage, read> vecmap: Vectors;
+@group(0) @binding(2) var<storage, read> subdiv_map: Vectors;
 @vertex
 fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
     const uv = array(
@@ -40,33 +41,47 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
         vec2(0.0, 0.0),
     );
 
-    let num_cell: u32 = i / 6;
-    let cell_xy = v2u32(num_cell % u.bounds.x, num_cell / u.bounds.x);
-    let dir = vecmap.cells[num_cell];
-    let size: v2f = v2f(u.data1.z, u.data1.w);
+    let use_subdiv =  u.data2.y > 0;
 
-    let v_end = dir * size.y * 0.6;
+    let point_div: u32 = 6u;
+    let num_cell: u32 = i / point_div;
 
-    let main = (i % 6) >= 3;
+    var cell_xy = v2u32();
 
-    let dx = dir.x * size.x * select(0.09, 0.05, main);
-    let dy = dir.y * size.x * select(0.09, 0.05, main);
+    if use_subdiv {
+        cell_xy = v2u32(num_cell % (u.bounds.x * 2), num_cell / (u.bounds.x * 2));
+    } else {
+        cell_xy = v2u32(num_cell % u.bounds.x, num_cell / u.bounds.x);
+    }
+
+    var dir = v2f();
+    if use_subdiv {
+        dir = (subdiv_map.cells[num_cell]);
+    } else {
+        dir = (vecmap.cells[num_cell]);
+    }
+
+    let size: v2f = select(v2f(u.data1.z, u.data1.w), v2f(u.data1.z, u.data1.w) * 0.5, use_subdiv);
+    let v_end = dir * u.data1.w * select(0.6, 0.4, use_subdiv);
+
+    let main = (i % point_div) >= 3;
+
+    let dx = dir.x * u.data1.z * select(0.09, 0.05, main);
+    let dy = dir.y * u.data1.z * select(0.09, 0.05, main);
 
     let pos2 = array(
-        // vec2(dy , -dx),
-        // v_end + vec2(0, -dx),
-        // v_end + vec2(0, dx),
-        vec2(dy, -dx), // second tri
+        vec2(dy, -dx),
         v_end,
         vec2(-dy, dx),
     );
+
     let cell_offset = v2f(size.x * f32(cell_xy.x), -size.y * f32(cell_xy.y));
-    let orig: v2f = v2f(-u.quad_size.x, u.quad_size.y) * 0.5 + cell_offset - v2f(-size.x, size.y) * 0.5;
+    let orig: v2f = v2f(-u.quad_size.x, u.quad_size.y) * 0.5 + cell_offset - v2f(-size.x, size.y) * select(0.5, 0.6, use_subdiv);
 
     var output: VertexOutput;
-    output.pos = v4f(10, 10, 10, 1);
-    output.uv = v2f(-10, -10);
-    if dir.x == 0 && dir.y == 0 {
+    if (dir.x == 0 && dir.y == 0) || num_cell > arrayLength(&subdiv_map.cells){
+        output.pos = v4f(10, 10, 10, 1);
+        output.uv = v2f(-10, -10);
         return output;
     }
     let p: v2f = orig + pos2[i % 3];
@@ -81,14 +96,4 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if in.uv.x < -1 {discard;}
     let main = (in.vert_idx % 6) >= 3;
     return v4f(0.50, 0.99, 0.6, select(0.25, 0.7, main));
-
-    // var p: v2u32 = v2u32(u32(in.uv.x * f32(u.bounds.x)), u32(in.uv.y * f32(u.bounds.y)));
-    // var tile: v2f = vecmap.cells[p.y * u.bounds.x + p.x];
-    // if tile.x == 0 && tile.y == 0 {
-    //     discard;
-    // }
-    // if (tile.x * 0) < 200000 {
-    //     discard;
-    // }
-    // return v4f((tile.xy + v2f(1, 1)) * 0.5, 0, 0.4);
 } 

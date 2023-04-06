@@ -138,10 +138,7 @@ namespace vex::flow
             out.data.reserve(grid.size.x * grid.size.y);
             out.data.len = 0;
             for (u8 c : grid.source)
-                out.data.add(c ? 0 : ~ProcessedData::dist_mask);
-
-            [[maybe_unused]] u32 iter = 0;
-
+                out.data.add(c ? 0 : ~ProcessedData::dist_mask); 
 
             const auto start_cell = args.start.y * grid.size.x + args.start.x;
             frontier.push(start_cell);

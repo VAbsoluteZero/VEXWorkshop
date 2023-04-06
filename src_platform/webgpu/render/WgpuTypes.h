@@ -137,7 +137,7 @@ namespace wgfx
             .resolveTarget = nullptr,
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
-            .clearValue = WGPUColor{0.1, 0.21, 0.13, 1.0},
+            .clearValue = WGPUColor{0.0f, 0.0f, 0.0f, 1.0},
         };
         WGPURenderPassDepthStencilAttachment depth_attachment{
             .depthLoadOp = WGPULoadOp_Clear,

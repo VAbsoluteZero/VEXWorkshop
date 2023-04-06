@@ -2,7 +2,9 @@
 const pi : f32 = 3.14159265359; 
 const pi2 : f32 = pi * 2; 
 alias v2f = vec2<f32>;
+alias v3f = vec4<f32>;
 alias v4f = vec4<f32>;
+alias v2i32 = vec2<i32>;
 alias v2u32 = vec2<u32>;
 alias mtx4 =  mat4x4<f32>;
 // replace_end
@@ -17,11 +19,13 @@ struct Cells {
 }; 
 struct Vectors {
     cells: array<v2f>,
-}; 
+};  
 
 @group(0) @binding(0) var<uniform> args : Args; 
 @group(0) @binding(1) var<storage> distances : Cells;
 @group(0) @binding(2) var<storage, read_write> flow_directions : Vectors;
+@group(0) @binding(2) var<storage, read> flow_read : Vectors;
+@group(0) @binding(3) var<storage, read_write> flow_sub2 : Vectors;
 // @group(0) @binding(3) var<storage, write> output_gpu : Vectors;
 
 const dist_mask: u32 = ~(1u<<15u);
@@ -69,7 +73,7 @@ fn cs_main(@builtin(workgroup_id) gid: vec3u, @builtin(local_invocation_id) lid:
     if start_idx >= size_1d {
         return;
     }
-    let len: u32 = stride;// select(stride, size_1d  stride, loc_idx == 63);
+    let len: u32 = stride;
     let offsets: array<i32, 8> = array<i32, 8>(
         -i32(args.size.x) - 1, // top-left
         -i32(args.size.x) + 0, // top (CW sart)
@@ -121,7 +125,135 @@ fn cs_main(@builtin(workgroup_id) gid: vec3u, @builtin(local_invocation_id) lid:
         flow_directions.cells[cur_i] = select(v2f(0, 0), normalize(r), r.x != 0 || r.y != 0);
     }
 }
+const c19 = 1.0 /9.0;
 
-@compute @workgroup_size(64)
-fn cs_postprocess_main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
+const gaussian_kernel: array<f32, 9> = array<f32, 9>(
+    1.0 / 16.0, 2.0 / 16.0, 1.0 / 16.0,
+    2.0 / 16.0, 4.0 / 16.0, 2.0 / 16.0,
+    1.0 / 16.0, 2.0 / 16.0, 1.0 / 16.0
+);
+const box_kernel: array<f32, 9> =  array<f32, 9>(
+    c19, c19, c19,
+    c19, c19, c19,
+    c19, c19, c19
+);
+
+
+const c14 = 1.0 /4.0; 
+const box_kernel_TL: array<f32, 9> =  array<f32, 9>(
+    c14, c14, 0.0,
+    c14,  c14, 0.0,
+    0.0,  0.0, 0.0
+);
+const box_kernel_TR: array<f32, 9> =  array<f32, 9>(
+    0.0, c14, c14,
+    0.0, c14, c14,
+    0.0, 0.0, 0.0
+);
+const box_kernel_BR: array<f32, 9> =  array<f32, 9>(
+    0.0, 0.0, 0.0,
+    0.0, c14, c14,
+    0.0, c14, c14
+);
+const box_kernel_BL: array<f32, 9> =  array<f32, 9>(
+    0.0, 0.0, 0.0,
+    c14, c14, 0.0,
+    c14, c14, 0.0
+);
+
+const kernles = array(box_kernel_TL, box_kernel_TR, box_kernel_BL, box_kernel_BR);
+
+const repell =array(
+    normalize(v2f(1.0, -1.0)) * 0.0,
+    normalize(v2f(0.0, -1.0)),
+    normalize(v2f(-1.0, -1.0))* 0.0,
+    normalize(v2f(1.0, 0.0)),
+     v2f(0.0, 0.0) ,
+    normalize(v2f(-1.0, 0.0)),
+    normalize(v2f(1.0, 1.0))* 0.0,
+    normalize(v2f(0.0, 1.0)),
+    normalize(v2f(-1.0, 1.0))* 0.0
+);
+const point_to =array(
+    normalize(vec2<f32>(-1.0, 1.0)),
+    normalize(vec2<f32>(0.0, 1.0)),
+    normalize(vec2<f32>(1.0, 1.0)),
+    normalize(vec2<f32>(-1.0, 0.0)),
+     (vec2<f32>(0.0, 0.0)),
+    normalize(vec2<f32>(1.0, 0.0)),
+    normalize(vec2<f32>(-1.0, -1.0)),
+    normalize(vec2<f32>(0.0, -1.0)),
+    normalize(vec2<f32>(1.0, -1.0))
+);
+
+@compute @workgroup_size(8, 8)
+fn cs_postprocess_main(@builtin(global_invocation_id) gid: vec3u) {
+    if disabled { return;}
+
+    let k_wallbias: bool = (args.flags & 1u) > 0;
+    let k_smooth: bool = (args.flags & 2u) > 0;
+
+    let tmp = gid.xy  ;
+    let read_cell = v2i32(i32(tmp.x), i32(tmp.y));
+    let size_1d: u32 = args.size.x * args.size.y * 4;
+    let read_size_1d: u32 = args.size.x * args.size.y * 4;
+    let subdiv_stride_x = i32(args.size.y * 2);
+
+    let write_cell = read_cell * 2;
+    if read_cell.y >= i32(args.size.y) {return;}
+    if read_cell.x >= i32(args.size.x) {return;}
+
+    let self_idx = read_cell.x + read_cell.y * i32(args.size.x);
+    let self_val: u32 = distances.cells[self_idx];
+    let self_wall: bool = (self_val & (1u << 15u)) > 0;
+    if self_wall { return;}
+
+    let neigbors = array(
+        read_cell + vec2<i32>(-1, -1),
+        read_cell + vec2<i32>(0, -1),
+        read_cell + vec2<i32>(1, -1),
+        read_cell + vec2<i32>(-1, 0),
+        read_cell + vec2<i32>(0, 0),
+        read_cell + vec2<i32>(1, 0),
+        read_cell + vec2<i32>(-1, 1),
+        read_cell + vec2<i32>(0, 1),
+        read_cell + vec2<i32>(1, 1),
+    );
+
+    let self_vec = flow_read.cells[self_idx];
+    let pointing_to = read_cell + v2i32(i32(ceil(self_vec.x)), i32(ceil(-self_vec.y)));
+    let pointing_oob = pointing_to.y >= i32(args.size.y) || pointing_to.x >= i32(args.size.x) || pointing_to.x < 0 || pointing_to.y < 0;
+
+    var point_to_wall = false;
+    if !pointing_oob {
+        let neighbor_val: u32 = distances.cells[ pointing_to.x + pointing_to.y * i32(args.size.x)];
+        point_to_wall = (neighbor_val & (1u << 15u)) > 0;
+    }
+
+    let self_dist: u32 = distances.cells[self_idx];
+    // messed up order
+    for (var i = 0; i < 4; i++) {
+        let off_part = select(i, subdiv_stride_x + i % 2, i >= 2);
+        let idx_to_write = write_cell.x + write_cell.y * subdiv_stride_x + off_part;
+
+        var sum = v2f();
+        for (var j = 0; j < 9; j++) {
+            let cell = neigbors[j];
+            let oob = cell.y >= i32(args.size.y) || cell.x >= i32(args.size.x) || cell.x < 0 || cell.y < 0;
+
+            if oob {continue;}
+
+            let read_idx = cell.x + cell.y * i32(args.size.x);
+            let cell_val = flow_read.cells[read_idx];
+            let neighbor_val: u32 = distances.cells[read_idx];
+            let neighbor_wall: bool = (neighbor_val & (1u << 15u)) > 0;
+
+            let fixup = select(v2f(0.0, 0.0), kernles[i][j] * point_to[j] * 23, point_to_wall && neighbor_val < self_dist);
+            sum += fixup;
+            //if kernles[i][j] > 0 && neighbor_wall {sum += kernles[i][j] * select(cell_val, repell[j] * 14, neighbor_wall); }// repell[j]
+
+            sum += kernles[i][j] * select(cell_val, repell[j] * 0.752, neighbor_wall);
+        }
+        flow_sub2.cells[idx_to_write] = select(normalize(sum), v2f(), sum.x == 0 && sum.y == 0);
+    }
 }

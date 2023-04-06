@@ -17,6 +17,12 @@ using namespace std::literals::string_view_literals;
 using namespace std::literals::chrono_literals;
 constexpr const char* console_name = "Console##pathfind";
 
+#ifndef __EMSCRIPTEN__
+    #define VEX_PF_StressPreset 0
+#else
+    #define VEX_PF_StressPreset 0
+#endif
+
 void Flow::Map1b::fromImage(Flow::Map1b& out, const char* img)
 {
     spdlog::stopwatch sw;
@@ -128,8 +134,12 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     }
     // init webgpu stuff
     {
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
+#if VEX_PF_StressPreset
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
         // Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
+#else
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
+#endif
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -148,12 +158,13 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
 
         compute_pass.init(ctx, wgpu_backend->text_shad_lib,
             "content/shaders/wgsl/flow/flowfield_conv.wgsl", heatmap.storage_buf, init_data.size);
-        flow_overlay.init(ctx, wgpu_backend->text_shad_lib, compute_pass.output_buf,
+        flow_overlay.init(ctx, wgpu_backend->text_shad_lib, compute_pass.output_buf, compute_pass.subdiv_buf,
             "content/shaders/wgsl/flow/flowfield_overlay.wgsl");
 
         part_sys.init(ctx, wgpu_backend->text_shad_lib,
             ParticleSym::InitArgs{
                 .flow_v2f_buf = &compute_pass.output_buf,
+                .flow_sub_v2f_buf = &compute_pass.subdiv_buf,
                 .cells_buf = &heatmap.storage_buf,
                 .bounds = init_data.size,
             });
@@ -163,6 +174,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         auto& options = owner.getSettings();
         opt_grid_thickness.addTo(options);
         opt_grid_color.addTo(options);
+        opt_heatmap_opacity.addTo(options);
+
         opt_show_dbg_overlay.addTo(options);
         opt_allow_diagonal.addTo(options);
         opt_show_numbers.addTo(options);
@@ -186,6 +199,8 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 auto& options = owner.getSettings();
                 opt_grid_thickness.removeFrom(options);
                 opt_grid_color.removeFrom(options);
+                opt_heatmap_opacity.removeFrom(options);
+
                 opt_show_dbg_overlay.removeFrom(options);
                 opt_allow_diagonal.removeFrom(options);
                 opt_show_numbers.removeFrom(options);
@@ -238,16 +253,26 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
             return (max_len > 0 && near.size() >= max_len) || //
                    (max_dist >= cur_max_dist);
         }
-    } client{
+    } client
+    {
         .near = {32, frame_alloc},
-        .max_len = (i32)init_data.size.y * 2, // 4000 , //
+#if VEX_PF_StressPreset
+        .max_len = (i32)glm::round(init_data.size.y * init_data.size.y * 0.25f),
+#else
+        .max_len = (i32)(init_data.size.y * 2),
+#endif
     };
 
     const float sz = map_area.cell_size.x;
     const v2f orig = map_area.top_left;
     using Part = ParticleSym::Particle;
     const i32 max_per_cell = 1.5f / ParticleSym::default_rel_radius;
-    const i32 num_to_spawn = (client.max_len * max_per_cell); // 160'000; //
+
+#if VEX_PF_StressPreset
+    const i32 num_to_spawn = 120'000;
+#else
+    const i32 num_to_spawn = (client.max_len * max_per_cell) * 2;
+#endif
 
     SPDLOG_INFO("spawning {} particles", num_to_spawn);
 
@@ -273,18 +298,21 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     for (auto i = 0; i < num_to_spawn; ++i)
     {
         i32 repeat_cnt = 4;
-    repeat:
-        auto entry_idx = rng::Rand::randMod(client_len);
-        v2f rand_cell = cells[entry_idx];
-        rejection[entry_idx]--;
-        if (rejection[entry_idx] < 0 && repeat_cnt > 0)
-        {
-            repeat_cnt--;
-            goto repeat;
-        }
+        // repeat:
+        float f_idx = i / ((float)num_to_spawn);
+
+        // auto entry_idx = rng::Rand::randMod(client_len);
+        auto entry_idx = (i32)(glm::floor(f_idx * client_len));
+        v2f cell_idx = cells[entry_idx];
+        // rejection[entry_idx]--;
+        // if (rejection[entry_idx] < 0 && repeat_cnt > 0)
+        //{
+        //     repeat_cnt--;
+        //     goto repeat;
+        // }
         volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding);
         volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding);
-        particles[i].pos = rand_cell + v2f{rnd_x, rnd_y};
+        particles[i].pos = cell_idx + v2f{rnd_x, rnd_y};
         particles[i].vel = v2f_zero;
     }
 
@@ -306,11 +334,12 @@ void FlowfieldPF::update(Application& owner)
         return;
     }
 
+    auto& options = owner.getSettings();
     if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
     {
         spdlog::stopwatch sw;
         defer_ { bfs_search_dur_ms = sw.elapsed() / 1ms; };
-        if (owner.getSettings().valueOr(opt_allow_diagonal.key_name, true))
+        if (options.valueOr(opt_allow_diagonal.key_name, true))
             Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
         else
             Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
@@ -383,7 +412,7 @@ void FlowfieldPF::update(Application& owner)
         auto int_sz = init_data.size;
 
         DrawContext draw_args{
-            .settings = &owner.getSettings(),
+            .settings = &options,
             .camera_mvp = model_view_proj,
             .camera_model_view = camera.mtx.view,
             .camera_projection = camera.mtx.projection,
@@ -402,8 +431,8 @@ void FlowfieldPF::update(Application& owner)
                 HeatmapDynamicData{
                     .buffer = processed_map.data.constSpan(),
                     .bounds = {(u32)int_sz.x, (u32)int_sz.y},
-                    .color1 = {0.340f, 0.740f, 0.707f, 1.f},
-                    .color2 = {0.930f, 0.400f, 0.223f, 1.f},
+                    .shrink_x_to_y = {0.930f, 0.400f, 0.0f, 1.0f}, // shrink x_to_y
+                    .opacity = options.valueOr(opt_heatmap_opacity.key_name, 1.0f),
                 });
         }
         { // compute pass
@@ -437,7 +466,7 @@ void FlowfieldPF::update(Application& owner)
             compute_ctx.comp_pass = wgpuCommandEncoderBeginComputePass(
                 compute_ctx.encoder, nullptr);
             part_sys.compute(compute_ctx, ParticleSym::CompArgs{
-                                              .settings = &owner.getSettings(),
+                                              .settings = &options,
                                               .bounds = int_sz,
                                               .grid_min = map_area.bot_left,
                                               .grid_size = {camera.height, camera.height},
@@ -455,8 +484,7 @@ void FlowfieldPF::update(Application& owner)
                     HeatmapDynamicData{
                         .buffer = init_data.debug_layer.constSpan(),
                         .bounds = {(u32)int_sz.x, (u32)int_sz.y},
-                        .color1 = {0.340f, 0.740f, 0.707f, 1.f},
-                        .color2 = {0.930f, 0.400f, 0.223f, 1.f},
+                        .shrink_x_to_y = {1.00f, 0.30f, 0.223f, 1.f},
                     });
             }
             if (draw_args.settings->valueOr(opt_show_ff_overlay.key_name, false))
@@ -470,8 +498,10 @@ void FlowfieldPF::update(Application& owner)
         // particle system - draw
         part_sys.draw(wgpu_ctx, draw_args,
             {
-                .settings = &owner.getSettings(),
+                .settings = &options,
                 .bounds = init_data.size,
+                .cell_size = map_area.cell_size,
+                .num_particles = (u32)num_particles,
             });
 
         // SUBMIT

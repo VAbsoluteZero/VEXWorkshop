@@ -56,6 +56,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (max_uv) < (discard_y) { 
         discard;
     }
-
+    
     return color;
 } 

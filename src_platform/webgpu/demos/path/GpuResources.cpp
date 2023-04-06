@@ -335,10 +335,7 @@ void vex::flow::CellHeatmapV1::draw(
 {
     UBOHeatMap vbo{
         .camera_vp = draw_ctx.camera_mvp,
-        .data1 = args.color1,
-        .data2 = args.color2,
-        .data3 = {},
-        .data4 = {draw_ctx.time, 0, 0, 0},
+        .data1 = {args.opacity, 0.0f, 0.0f, 0.0f},
         .quad_size = {draw_ctx.camera_h, draw_ctx.camera_h},
         .buffer_dimensions = args.bounds,
     };
@@ -403,46 +400,70 @@ void vex::flow::ComputeFields::init(const wgfx::GpuContext& ctx, const TextShade
                         .usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_Storage,
                         .size = (u32)(size.x * size.y * sizeof(v2f)),
                     });
-    staging_buf = GpuBuffer::create(
+    subdiv_buf = GpuBuffer::create(
         ctx.device, {
                         .label = "f32 vec stage",
-                        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead,
-                        .size = (u32)(size.x * size.y * sizeof(v2f)),
+                        .usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_Storage,
+                        .size = (u32)(size.x * size.y * sizeof(v2f) * 16),
                     });
+    // make main pass pl
+    {
+        auto [layout,
+            binding] = BGLCombinedBuilder{.al = tmp_alloc} //
+                           .addUniform(sizeof(UBO), uniform_buf, 0, WGPUShaderStage_Compute)
+                           .addStorageBuffer(16 * 16, map_data_buf, WGPUShaderStage_Compute, true)
+                           .addStorageBuffer(16 * 16, output_buf, WGPUShaderStage_Compute, false)
+                           .createLayoutAndGroup(ctx.device);
 
-    auto [layout,
-        binding] = BGLCombinedBuilder{.al = tmp_alloc} //
-                       .addUniform(sizeof(UBO), uniform_buf, 0, WGPUShaderStage_Compute)
-                       .addStorageBuffer(16 * 16, map_data_buf, WGPUShaderStage_Compute, true)
-                       .addStorageBuffer(16 * 16, output_buf, WGPUShaderStage_Compute, false)
-                       .createLayoutAndGroup(ctx.device);
+        //
+        main_pass.bgl_layout = layout;
+        main_pass.pipeline = main_pass.pipeline_data.createPipeline(ctx, shad, layout);
+        main_pass.bind_group = binding;
+    }
+    // make subdiv pass pl
+    {
+        auto [layout,
+            binding] = BGLCombinedBuilder{.al = tmp_alloc} //
+                           .addUniform(sizeof(UBO), uniform_buf, 0, WGPUShaderStage_Compute)
+                           .addStorageBuffer(16 * 16, map_data_buf, WGPUShaderStage_Compute, true)
+                           .addStorageBuffer(16 * 16, output_buf, WGPUShaderStage_Compute, true)
+                           .addStorageBuffer(16 * 16, subdiv_buf, WGPUShaderStage_Compute, false)
+                           .createLayoutAndGroup(ctx.device);
 
-    bgl_layout = layout;
-    pipeline = pipeline_data.createPipeline(ctx, shad, layout);
-    bind_group = binding;
+        wgpuDeviceTick(ctx.device);
+
+        subdiv_pass.bgl_layout = layout;
+        subdiv_pass.pipeline = subdiv_pass.pipeline_data.createPipeline(ctx, shad, layout);
+        subdiv_pass.bind_group = binding;
+    }
 }
 
 void vex::flow::ComputeFields::compute(wgfx::CompContext& ctx, const ComputeArgs& args)
 { //
-    wgpuComputePassEncoderSetPipeline(ctx.comp_pass, pipeline);
-    wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, bind_group, 0, nullptr);
     UBO vbo{
         .size = args.map_size,
         .flags = args.flags,
     };
     updateUniform(ctx, uniform_buf, vbo);
 
-    const auto work_size = args.map_size.x * args.map_size.y;
-    check_((work_size % 64) == 0);
-
-    u32 num_groups = (work_size / (64 * 32));
-
-    wgpuComputePassEncoderDispatchWorkgroups(ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
+    {
+        const auto work_size = args.map_size.x * args.map_size.y;
+        u32 num_groups = (work_size / (64 * 32));
+        check_((work_size % 64) == 0);
+        wgpuComputePassEncoderSetPipeline(ctx.comp_pass, main_pass.pipeline);
+        wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, main_pass.bind_group, 0, nullptr);
+        wgpuComputePassEncoderDispatchWorkgroups(
+            ctx.comp_pass, num_groups > 0 ? num_groups : 1, 1, 1);
+    }
+    {
+        wgpuComputePassEncoderSetPipeline(ctx.comp_pass, subdiv_pass.pipeline);
+        wgpuComputePassEncoderSetBindGroup(ctx.comp_pass, 0, subdiv_pass.bind_group, 0, nullptr);
+        wgpuComputePassEncoderDispatchWorkgroups(
+            ctx.comp_pass, args.map_size.x / 8, args.map_size.y / 8, 1);
+    }
 
     wgpuComputePassEncoderEnd(ctx.comp_pass);
     WGPU_REL(ComputePassEncoder, ctx.comp_pass);
-    wgpuCommandEncoderCopyBufferToBuffer(
-        ctx.encoder, output_buf.buffer, 0, staging_buf.buffer, 0, staging_buf.desc.size);
 }
 
 bool vex::flow::ComputeFields::reloadShaders(
@@ -452,14 +473,22 @@ bool vex::flow::ComputeFields::reloadShaders(
     if (!compute)
         return false;
 
-    WGPU_REL(ComputePipeline, pipeline);
-    pipeline = pipeline_data.createPipeline(context, compute, bgl_layout);
-    check_(pipeline);
+    WGPU_REL(ComputePipeline, main_pass.pipeline);
+    main_pass.pipeline = main_pass.pipeline_data.createPipeline(
+        context, compute, main_pass.bgl_layout);
+    check_(main_pass.pipeline);
+
+    WGPU_REL(ComputePipeline, subdiv_pass.pipeline);
+    subdiv_pass.pipeline = subdiv_pass.pipeline_data.createPipeline(
+        context, compute, subdiv_pass.bgl_layout);
+    check_(subdiv_pass.pipeline);
+
     return true;
 }
 
 void vex::flow::FlowFieldsOverlay::init(const wgfx::GpuContext& ctx,
-    const TextShaderLib& text_shad_lib, wgfx::GpuBuffer& flow_v2f_buf, const char* in_shader_file)
+    const TextShaderLib& text_shad_lib, wgfx::GpuBuffer& flow_v2f_buf, wgfx::GpuBuffer& subdiv_buf,
+    const char* in_shader_file)
 {
     shader_file = in_shader_file;
     vex::InlineBufferAllocator<4096> temp_alloc_resource;
@@ -486,8 +515,8 @@ void vex::flow::FlowFieldsOverlay::init(const wgfx::GpuContext& ctx,
     auto [layout, binding] = BGLCombinedBuilder{.al = tmp_alloc} //
                                  .addUniform(sizeof(UBOHeatMap), uniform_buf, 0,
                                      WGPUShaderStage_Fragment | WGPUShaderStage_Vertex)
-                                 .addStorageBuffer(16 * 16, flow_v2f_buf,
-                                     WGPUShaderStage_Fragment | WGPUShaderStage_Vertex)
+                                 .addStorageBuffer(16 * 16, flow_v2f_buf, WGPUShaderStage_Vertex)
+                                 .addStorageBuffer(16 * 16, subdiv_buf, WGPUShaderStage_Vertex)
                                  .createLayoutAndGroup(ctx.device);
 
     bgl_layout = layout;
@@ -510,12 +539,14 @@ void vex::flow::FlowFieldsOverlay::draw(
     const v2f arrow_size = {cell_h * 0.2, cell_h};
     // const v2f orig_loc_space = { cell_h * 0.2, cell_h };
 
+    const bool use_subdiv = true;
+
     UBOHeatMap vbo{
         .camera_vp = draw_ctx.camera_mvp,
         .data1 = args.color1,
         .data2 = args.color2,
         .data3 = {arrow_size.x, arrow_size.y, cell_w, cell_h},
-        .data4 = {draw_ctx.time, 0, 0, 0},
+        .data4 = {draw_ctx.time, (float)use_subdiv, 0, 0},
         .quad_size = {draw_ctx.camera_h, draw_ctx.camera_h},
         .buffer_dimensions = args.bounds,
     };
@@ -526,7 +557,8 @@ void vex::flow::FlowFieldsOverlay::draw(
         wgpuRenderPassEncoderSetPipeline(rpass_enc, pipeline);
         wgpuRenderPassEncoderSetBindGroup(rpass_enc, 0, bind_group, 0, 0);
 
-        wgpuRenderPassEncoderDraw(rpass_enc, args.bounds.x * args.bounds.y * 6, 1, 0, 0);
+        wgpuRenderPassEncoderDraw(
+            rpass_enc, args.bounds.x * args.bounds.y * 6 * (use_subdiv ? 16 : 1), 1, 0, 0);
         wgpuRenderPassEncoderPopDebugGroup(rpass_enc);
     }
 }
@@ -584,7 +616,7 @@ void vex::flow::ParticleSym::init(
                             .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Storage,
                             .size = (u32)(args.max_particles * sizeof(Particle)),
                         });
-        auto table_size = args.bounds.x * args.bounds.y * spatial_table_depth * 8 * 4;
+        auto table_size = args.bounds.x * args.bounds.y * spatial_table_depth * 16 * 4;
         hash_data.spatial_table = GpuBuffer::create(
             ctx.device, {
                             .label = "table buf",
@@ -604,9 +636,6 @@ void vex::flow::ParticleSym::init(
                             .size = (u32)(args.max_particles * 4),
                         });
 
-        //constexpr auto k1 = offsetof(SimulateUBO, flags);
-        //constexpr auto k2 = offsetof(SimulateUBO, spatial_table_size);
-        // counting pipeline
         auto [layout, binding] =
             BGLCombinedBuilder{.al = tmp_alloc} //
                 .addUniform(sizeof(SimulateUBO), hash_data.uniform_buf, 0, WGPUShaderStage_Compute)
@@ -645,11 +674,13 @@ void vex::flow::ParticleSym::init(
                             .size = (u32)(args.max_particles * 4),
                         });
 
+        // #fixme - separate bindings
         auto [layout, binding] =
             BGLCombinedBuilder{.al = tmp_alloc} //
                 .addUniform(sizeof(SimulateUBO), hash_data.uniform_buf, 0, WGPUShaderStage_Compute)
                 .addStorageBuffer(256, hash_data.particle_data_buf, WGPUShaderStage_Compute, false)
                 .addStorageBuffer(256, *(args.flow_v2f_buf), WGPUShaderStage_Compute, true)
+                .addStorageBuffer(256, *(args.flow_sub_v2f_buf), WGPUShaderStage_Compute, true)
                 .addStorageBuffer(256, *(args.cells_buf), WGPUShaderStage_Compute, true)
                 .addStorageBuffer(256, hash_data.spatial_table, WGPUShaderStage_Compute, true)
                 .addStorageBuffer(256, dbg, WGPUShaderStage_Compute, false)
@@ -820,15 +851,17 @@ void vex::flow::ParticleSym::draw(
 {
     if (sym_data.num_particles < 1)
         return;
-    const float cell_h = (draw_ctx.grid_half_size / args.bounds.y);
-    const float cell_w = cell_h;
 
     auto rad = args.settings->valueOr(opt_part_radius.key_name, default_rel_radius);
+    auto color1 = args.settings->valueOr<v4f>(opt_part_color.key_name, Color::green());
+    auto auto_color = args.settings->valueOr<bool>(opt_part_auto_color, false);
     VisualUBO vbo{
         .camera_vp = draw_ctx.camera_mvp,
-        .color1 = Color::green(),
-        .color2 = Color::red(),
-        .size = {cell_w * rad, cell_w * rad, 1, 1},
+        .color1 = color1,
+        .color2 = args.color2,
+        .size = {args.cell_size.x * rad * 1, args.cell_size.y * rad * 1, 1, 1},
+        .num_particles = args.num_particles,
+        .flags = auto_color,
     };
     updateUniform(ctx, vis_data.uniform_buf, vbo);
     {
@@ -921,10 +954,4 @@ bool vex::flow::ParticleSym::reloadShaders(
 void vex::flow::ParticleSym::release()
 { //
     SPDLOG_ERROR("#fixme - add release");
-}
-
-bool vex::flow::ParticleSym::isValid() const
-{ //
-    SPDLOG_ERROR("#fixme - add isValid");
-    return false;
 }

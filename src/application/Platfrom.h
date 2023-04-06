@@ -82,7 +82,7 @@ namespace vex
 
             template <typename T>
             void setValue(T val)
-            { 
+            {
                 OptNumValue& opt_min = this->min;
                 OptNumValue& opt_mix = this->max;
                 if (T* stored_val = this->value.find<std::decay_t<T>>(); nullptr != stored_val)
@@ -122,6 +122,9 @@ namespace vex
             {
                 container.removeSetting(key_name);
             }
+
+            operator const char*() const { return key_name; }
+            operator std::string_view() const { return key_name; }
         };
 
         struct VersionFilter
@@ -229,6 +232,7 @@ namespace vex
 
         SettingsContainer& addSetting(std::string key, Entry entry)
         {
+            check_(!settings.contains(key));
             settings.emplaceAndGet(std::move(key), std::move(entry));
             return *this;
         }

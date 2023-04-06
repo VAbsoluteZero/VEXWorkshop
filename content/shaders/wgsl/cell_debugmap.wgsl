@@ -8,10 +8,10 @@ alias mtx4 =  mat4x4<f32>;
 
 struct Uniforms {
      camera_vp: mtx4,
-     color1: v4f,
-     color2: v4f,
-     data1: v4f,
-     data2: v4f,
+     v1_unused: v4f,
+     v2_unused: v4f,
+     v3_unused: v4f,
+     v4_unused: v4f,
      quad_size: v2f,
      bounds: v2u32,
 }; 

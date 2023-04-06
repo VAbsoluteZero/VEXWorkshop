@@ -2,16 +2,17 @@
 const pi : f32 = 3.14159265359; 
 const pi2 : f32 = pi * 2; 
 alias v2f = vec2<f32>;
+alias v3f = vec3<f32>;
 alias v4f = vec4<f32>;
 alias v2u32 = vec2<u32>;
 alias mtx4 =  mat4x4<f32>;
 
 struct Uniforms {
      camera_vp: mtx4,
-     color1: v4f,
-     color2: v4f,
-     data1: v4f,
-     data2: v4f,
+     opacity_x : v4f, // unused 
+     color2: v4f,// unused
+     data1: v4f, // unused
+     data2: v4f, // unused
      quad_size: v2f,
      bounds: v2u32,
 }; 
@@ -67,7 +68,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     let expected_extreme = f32(u.bounds.x + u.bounds.y);
     var fpart = clamp(0., 1., f32(part) / expected_extreme);
-    var r = fpart;// 0.95 + cos(fpart * pi * u.data2.x * 9) * 0.041;
+    var r = fpart;
     var b = 0.0532 / (fpart + 0.0021);
-    return v4f(r, (1.02 - sin(fpart * pi)) * 1.05 - b * 0.12, b, 1);//mix(0, 0.1, 1 / fpart  )fpart
+    return v4f(r, (1.02 - sin(fpart * pi)) * 1.05 - b * 0.12, b, u.opacity_x.x);//mix(0, 0.1, 1 / fpart  )fpart
 } 

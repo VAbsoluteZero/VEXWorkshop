@@ -20,6 +20,7 @@
 
 using namespace std::literals::chrono_literals; 
 
+
 struct WgpuRenderInterface
 {
     wgfx::Globals globals;

@@ -26,13 +26,7 @@
 using namespace vex;
 
 // #fixme - possibly register samples similarly to the way test frameworks register tests
-vex::DemoSamples registerAvailableDemoCtors();
-
-struct XY
-{
-    u32 x;
-    u32 y;
-};
+vex::DemoSamples registerAvailableDemoCtors(); 
 
 int main(int argc, char** argv)
 {
@@ -80,12 +74,7 @@ vex::DemoSamples registerAvailableDemoCtors()
             auto new_demo = new vex::flow::FlowfieldPF();
             new_demo->init(owner, {});
             return new_demo;
-        });
-    // out.add("model_loader", "Model loader", "Load and render simple model",
-    //     [](vex::Application& owner) -> vex::IDemoImpl*
-    //     {
-    //         return new vex::ModelLoader();
-    //     });
+        }); 
 #endif
 
     return out;
