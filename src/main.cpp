@@ -33,15 +33,17 @@ int main(int argc, char** argv)
     vex::StartupConfig config;
     // experimental feature, originally demo would be selected only once
     config.allow_demo_changes =
-#ifndef NDEBUG
+#ifndef VEX_EMSCRIPTEN
         true;
 #else
-        true;
+        false;
 #endif
     config.target_framerate = 300; 
 
     spdlog::stopwatch sw;
     auto& app = vex::Application::init(config, registerAvailableDemoCtors());
+
+    SPDLOG_INFO(" ---------------- application initialization finished ---------------- ");
     app.activateDemo("pf_main");
     SPDLOG_WARN("Initializing application took {} seconds", sw);
 
@@ -69,9 +71,10 @@ vex::DemoSamples registerAvailableDemoCtors()
         [](vex::Application& owner) -> vex::IDemoImpl*
         {
             spdlog::stopwatch sw;
-            defer_ { SPDLOG_WARN("Initializing demo took {} seconds", sw); };
-
+            defer_ { SPDLOG_WARN("Initializing demo took {} seconds", sw); }; 
+            SPDLOG_INFO(" ctor ");
             auto new_demo = new vex::flow::FlowfieldPF();
+            SPDLOG_INFO(" before init ");
             new_demo->init(owner, {});
             return new_demo;
         }); 

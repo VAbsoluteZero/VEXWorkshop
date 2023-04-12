@@ -66,8 +66,8 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
 
     let main = (i % point_div) >= 3;
 
-    let dx = dir.x * u.data1.z * select(0.09, 0.05, main);
-    let dy = dir.y * u.data1.z * select(0.09, 0.05, main);
+    let dx = dir.x * u.data1.z * select(0.12, 0.09, main);
+    let dy = dir.y * u.data1.z * select(0.12, 0.09, main);
 
     let pos2 = array(
         vec2(dy, -dx),

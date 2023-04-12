@@ -10,7 +10,7 @@
             "name": "DefaultCfg",
             "displayName": "Default Config",
             "generator": "Visual Studio 17 2022",
-            "binaryDir": "${sourceDir}/cmake_output/${presetName}",
+            "binaryDir": "${sourceDir}/cmake_output/${presetName}/",
             "hidden": true,
             "architecture": {
                 "value": "x64",
@@ -31,7 +31,7 @@
                 "VEX_USE_EMSCRIPTEN": false
             }
         },
-        {
+        { 
             "name": "clang_base",
             "displayName": "Clang default",
             "inherits": "DefaultCfg",
@@ -98,10 +98,12 @@
             "hidden": false,
             "generator": "Ninja",
             "description": " >> ONLY USE IT WITH 'emcmake' as it will set proper envars << ",
+            "toolchainFile": "$env{EMSCRIPTEN_ROOT}/cmake/Modules/Platform/Emscripten.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_COMPILER": "em++",
-                "CMAKE_C_COMPILER": "emcc",
+                "CMAKE_CXX_COMPILER": "$env{EMSCRIPTEN_ROOT}/em++.bat",
+                "CMAKE_C_COMPILER": "$env{EMSCRIPTEN_ROOT}/emcc.bat",
+                "CMAKE_AR": "$env{EMSCRIPTEN_ROOT}/emar.bat",
                 "VEX_USE_EMSCRIPTEN": true,
                 "VEX_USE_BIN_DIR": true
             }

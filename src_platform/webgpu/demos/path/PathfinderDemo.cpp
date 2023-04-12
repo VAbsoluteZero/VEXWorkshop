@@ -130,11 +130,13 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
     // init webgpu stuff
     {
 #if VEX_PF_StressPreset
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map256.png");
-        // Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map128.png");
+#elif VEX_PF_WebDemo
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map64.png");
 #else
         Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
 #endif
+        processed_map.size = {init_data.size.x, init_data.size.y};
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
             processed_map.data.add(c ? 0 : ~ProcessedData::dist_mask);
@@ -161,10 +163,11 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 .flow_v2f_buf = &compute_pass.output_buf,
                 .flow_sub_v2f_buf = &compute_pass.subdiv_buf,
                 .cells_buf = &heatmap.storage_buf,
-                .bounds = init_data.size,
                 .max_particles = max_particles,
+                .bounds = init_data.size,
             });
     }
+
     // init console variables
     {
         auto& options = owner.getSettings();
@@ -216,8 +219,16 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
                 opt_part_sep.removeFrom(options);
             });
     }
+    // init ccamera
+    const auto cam_h = default_cell_w * init_data.size.y;
+    map_area.unscalled_camera_h = cam_h;
+    map_area.camera = BasicCamera::makeOrtho({0.f, 0.f, -4.0}, // pos
+        {cam_h * 1.333f, cam_h},                               // size
+        -10, 10);                                              // near/far
+
     // add input hooks
-    owner.input.addTrigger("DEBUG"_trig,
+#if VEX_PF_WebDemo == 1
+    owner.input.addTrigger("ShaderReload"_trig,
         Trigger{
             .fn_logic =
                 [](Trigger& self, const InputState& state)
@@ -227,6 +238,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
             },
         },
         true);
+#endif
 }
 
 struct NearSearchClient
@@ -251,28 +263,29 @@ struct NearSearchClient
     FORCE_INLINE u32 startDist() const { return start_dist; }
 };
 
-void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnArgs args)
+void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnLocation args)
 {
-    NearSearchClient client
-    {
-        .near = {(u32)(init_data.size.y * 4), frame_alloc},
-#if VEX_PF_StressPreset
-        .max_len = (i32)glm::round(init_data.size.y * init_data.size.y * 0.25f),
-#else
-        .max_len = (i32)(init_data.size.y * 2),
-#endif
+    if ((num_particles == max_particles) && !spawn_args.reset)
+        return;
+    if (init_data.isBlocked(goal_cell))
+        return;
+
+    NearSearchClient client{
+        .near = {(u32)(init_data.size.y * init_data.size.x / 2), frame_alloc},
+        // #if VEX_PF_StressPreset
+        //         .max_len = (i32)glm::round(init_data.size.y * init_data.size.y * 0.5f),
+        // #else
+        //         .max_len = (i32)(init_data.size.y * 4),
+        // #endif
+        .max_dist = (u32)spawn_args.radius,
     };
 
     const float sz = map_area.cell_size.x;
     const v2f orig = map_area.top_left;
     using Part = ParticleSym::Particle;
-    const i32 max_per_cell = 1.5f / ParticleSym::default_rel_radius;
+    //    const i32 max_per_cell = 1.5f / map_area.part_radius;
 
-#if VEX_PF_StressPreset
-    const i32 num_to_spawn = 1'000'000;
-#else
-    const i32 num_to_spawn = (client.max_len * max_per_cell) * 2;
-#endif
+    const i32 num_to_spawn = glm::clamp(spawn_args.count, 0, max_particles);
 
     SPDLOG_INFO("spawning {} particles", num_to_spawn);
 
@@ -288,36 +301,45 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     }
 
     vex::Buffer<Part> particles = {frame_alloc, num_to_spawn};
-    vex::Buffer<i32> rejection = {frame_alloc, (i32)client_len};
-    rejection.addUninitialized(client_len);
-    for (auto& it : rejection)
-        it = max_per_cell;
-    particles.addUninitialized(num_to_spawn);
+    //   vex::Buffer<i32> rejection = {frame_alloc, (i32)client_len};
+    // rejection.addUninitialized(client_len);
+    // for (auto& it : rejection)
+    //     it = max_per_cell;
+    particles.reserve(num_to_spawn);
 
-    const float padding = ParticleSym::default_rel_radius * sz * 0.5f;
-    for (auto i = 0; i < num_to_spawn; ++i)
+    if (spawn_args.reset)
     {
-        i32 repeat_cnt = 4;
-        // repeat:
-        float f_idx = i / ((float)num_to_spawn);
-
-        // auto entry_idx = rng::Rand::randMod(client_len);
-        auto entry_idx = (i32)(glm::floor(f_idx * client_len));
-        v2f cell_idx = cells[entry_idx];
-        // rejection[entry_idx]--;
-        // if (rejection[entry_idx] < 0 && repeat_cnt > 0)
-        //{
-        //     repeat_cnt--;
-        //     goto repeat;
-        // }
-        volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding);
-        volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding);
-        particles[i].pos = cell_idx + v2f{rnd_x, rnd_y};
-        particles[i].vel = v2f_zero;
+        num_particles = 0;
     }
 
-    num_particles = num_to_spawn;
-    part_sys.spawnForSymulation(ctx, particles.constSpan());
+    const float padding = map_area.part_radius * sz * 1.01f;
+    for (auto i = 0; i < num_to_spawn; ++i)
+    {
+        if (num_particles + i >= max_particles)
+            break;
+
+        float f_idx = i / ((float)num_to_spawn);
+        auto entry_idx = (i32)(glm::floor(f_idx * client_len));
+        v2f cell_idx = cells[entry_idx];
+        volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding * 2);
+        volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding * 2);
+        Part particle = {
+            .pos = cell_idx + v2f{rnd_x, rnd_y},
+            .vel = v2f_zero,
+        };
+        particles.add(particle);
+    }
+
+    if (spawn_args.reset)
+    {
+        num_particles = num_to_spawn;
+        part_sys.resetParticleBuffer(ctx, particles.constSpan());
+    }
+    else
+    {
+        part_sys.spawnForSimulation(ctx, particles.constSpan());
+        num_particles += particles.len;
+    }
 }
 
 void FlowfieldPF::update(Application& owner)
@@ -344,6 +366,7 @@ void FlowfieldPF::update(Application& owner)
     //         return true;
     //     });
 
+    const auto& time = owner.getTime();
     auto& options = owner.getSettings();
     if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
     {
@@ -357,6 +380,7 @@ void FlowfieldPF::update(Application& owner)
         NearSearchClient client{
             .near = {32, frame_alloc},
             .max_len = (i32)(init_data.size.y * 3),
+            .max_dist = 6,
         };
         for (auto it : sub_goals)
         {
@@ -371,7 +395,7 @@ void FlowfieldPF::update(Application& owner)
             {
                 if (processed_map[n_cell] > n_dist)
                 {
-                    auto v = processed_map[n_cell] + (((i32)client.start_dist) - ((i32)n_dist));
+                    auto v = processed_map[n_cell] + (((i32)client.max_dist + 1) - ((i32)n_dist));
                     processed_map[n_cell] = (v > 1) ? v : 1;
                 }
             }
@@ -380,11 +404,16 @@ void FlowfieldPF::update(Application& owner)
             client.cur_max_dist = 0;
         }
     }
-
     // #fixme - movable camera
-    auto camera = BasicCamera::makeOrtho({0.f, 0.f, -4.0}, {12 * 1.333f, 16}, -10, 10);
+    auto& camera = map_area.camera;
     camera.aspect = viewport.options.size.x / (float)viewport.options.size.y;
+    // map_area.camera_scale = glm::mix(
+    //     map_area.camera_scale, map_area.camera_scale_target, time.unscalled_dt_f32 * 20.0f);
+    // camera.height = map_area.unscalled_camera_h * map_area.camera_scale;
     camera.update();
+
+    map_area.part_radius = options.valueOr(
+        opt_part_radius.key_name, ParticleSym::default_rel_radius);
 
     auto& globals = wgpu_backend->getGlobalResources();
 
@@ -393,7 +422,8 @@ void FlowfieldPF::update(Application& owner)
     bool has_focus = vp_wrapper.mouse_over && vp_wrapper.gui_visible;
     if (has_focus)
     { // process input
-        owner.input.ifTriggered("DEBUG"_trig,
+#if VEX_PF_WebDemo == 1
+        owner.input.ifTriggered("ShaderReload"_trig,
             [&](const input::Trigger& self)
             {
                 spdlog::stopwatch sw;
@@ -411,7 +441,7 @@ void FlowfieldPF::update(Application& owner)
                 part_sys.reloadShaders(wgpu_backend->text_shad_lib, gctx);
                 return true;
             });
-
+#endif
         auto mpos = camera.normalizedViewToWorld(viewports.imgui_views[0].mouse_pos_normalized);
 
         float r = init_data.size.y / camera.height;
@@ -419,10 +449,10 @@ void FlowfieldPF::update(Application& owner)
         // #fixme rewrite this mess to properly set up size indep. from camera
         map_area.top_left = v2f{-camera.height, camera.height} * 0.5f;
         map_area.bot_left = v2f{-camera.height, -camera.height} * 0.5f;
-        map_area.cell_size = {cell_w, cell_w};
+        map_area.cell_size = {default_cell_w, default_cell_w};
 
-        v2u32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
-        ;
+        v2i32 m_cell = {mpos.x * r + init_data.size.x / 2, -mpos.y * r + init_data.size.y / 2};
+
         owner.input.ifTriggered("MouseRightDown"_trig,
             [&](const input::Trigger& self)
             {
@@ -431,6 +461,8 @@ void FlowfieldPF::update(Application& owner)
                 bool valid = init_data.contains(m_cell) && !init_data.isBlocked(m_cell);
                 if (ctrl_down && valid)
                     sub_goals.push(m_cell);
+                else if (ctrl_down)
+                    sub_goals.popDiscard();
 
                 return true;
             });
@@ -439,7 +471,7 @@ void FlowfieldPF::update(Application& owner)
             {
                 auto trig = self.input_data.find(vex::input::SignalId::KeyModCtrl);
                 auto ctrl_down = trig && trig->isActive();
-                bool valid = init_data.contains(m_cell) && !init_data.isBlocked(m_cell);
+                bool valid = !init_data.isBlocked(m_cell);
                 if (!ctrl_down && valid)
                     goal_cell = m_cell;
 
@@ -448,23 +480,43 @@ void FlowfieldPF::update(Application& owner)
         owner.input.ifTriggered("MouseLeftDown"_trig,
             [&](const input::Trigger& self)
             {
-                if (init_data.contains(m_cell) && !init_data.isBlocked(m_cell))
+                if (!init_data.isBlocked(m_cell))
                 {
                     trySpawningParticlesAtLocation(
                         globals.asContext(), {.cell = m_cell, .world_pos = mpos});
                 }
                 return true;
             });
+        owner.input.ifTriggered("MouseMidMove"_trig,
+            [&](const input::Trigger& self)
+            {
+                v3f world_delta = camera.viewportToCamera(
+                    vp_wrapper.pixelScaleToNormalizedView(owner.input.global.mouse_delta));
+                camera.pos = camera.pos + v3f(world_delta.x, world_delta.y, 0.0f);
+                const float clamp_v = map_area.cell_size.x * processed_map.size.x * 0.5f;
+                camera.pos.x = glm::clamp(camera.pos.x, -clamp_v, clamp_v);
+                camera.pos.y = glm::clamp(camera.pos.y, -clamp_v, clamp_v);
+                return true;
+            });
+        // owner.input.ifTriggered("MouseMidScroll"_trig,
+        //     [&](const input::Trigger& self)
+        //     {
+        //         auto input_data = self.input_data.find(vex::input::SignalId::MouseScroll);
+        //         if (!input_data)
+        //             return false;
+        //         float delta = -input_data->value_raw.y * 0.03f;
+        //         map_area.camera_scale_target = glm::clamp(map_area.camera_scale_target + delta,
+        //             camera_scale_clamp_min, camera_scale_clamp_max);
+        //         return true;
+        //     });
     }
     {
         auto& wgpu_ctx = viewport.setupForDrawing(globals);
 
         auto model_view_proj = camera.mtx.projection * camera.mtx.view;
-        auto& time = owner.getTime();
         auto int_sz = init_data.size;
 
-        DrawContext draw_args{
-            .settings = &options,
+        DrawContext draw_args{.settings = &options,
             .camera_mvp = model_view_proj,
             .camera_model_view = camera.mtx.view,
             .camera_projection = camera.mtx.projection,
@@ -474,7 +526,7 @@ void FlowfieldPF::update(Application& owner)
             .time = (float)time.unscaled_runtime,
             .grid_half_size = init_data.size.x / 2.0f,
             .camera_h = camera.height,
-        };
+            .cell_sz = map_area.cell_size.x};
         { // draw HEATMAP & background
 
             // heatmap WRITES to storage buffer that contains search result
@@ -579,15 +631,18 @@ void FlowfieldPF::drawUI(Application& owner)
         ImGui::DockBuilderRemoveNode(dockspace_id);
         ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
-
+#if VEX_PF_WebDemo == 1
         ImGuiID dock_id_down = ImGui::DockBuilderSplitNode(
-            main_dockspace, ImGuiDir_Down, 0.21f, nullptr, &dockspace_id);
+            main_dockspace, ImGuiDir_Right, 0.31f, nullptr, &dockspace_id);
         ImGui::DockBuilderDockWindow(ui.console_wnd.name, dock_id_down);
+#endif
         ImGui::DockBuilderDockWindow(ids::main_vp_name, dockspace_id);
         ImGui::DockBuilderDockWindow(ids::debug_vp_name, dockspace_id);
         ImGui::DockBuilderFinish(main_dockspace);
     }
-
+#if VEX_PF_WebDemo == 1
+    ui.console_wnd.is_open = false;
+#endif
     ui.drawStandardUI(owner, &viewports);
 
     if (ImGui::BeginMainMenuBar())
@@ -598,9 +653,36 @@ void FlowfieldPF::drawUI(Application& owner)
         ImGui::Text(" bfs: %.3f ms", bfs_search_dur_ms);
     }
 
+    const auto vp_size = viewports.imgui_views[0].last_seen_size;
     auto& options = owner.getSettings();
+
+    defer_ { ImGui::End(); }; // close window region
     if (ImGui::Begin(ids::main_vp_name))
     {
+        {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
+            ImGui::PushFont(vex::g_view_hub.visuals.fnt_tiny);
+            ImGui::Indent(4);
+            defer_
+            {
+                ImGui::PopFont();
+                ImGui::PopStyleColor();
+                ImGui::Unindent(4);
+            };
+            ImVec2 side_panel_size = {250, 200};
+            [[maybe_unused]] bool visible = ImGui::BeginChild(
+                "##pf_spawn_options", side_panel_size, false);
+            defer_ { ImGui::EndChild(); };
+            ImGui::Text("Particle spawn settings:");
+            ImGui::Text("count per click:        ");
+            ImGui::DragInt("##num_ps_spawn-num", &spawn_args.count, 10, 1, max_particles / 2);
+
+            ImGui::Text("radius (in valid cells):");
+            ImGui::SliderInt("##num_ps_spawn-area", &spawn_args.radius, 2, init_data.size.x / 2);
+
+            ImGui::Checkbox("clear others on spawn", &spawn_args.reset);
+        }
+        ImGui::NewLine();
         if (options.valueOr(opt_show_numbers.key_name, false) && processed_map.size.x > 0 &&
             processed_map.size.x < 65) // messy on large map. #fixme test for visible size instead
         {
@@ -608,13 +690,12 @@ void FlowfieldPF::drawUI(Application& owner)
             ImDrawList* dlist = ImGui::GetWindowDrawList();
             i32 pos = 0;
             ImVec2 min_xy = ImGui::GetWindowContentRegionMin();
-            auto vp_size = viewports.imgui_views[0].last_seen_size;
-            v2f center = vp_size / 2;
-            center.x += min_xy.x + 2;
-            center.y += min_xy.y + 12;
+            v2f vp_center = vp_size / 2;
+            vp_center.x += min_xy.x + 2;
+            vp_center.y += min_xy.y + 12;
 
             f32 cell_w = (vp_size.y / 2.0f) / (processed_map.size.y / 2.0f);
-            v2f orig = center - v2f{vp_size.y / 2 - cell_w / 2, vp_size.y / 2 - cell_w / 2};
+            v2f orig = vp_center - v2f{vp_size.y / 2 - cell_w / 2, vp_size.y / 2 - cell_w / 2};
             for (auto it : processed_map.data)
             {
                 auto dist = it & processed_map.dist_mask;
@@ -641,7 +722,7 @@ void FlowfieldPF::drawUI(Application& owner)
         {
             if (ImGui::Button(ICON_CI_DEBUG_START "##pf_pause"))
                 is_pause_enabled_cv->value.set<bool>(false);
-        }
+        } 
 
         std::string item_id;
         item_id.reserve(80);
@@ -694,7 +775,8 @@ void FlowfieldPF::drawUI(Application& owner)
                 "##pf_options", side_panel_size, false);
             defer_ { ImGui::EndChild(); };
             ImGui::Indent(4);
-            defer_ { ImGui::Unindent(); };
+            defer_ { ImGui::Unindent(); }; 
+
             for (auto& [k, v] : options.settings)
             {
                 if ((SettingsContainer::Flags::k_visible_in_ui & v.flags) == 0)
@@ -754,13 +836,39 @@ void FlowfieldPF::drawUI(Application& owner)
             }
         }
     }
-    ImGui::End();
     if (ImGui::BeginMainMenuBar())
     {
         defer_ { ImGui::EndMainMenuBar(); };
         ImGui::Bullet();
         ImGui::Text("[particles:%d/%d] ", num_particles, max_particles);
-        ImGui::Bullet();
+        ImGui::Bullet(); 
+        {
+            ImGui::SetNextItemWidth(105);
+            auto time_scale = options.settings.find(opt_time_scale.key_name);
+            auto& ts_value = time_scale->value.get<float>();
+            ImGui::SliderFloat("Time scale##pf_time_scale", &ts_value, 0.25f, 2.0f, "%.3f",
+                ImGuiSliderFlags_AlwaysClamp);
+        }
+    }
+    const bool has_no_goal = init_data.isBlocked(goal_cell);
+    const bool has_no_particles = (num_particles == 0);
+    if (has_no_goal || has_no_particles)
+    {
+        const auto offset1 = ImGui::CalcTextSize(" Left click on any empty cell to set goal").x / 2;
+        const auto offset2 =
+            ImGui::CalcTextSize(" Right click on any empty cell to spawn particles").x / 2;
+        ImGui::PushFont(vex::g_view_hub.visuals.fnt_header);
+        defer_ { ImGui::PopFont(); };
+        if (has_no_goal)
+        {
+            ImGui::SetCursorPos({vp_size.x / 2.0f - offset1, vp_size.y / 2.0f});
+            ImGui::Text(" Right click on any empty cell to set goal ");
+        }
+        else if (has_no_particles)
+        {
+            ImGui::SetCursorPos({vp_size.x / 2.0f - offset2, vp_size.y / 2.0f});
+            ImGui::Text(" Left click on any empty cell to spawn particles ");
+        }
     }
 }
 void FlowfieldPF::postFrame(Application& owner)

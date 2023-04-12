@@ -7,11 +7,6 @@
 #include <webgpu/render/WgpuApp.h>
 
 #include "GpuResources.h"
-#ifndef __EMSCRIPTEN__
-#define VEX_PF_StressPreset 0
-#else
-#define VEX_PF_StressPreset 0
-#endif
 
 namespace vex::flow
 {
@@ -19,8 +14,6 @@ namespace vex::flow
     {
         static inline const char* main_vp_name = "MainViewport";
         static inline const char* debug_vp_name = "Debug Layer";
-
-        // static inline const char* setting_grid_sz = "pf.grid_size";
     } // namespace ids
 
     struct ProcessedData
@@ -70,11 +63,19 @@ namespace vex::flow
             vex::Buffer<u8> source;
             vex::Buffer<u8> matrix;       // neighbor matrix
             vex::Buffer<u32> debug_layer; // 1st byte is the same as in matrix
-            v2u32 size{0, 0};
+            v2u32 size{64, 64};
 
-            bool contains(v2u32 index) const { return index.x < size.x && index.y < size.y; }
+            bool contains(v2i32 index) const
+            {
+                return index.x < size.x && index.y < size.y && index.x >= 0 && index.y >= 0;
+            }
 
-            bool isBlocked(v2u32 index) const { return source[index.y * size.x + index.x] == 0; }
+            bool isBlocked(v2i32 index) const
+            {
+                if (!contains(index))
+                    return true;
+                return source[index.y * size.x + index.x] == 0;
+            }
 
             FORCE_INLINE u8* cellMaskPtr(v2u32 cell)
             {
@@ -106,7 +107,7 @@ namespace vex::flow
             out.data.reserve(grid.size.x * grid.size.y);
             out.data.len = 0;
             for (u8 c : grid.source)
-                out.data.add(c ? 0 : ~ProcessedData::dist_mask); 
+                out.data.add(c ? 0 : ~ProcessedData::dist_mask);
 
             const auto start_cell = args.start.y * grid.size.x + args.start.x;
             frontier.push(start_cell);
@@ -180,15 +181,20 @@ namespace vex::flow
                 }
             }
         }
-    }; 
+    };
 
     struct FlowfieldPF : public IDemoImpl
     {
 #if VEX_PF_StressPreset
-        static constexpr i32 max_particles = 1'200'000;;
+        static constexpr i32 max_particles = 2'000'000;
+        ;
 #else
-        static constexpr i32 max_particles = 200'000;
+        static constexpr i32 max_particles = 1'000'000;
 #endif
+        static constexpr float default_cell_w = 0.2f;
+        static constexpr float camera_scale_clamp_min = 0.5f;
+        static constexpr float camera_scale_clamp_max = 2.0f;
+
         struct InitArgs
         {
         };
@@ -200,12 +206,12 @@ namespace vex::flow
         virtual ~FlowfieldPF();
 
     private:
-        struct SpawnArgs
+        struct SpawnLocation
         {
             v2u32 cell;
-            v3f world_pos;
+            v3f world_pos; 
         };
-        void trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnArgs args);
+        void trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnLocation args);
 
         wgfx::ui::ViewportHandler viewports;
         wgfx::ui::BasicDemoUI ui;
@@ -226,11 +232,11 @@ namespace vex::flow
 
         ComputeFields compute_pass;
         FlowFieldsOverlay flow_overlay;
-        ParticleSym part_sys; 
+        ParticleSym part_sys;
 
         double bfs_search_dur_ms = 0;
-        v2u32 goal_cell = {10, 10};
-        vex::StaticRing<v2u32, 3> sub_goals;
+        v2i32 goal_cell = {10, 10};
+        vex::StaticRing<v2u32, 2> sub_goals;
         i32 num_particles = 0;
 
         struct
@@ -238,8 +244,21 @@ namespace vex::flow
             v2f top_left{};
             v2f bot_left{};
             v2f center{0, 0};
-            v2f cell_size{};
+            v2f cell_size{default_cell_w, default_cell_w};
+            float part_radius = ParticleSym::default_rel_radius;
+
+            BasicCamera camera{};
+            float unscalled_camera_h = 8.0f;
+            float camera_scale = 1.0f;
+            float camera_scale_target = 1.0f;
         } map_area;
+
+        struct
+        {
+            i32 radius = 24;
+            i32 count = 25000;
+            bool reset = false;
+        } spawn_args;
 
         struct
         {

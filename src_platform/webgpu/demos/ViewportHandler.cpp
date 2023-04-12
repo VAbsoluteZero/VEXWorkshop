@@ -89,6 +89,7 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
     {
         defer_ { ImGui::EndMainMenuBar(); };
 
+#if VEX_PF_WebDemo == 1
         if (ImGui::BeginMenu("File"))
         {
             defer_ { ImGui::EndMenu(); };
@@ -117,6 +118,7 @@ void wgfx::ui::BasicDemoUI::drawStandardUI(vex::Application& app, ViewportHandle
             defer_ { ImGui::EndMenu(); };
             ImGui::MenuItem("Show ImGui Metrics", nullptr, &g_metric_shown);
         }
+#endif
         ImGui::Bullet();
         const i32 target_fps = app.getMaxFps();
         ImGui::Text("[frame:%.3fms (%.1f FPS/%d)]", 1000.0f / ImGui::GetIO().Framerate,

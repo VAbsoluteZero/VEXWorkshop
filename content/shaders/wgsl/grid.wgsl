@@ -2,6 +2,7 @@ struct Uniforms {
     mvp: mat4x4<f32>,
     data1: vec4<f32>, 
     data2: vec4<f32>, 
+    grid_sz: vec2<f32>, 
 }; 
 
 struct VertexInput {
@@ -19,13 +20,14 @@ struct VertexOutput {
 @vertex
 fn vs_main(@builtin(vertex_index) i: u32, in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.pos = uniforms.mvp * vec4<f32>(in.pos, 1.0);
+    out.pos = vec4<f32>(in.pos, 1.0);
 
-    var v = (v2f(out.pos.x, out.pos.y));
+    var v = (v2f(out.pos.x, out.pos.y) * uniforms.grid_sz.x * 0.5f);
 
     out.pos.x = floor(v.x / uniforms.data2.z) * uniforms.data2.z;
     out.pos.y = floor(v.y / uniforms.data2.w) * uniforms.data2.w;
 
+    out.pos = uniforms.mvp * out.pos;
     out.color = uniforms.data1;
     out.uv = in.uv;
     return out;
@@ -45,7 +47,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var side_len = uniforms.data2.x;
     var thickness = uniforms.data2.y;
 
-    let main_freq: v2f = in.uv * pi2 * side_len  ;
+    let main_freq: v2f = in.uv * pi2 * side_len;
     //let sub_main_freq: v2f = in.uv * pi2 * side_len * subdiv_adjusted;
     let mult: f32 = 1;
     var uv_cos: vec2<f32> = cos(main_freq) * (mult);
@@ -56,6 +58,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (max_uv) < (discard_y) { 
         discard;
     }
-    
+
     return color;
 } 

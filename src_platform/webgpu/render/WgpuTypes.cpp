@@ -216,6 +216,8 @@ WGPUSurface wgfx::getWGPUSurface(WGPUInstance instance, SDL_Window* sdl_window)
         return wgpuInstanceCreateSurface(instance, &d);
     }
 #elif __EMSCRIPTEN__
+
+    SPDLOG_INFO(" wgpu getting surface " );
     WGPUSurfaceDescriptorFromCanvasHTMLSelector canvDesc = {};
     canvDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
     canvDesc.selector = "canvas";
@@ -243,7 +245,7 @@ void wgfx::swapchainPresent(WGPUSwapChain swap_chain) { wgpuSwapChainPresent(swa
 auto wgfx::Globals::isValid() const -> bool
 {
 #ifdef __EMSCRIPTEN__
-    return device && swap_chain;
+    return device;
 #else
     return instance && device && instance && queue //
            && surface && swap_chain;
@@ -337,8 +339,12 @@ WGPUShaderModule wgfx::shaderFromSrc(WGPUDevice device, const char* src)
     checkLethal(src, "Unrecoverable : got nullptr instead of WGSL shader source");
     WGPUShaderModuleWGSLDescriptor shaderCodeDesc{};
     shaderCodeDesc.chain.next = nullptr;
-    shaderCodeDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
+    shaderCodeDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor; 
+#ifndef __EMSCRIPTEN__
     shaderCodeDesc.source = src;
+#else
+    shaderCodeDesc.code = src;
+#endif
     WGPUShaderModuleDescriptor desc{};
     desc.nextInChain = nullptr;
     desc.nextInChain = &shaderCodeDesc.chain;
@@ -534,7 +540,7 @@ wgfx::TextureView wgfx::TextureView::create(
         .addressModeW = address_mode,
         .magFilter = WGPUFilterMode_Linear,
         .minFilter = WGPUFilterMode_Linear,
-        .mipmapFilter = mipmapFilter,
+        .mipmapFilter = (decltype(WGPUSamplerDescriptor::mipmapFilter)) mipmapFilter,
         .lodMinClamp = 0.0f,
         .lodMaxClamp = (float)from_tex.mip_level_count,
         .maxAnisotropy = 1,

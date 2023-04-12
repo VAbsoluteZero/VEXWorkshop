@@ -8,16 +8,16 @@ endif()
 # initialization
 # -------------------------------------------------------------------------------------------------
 set (CMAKE_SYSTEM_VERSION 10.0 (latest installed version))
-message("win: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
+message("win: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}") 
 project(VEXWorkshop VERSION 0.1)
-set(CMAKE_CXX_STANDARD 20)
+message("-------------------------------------------------------")
+set(CMAKE_CXX_STANDARD 20) 
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_SUPPRESS_REGENERATION true) # no zero check  
 ADD_DEFINITIONS(-DUNICODE)
 ADD_DEFINITIONS(-D_UNICODE)
 option(VEX_DEBUG_CMAKE "Enable cmake diagnostics" NO)  
-option(VEX_FETCH "Enable fetching VEX" NO)
-
+option(VEX_FETCH "Enable fetching VEX" NO) 
 message("c compiler id : ${CMAKE_C_COMPILER_ID}")
 message("cxx compiler id : ${CMAKE_CXX_COMPILER_ID}")
 message("compiler path: ${CMAKE_CXX_COMPILER}") 
@@ -100,6 +100,7 @@ if (VEX_USE_WGPU OR VEX_USE_DAWN OR VEX_USE_EMSCRIPTEN)
         add_compile_definitions(VEX_GFX_WEBGPU_DAWN=1)
     elseif(VEX_USE_EMSCRIPTEN)
         add_compile_definitions(VEX_GFX_WEBGPU_EMSC=1)
+        add_compile_definitions(VEX_EMSCRIPTEN=1)
     endif()
     set(VEX_BACKEND_WEBGPU ON)
 elseif(VEX_USE_DX11)
@@ -119,6 +120,11 @@ if (VEX_USE_DAWN)
 endif()
 
 if (EMSCRIPTEN) 
+    message("-------------------------------------------------------")
+    message("CMAKE_AR=${CMAKE_AR}")
+    message(" info : emroot: $ENV{EMSCRIPTEN_ROOT}")
+    include_directories("$ENV{EMSCRIPTEN_ROOT}/system/include/webgpu/")  
+    include_directories(${VEXWorkshop_SOURCE_DIR}/third_party_bin/wgpu/)  
     message(STATUS " info PLATFORM : EMSCRIPTEN")  
 	file(GLOB_RECURSE VEX_PLATFORM_SRC
         CONFIGURE_DEPENDS 
@@ -128,19 +134,23 @@ if (EMSCRIPTEN)
 	set(VEX_PLATFORM_IMGUISRC "${VEXWorkshop_SOURCE_DIR}/third_party/imgui/backends/imgui_impl_wgpu.cpp") 
 	set(CMAKE_EXECUTABLE_SUFFIX ".html")  
 
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY") #-s ASYNCIFY -s STRICT=1
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY -s ASYNCIFY_STACK_SIZE=45535") #-s ASYNCIFY -s STRICT=1
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s ASSERTIONS=1 -s WASM=1 -s ASYNCIFY -s ASYNCIFY_STACK_SIZE=65535")
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
 	# debug stuff commented out   
-	#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -s DEMANGLE_SUPPORT=1 -s SAFE_HEAP=1 -s STACK_OVERFLOW_CHECK=2")
+	# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O2 -s DEMANGLE_SUPPORT=1 -s SAFE_HEAP=1 -s STACK_OVERFLOW_CHECK=2")
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s DISABLE_EXCEPTION_CATCHING=1")
 
 	set(CMAKE_EXE_LINKER_FLAGS "-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ASSERTIONS=1 -s WASM=1 -s USE_WEBGPU=1 -s USE_SDL=2 -s SINGLE_FILE=1 ")
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ")	  
     string(CONCAT EM_EXTRA_LINK_FLAGS "${CMAKE_EXE_LINKER_FLAGS}"
-        "-s NO_EXIT_RUNTIME=1 --shell-file ${CMAKE_CURRENT_LIST_DIR}/src_platform/emscripten/shell.html "
-        "-s USE_SDL_IMAGE=1 -s USE_SDL_MIXER=1 -s ENVIRONMENT=web  -s TEXTDECODER=2 "
-        "-s ABORTING_MALLOC=0 -s ALLOW_MEMORY_GROWTH=0 -s MALLOC=emmalloc --output_eol=linux" #-s before
+        "-s NO_EXIT_RUNTIME=1 --shell-file ${CMAKE_CURRENT_LIST_DIR}/src_platform/emscripten/shell.html " 
+        " -s EXIT_RUNTIME -s USE_SDL_IMAGE=1 -s USE_SDL_MIXER=1 -s ENVIRONMENT=web  -s TEXTDECODER=2 -s DEFAULT_LIBRARY_FUNCS_TO_INCLUDE=[$UTF8ArrayToString]"
+        " -s ABORTING_MALLOC=0 -s ALLOW_MEMORY_GROWTH=1 -s MALLOC=emmalloc "
+        " -s TOTAL_MEMORY=1524MB "
+   #     " -s FORCE_FILESYSTEM=1 --profiling"
+        " --output_eol=linux "
+        " --embed-file=${VEXWorkshop_SOURCE_DIR}/content@content" #-s before
     )
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${EM_EXTRA_LINK_FLAGS}")
     message(STATUS "info : emscripten linker flags: ${CMAKE_EXE_LINKER_FLAGS}") 
@@ -150,6 +160,8 @@ elseif (WIN32)
     set(SDL_SHARED TRUE)
     add_subdirectory("third_party/SDL2") 
     include_directories("${VEXWorkshop_SOURCE_DIR}/src_platform/windows/")
+     
+    add_compile_definitions( SPDLOG_COMPILED_LIB)
 endif() 
 # ------------------------------------------------------------------------------------------------- 
 if (VEX_BACKEND_WEBGPU) 
@@ -261,14 +273,13 @@ endif()
 add_compile_definitions(GLM_FORCE_LEFT_HANDED=1 GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
 add_compile_definitions(VEXCORE_DEFINE_STRHASH=1 FMT_EXCEPTIONS=0 SPDLOG_NO_EXCEPTIONS=1)
 
-add_compile_definitions( SPDLOG_COMPILED_LIB)
 set(EXECUTABLE_OUTPUT_PATH  ${VEXWorkshop_SOURCE_DIR}/build/)  
 ######################################################################################################
 add_executable(VEXWorkshop ${VEX_ALLSRC}) # VEXWorkshop target
 # libs
 target_link_libraries(VEXWorkshop PRIVATE rapidobj::rapidobj)
 target_link_libraries(VEXWorkshop PRIVATE imgui) 
-target_link_libraries(VEXWorkshop PRIVATE spdlog) 
+target_link_libraries(VEXWorkshop PRIVATE spdlog::spdlog) 
 
 if (NOT VEX_USE_BIN_DIR)
     set_target_properties(VEXWorkshop
@@ -314,6 +325,7 @@ if (VEX_USE_DX11)
     target_link_libraries(VEXWorkshop PRIVATE d3d11 dxgi) 
 endif() 
 if(NOT EMSCRIPTEN)
+    message(STATUS " ===> linking to spdlog & sdl") 
     target_link_libraries(VEXWorkshop PRIVATE SDL2main SDL2-static)  
     if (VEX_USE_DAWN)      
         target_link_libraries(VEXWorkshop PRIVATE webgpu) 

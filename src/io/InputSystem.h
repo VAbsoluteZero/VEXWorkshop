@@ -17,6 +17,7 @@ namespace vex::input
         MouseLBK,
         MouseRBK,
         MouseMID,
+        MouseScroll,
         KeySpace,
         KeyEscape,
         KeyW,
@@ -66,10 +67,7 @@ namespace vex::input
         {
             return SignalState::Going == state || SignalState::Started == state;
         }
-        inline constexpr bool ia_started() const
-        {
-            return  SignalState::Started == state;
-        }
+        inline constexpr bool ia_started() const { return SignalState::Started == state; }
     };
     struct InputState
     {
@@ -160,7 +158,7 @@ namespace vex::input
         PreProcessOptions default_prep;
     };
 
-    constexpr auto operator"" _trig(const char* cstr, u64 len)
+    constexpr auto operator"" _trig(const char* cstr, size_t len)
     {
         return util::fnv1a<true>((u8*)cstr, len);
     }

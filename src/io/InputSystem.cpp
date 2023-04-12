@@ -69,6 +69,21 @@ vex::input::InputSystem::InputSystem()
                 return false;
             },
         });
+    addTrigger("MouseMidScroll"_trig,
+        Trigger{
+            .fn_logic =
+                [](Trigger& self, const InputState& state)
+            {
+                //const auto moves = state.this_frame[sid(MouseScroll)].state > SignalState::None;
+                if ((state.this_frame[sid(MouseScroll)].state > SignalState::None))
+                {
+                    self.input_data[SignalId::MouseScroll] = state.this_frame[sid(MouseScroll)];
+                    return true;
+                }
+
+                return false;
+            },
+        });
     addTrigger("MouseLeftDown"_trig,
         Trigger{
             .fn_logic =
@@ -113,7 +128,7 @@ vex::input::InputSystem::InputSystem()
             .fn_logic =
                 [](Trigger& self, const InputState& state)
             {
-                //self.input_data[sid(KeyEscape)]
+                // self.input_data[sid(KeyEscape)]
                 if (state.this_frame[sid(KeyEscape)].state == SignalState::Started)
                 {
                     return true;
@@ -157,8 +172,15 @@ void vex::input::InputSystem::poll(float dt)
                 SDL_GetMouseState(&global.mouse_pos_window.x, &global.mouse_pos_window.y);
                 SDL_GetGlobalMouseState(&global.mouse_pos_global.x, &global.mouse_pos_global.y);
                 st[sid(MouseMove)].value_raw = global.mouse_delta;
+                break;
             }
-            break;
+            case SDL_MOUSEWHEEL:
+            {
+                st[sid(MouseScroll)].value_raw.y = {sdl_event.wheel.preciseY};
+                st[sid(MouseScroll)].value_raw.x = {sdl_event.wheel.preciseX};
+
+                break;
+            }
 
             default: break;
         }

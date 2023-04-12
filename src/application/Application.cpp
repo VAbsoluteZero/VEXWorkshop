@@ -4,7 +4,6 @@
 #include <flags.h>
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
-#include <ini.h>
 #include <misc/cpp/imgui_stdlib.h>
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -22,9 +21,13 @@
 #else
     #include <webgpu/render/WgpuApp.h>
 #endif
-#ifdef __EMSCRIPTEN__
+#ifdef VEX_EMSCRIPTEN
     #include <emscripten.h>
     #include <emscripten/html5.h>
+ 
+static auto g_cached_canvas_sz = v2i32{0,0};
+#else
+    #include <ini.h>
 #endif
 
 #include <utils/CLI.h>
@@ -42,11 +45,19 @@ static inline const auto opt_imgui_demo = vex::SettingsContainer::EntryDesc<bool
 static void setupLoggers();
 static void setupSettings(vex::Application& app);
 
+#ifdef VEX_EMSCRIPTEN 
+extern "C" {
+    void vex_em_update_wnd_size(int x, int y) { 
+    }
+}
+#endif
+
 vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSamples&& samples)
 {
     setupLoggers();
 
     auto config = in_config;
+#ifndef VEX_EMSCRIPTEN
     { // #fixme
         mINI::INIFile file("cfg.ini");
         mINI::INIStructure ini;
@@ -76,6 +87,24 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
             }
         }
     }
+#else
+    {
+        int width = 0;
+        int height = 0;
+        emscripten_get_canvas_element_size("canvas", &width, &height);
+        auto ratio = emscripten_get_device_pixel_ratio(); 
+        config.WindowArgs.h = height;
+        config.WindowArgs.w = width;
+        config.WindowArgs.x = 0;
+        config.WindowArgs.y = 0;
+
+        SPDLOG_INFO("pixel ratio: {}  ", ratio);
+        SPDLOG_INFO("canvas area: {} : {}", width, height);
+        emscripten_get_screen_size(&width, &height);
+        SPDLOG_INFO("scree area: {} : {}", width, height);
+        g_cached_canvas_sz = {width, height};
+    }
+#endif
 
     vex::console::makeAndRegisterCmd("app.quit", "Exit application.\n", true,
         [](const vex::console::CmdCtx& ctx)
@@ -106,7 +135,7 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
     self.allow_demo_transition = config.allow_demo_changes;
 
     using namespace std::literals::chrono_literals;
-    std::this_thread::sleep_for(10ms);
+    std::this_thread::sleep_for(2ms);
 
 #if ENABLE_IMGUI // Init ImGui related stuff
     [[maybe_unused]] auto c = ImGui::CreateContext();
@@ -120,12 +149,15 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
         self.setGraphicsBackend<DirectX11App>(true);
 #else
         self.setGraphicsBackend<WebGpuBackend>(true);
+        SPDLOG_INFO("created gfx backend instance");
 #endif
     }
     setupSettings(self);
     self.all_demos = samples;
     opt_imgui_demo.addTo(self.getSettings());
     opt_time_scale.addTo(self.getSettings());
+
+    SPDLOG_INFO("created appication instance");
 
     return self;
 }
@@ -134,8 +166,11 @@ bool vex::Application::activateDemo(const char* id)
 {
     if (auto* entry = all_demos.demos.find(id); entry)
     {
+        SPDLOG_INFO(" activate demo : {}", id);
         active_demo.reset(entry->callback(*this));
+        return true;
     }
+    SPDLOG_INFO(" failed to activated ");
     return false;
 }
 
@@ -158,12 +193,14 @@ i32 vex::Application::runLoop()
         v2u32 size = main_window->windowSize();
         this->gfx_backend->handleWindowResize(*this, size);
         ImGuiSizes::g_cvs_sz = size;
+        SPDLOG_INFO("window resized, {}x : {}y", size.x, size.y);
     };
-
+     
     do
     {
         input.poll(ftime.unscalled_dt_f32);
-        input.updateTriggers();
+        input.updateTriggers(); 
+
         //-----------------------------------------------------------------------------
         // prepare frame
         {
@@ -181,8 +218,7 @@ i32 vex::Application::runLoop()
                         this->main_window->windowSize(), this->main_window->display_size.y);
                     ImGui::GetStyle() = g_view_hub.visuals.styles[EImGuiStyle::DeepDark];
                     gfx_backend->softReset(*this);
-                    SPDLOG_WARN(
-                        " [Experimental] Demo reset completed. Hopefully it was successful.");
+                    SPDLOG_WARN(" [Experimental] Demo reset completed.");
                 }
                 else
                 {
@@ -260,25 +296,27 @@ i32 vex::Application::runLoop()
 
     // save #fixme
     {
-        { // set to dict
+#ifndef __EMSCRIPTEN__
+        {// set to dict
             v2i32 size;
-            v2i32 pos;
-            auto wnd = main_window->getRawWindow();
-            SDL_GetWindowSize(wnd, &size.x, &size.y);
-            SDL_GetWindowPosition(wnd, &pos.x, &pos.y);
+    v2i32 pos;
+    auto wnd = main_window->getRawWindow();
+    SDL_GetWindowSize(wnd, &size.x, &size.y);
+    SDL_GetWindowPosition(wnd, &pos.x, &pos.y);
 
-            mINI::INIFile file("cfg.ini");
-            mINI::INIStructure ini;
+    mINI::INIFile file("cfg.ini");
+    mINI::INIStructure ini;
 
-            ini["window"sv]["pos"sv] = fmt::format("{} {}", pos.x, pos.y);
-            ini["window"sv]["size"sv] = fmt::format("{} {}", size.x, size.y);
-            file.generate(ini);
-        }
-    }
+    ini["window"sv]["pos"sv] = fmt::format("{} {}", pos.x, pos.y);
+    ini["window"sv]["size"sv] = fmt::format("{} {}", size.x, size.y);
+    file.generate(ini);
+}
+#endif
+}
 
-    SDL_Quit();
+SDL_Quit();
 
-    return 0;
+return 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -410,11 +448,12 @@ namespace spdlog::sinks
 static void setupLoggers()
 {
     auto cls_output = std::make_shared<spdlog::sinks::console_buf_sink>();
+    auto std_output = std::make_shared<spdlog::sinks::stdout_color_sink_st>();
 #ifndef __EMSCRIPTEN__
     auto vs_output = std::make_shared<spdlog::sinks::msvc_sink_st>();
     spdlog::sinks_init_list sink_list = {vs_output, cls_output};
 #else
-    spdlog::sinks_init_list sink_list = {cls_output};
+    spdlog::sinks_init_list sink_list = {cls_output, std_output};
 #endif // ! __EMSCRIPTEN__
 
 

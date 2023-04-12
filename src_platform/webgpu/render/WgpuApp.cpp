@@ -14,12 +14,16 @@
 // vex
 #include <application/Application.h>
 #include <application/Environment.h>
+#include <spdlog/stopwatch.h>
 #include <stb/stb_image_write.h>
 #include <utils/ImGuiUtils.h>
-#include <spdlog/stopwatch.h>
 
-using namespace std::literals::chrono_literals; 
+#ifdef VEX_EMSCRIPTEN
+    #include <emscripten.h>
+    #include <emscripten/html5.h>
+#endif
 
+using namespace std::literals::chrono_literals;
 
 struct WgpuRenderInterface
 {
@@ -34,10 +38,9 @@ struct WgpuRenderInterface
 
     auto init(vex::Application& owner) -> i32
     {
-        SDL_Window* sdl_window = owner.getMainWindow()->getRawWindow();
-        int wnd_x = 128;
-        int wnd_y = 128;
-        SDL_GetWindowSize(sdl_window, &wnd_x, &wnd_y);
+        const auto wnd_sz_uint = owner.getMainWindow()->windowSize();
+        const auto wnd_x = wnd_sz_uint.x;
+        const auto wnd_y = wnd_sz_uint.y;
         // initialize adapte, device, chain & surface
         {
             WGPUInstanceDescriptor desc{.nextInChain = nullptr};
@@ -46,7 +49,7 @@ struct WgpuRenderInterface
             if (!wgfx::k_using_emscripten) // emscripten REQUIRES instance to be NULL
                 checkLethal(globals.instance, "wgpu initialization failed.");
 
-            globals.surface = wgfx::getWGPUSurface(globals.instance, sdl_window);
+            globals.surface = wgfx::getWGPUSurface(globals.instance, owner.getMainWindow()->getRawWindow());
 
             WGPURequestAdapterOptions req_opts = {.nextInChain = nullptr,
                 .compatibleSurface = globals.surface,
@@ -54,9 +57,6 @@ struct WgpuRenderInterface
                 .forceFallbackAdapter = false};
             wgfx::requestAdapter(globals, req_opts);
 
-            wgpuAdapterGetLimits(globals.adapter, &limits);
-
-            // WGPURequiredLimits required{.limits = limits.limits};
             WGPUDeviceDescriptor deviceDesc{
                 .label = "wgpu device",
                 //.requiredLimits = &required,
@@ -67,32 +67,35 @@ struct WgpuRenderInterface
             auto onDeviceError = [](WGPUErrorType type, char const* message, void*)
             {
                 SPDLOG_ERROR("wgpu device encountered error:[c{}]:{}", (u32)type, message);
-                
-                check_(false);  
-            };  
+
+                check_(false);
+            };
             wgpuDeviceSetUncapturedErrorCallback(globals.device, onDeviceError, nullptr);
             globals.queue = wgpuDeviceGetQueue(globals.device);
-              
+
             globals.main_texture_fmt =
 #if defined(VEX_GFX_WEBGPU_DAWN) || defined(__EMSCRIPTEN__)
                 WGPUTextureFormat_BGRA8Unorm;
 #else
                 wgpuSurfaceGetPreferredFormat(globals.surface, globals.adapter);
-#endif 
-              
+#endif
+
             WGPUSwapChainDescriptor desc_swap_chain{
                 .nextInChain = nullptr,
                 .label = "chain",
                 .usage = WGPUTextureUsage_RenderAttachment,
                 .format = globals.main_texture_fmt,
-                .width = (u32)wnd_x, 
+                .width = (u32)wnd_x,
                 .height = (u32)wnd_y,
+#ifndef __EMSCRIPTEN__
                 .presentMode = WGPUPresentMode_Immediate,
+#else
+                .presentMode = WGPUPresentMode_Fifo,
+#endif
             };
-
             globals.swap_chain = wgpuDeviceCreateSwapChain(
                 globals.device, globals.surface, &desc_swap_chain);
-        } 
+        }
 
         bool valid = checkRel(globals.isValid(), "wgpu initialization failed");
         return valid ? 0 : 1;
@@ -107,7 +110,11 @@ struct WgpuRenderInterface
             .format = globals.main_texture_fmt,
             .width = (u32)w,
             .height = (u32)h,
+#ifndef __EMSCRIPTEN__
             .presentMode = WGPUPresentMode_Immediate,
+#else
+            .presentMode = WGPUPresentMode_Fifo,
+#endif
         };
 
         auto old_chain = globals.swap_chain;
@@ -158,7 +165,7 @@ struct WgpuRenderInterface
 
             wgfx::swapchainPresent(globals.swap_chain);
 
-            frame_data.release(); 
+            frame_data.release();
             WGPU_REL(RenderPassEncoder, frame_data.render_pass);
             WGPU_REL(CommandBuffer, command);
             WGPU_REL(TextureView, frame_data.cur_tex_view);
@@ -193,7 +200,7 @@ void vex::WebGpuBackend::pollEvents()
 i32 vex::WebGpuBackend::init(vex::Application& owner)
 {
     spdlog::stopwatch sw;
-    defer_{ SPDLOG_WARN("Initializing GPU Backend took {} seconds", sw); };
+    defer_ { SPDLOG_WARN("Initializing GPU Backend took {} seconds", sw); };
 
     already_initialized = true;
     if (!checkAlways(already_initialized, "must not call init more than once"))
@@ -203,23 +210,31 @@ i32 vex::WebGpuBackend::init(vex::Application& owner)
 
     impl = new WgpuRenderInterface();
     auto err = impl->init(owner);
+
+    spdlog::info("init returned code : {}", err);
     if (err == 0)
     {
         SDL_Window* sdl_window = owner.getMainWindow()->getRawWindow();
+
+        spdlog::info("debug: got window");
         [[maybe_unused]] auto c = ImGui::CreateContext();
+        spdlog::info("debug: got imgui contex");
 #if ENABLE_IMGUI
         ImGui_ImplWGPU_Init(impl->globals.device, 1, impl->globals.main_texture_fmt);
+        spdlog::info("debug: ImGui_ImplWGPU_Init ");
         ImGui_ImplSDL2_InitForSDLRenderer(sdl_window);
+        spdlog::info("debug: sdl init ");
         ImGui_ImplWGPU_CreateDeviceObjects();
+        spdlog::info("debug: ImGui_ImplWGPU_CreateDeviceObjects ");
 #endif
     }
     else
     {
         checkLethal(false, "wgpu demo - initialization failed");
     }
-
     text_shad_lib.build("content/shaders/wgsl/");
 
+    spdlog::info(" webgpu init finished");
     return err;
 }
 

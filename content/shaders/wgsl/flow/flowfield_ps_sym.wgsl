@@ -55,8 +55,12 @@ struct Cells {
 struct Table {
     cells: array<i32>,
 };   
+struct TableUint {
+    cells: array<u32>,
+}; 
 @group(0) @binding(5) var<storage, read> table : Table;  
-@group(0) @binding(6) var<storage, read_write> dbg : Table; 
+//@group(0) @binding(6) var<storage, read_write> dbg : Table; 
+@group(0) @binding(6) var<storage, read> cnt_table : TableUint; 
 //@group(0) @binding(4) var<storage, read_write> particles: ParticleData;
 
 fn hash(pos: v2i32) -> u32 {
@@ -156,7 +160,7 @@ fn cell_to_idx(cell: v2i32, offset: i32) -> i32 {
  
 fn cell_to_cell_collision(a: v2i32, b: v2i32, cap: u32) {
     let dummy_particle: i32 = (i32(args.num_particles) - 1);
-    let iter_cnt = i32(args.table_depth);
+    let iter_cnt = min(2, i32(args.table_depth));
 
     var start_a = a.x + a.y * i32(args.spatial_table_size.y);
     var start_b = b.x + b.y * i32(args.spatial_table_size.y);
@@ -187,7 +191,7 @@ fn cell_to_cell_collision(a: v2i32, b: v2i32, cap: u32) {
             if invalid_cycle {return;}
 
             let diff_norm = normalize(diff);
-            let sep_mag = args.radius * 0.5 * args.separation;
+            let sep_mag = args.radius * 0.09 * args.separation;
 
             particles.data[a_idx].vel += (v2f(-diff_norm.x, -diff_norm.y)) * sep_mag;
             particles.data[b_idx].vel += diff_norm * sep_mag;
@@ -222,7 +226,35 @@ fn solve_v2(gid: u32, num_groups: u32, dbg_val: i32) {
             }
         }
     }
-}
+} 
+
+// fn solve_v3(gid: u32, num_groups: u32, dbg_val: i32) {
+//     let depth_len = args.table_depth;
+//     let max_index = (args.spatial_table_size.x) * (args.spatial_table_size.y) * args.table_depth;
+//     let stride_x = args.spatial_table_size.x;
+
+//     let chunks_in_row: u32 = (args.spatial_table_size.y - 2) / u32(solver_chunk.x) + 1u;
+//     let box_y: i32 = i32(gid / chunks_in_row);
+//     let box_x: i32 = i32(gid % chunks_in_row);
+
+//     let quad_tl: v2i32 = v2i32(i32(box_x * solver_chunk.x) + 1, i32(box_y * solver_chunk.y) + 1);
+
+//     let limit_x: i32 = min(i32(quad_tl.x) + solver_chunk.x, i32(args.spatial_table_size.x - 1));
+//     let limit_y: i32 = min(i32(quad_tl.y) + solver_chunk.y, i32(args.spatial_table_size.y - 1));
+
+//     for (var x: i32 = quad_tl.x; x < limit_x; x++) {
+//         for (var y: i32 = quad_tl.y; y < limit_y; y++) {
+
+//             let cur_cell: v2i32 = v2i32(x, y);
+
+//             for (var j = 0; j < 9; j++) {
+//                 let cell = neigbors[j]; 
+                
+//             }
+ 
+//         }
+//     }
+// }
 
 
 @compute @workgroup_size(64)  
@@ -255,12 +287,12 @@ fn cs_solve_few(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invoca
     particles.data[idx].vel += select(v2f(), normalize(separate) * args.radius * 12.5, separate.x != 0);
 }
 
-fn wall_collide(center: v2f, cell: v2i32, delta_vec: v2f) -> v2f {
+fn wall_collide(idx: u32, center: v2f, cell: v2i32, delta_vec: v2f, collided: ptr<function,bool>) -> v2f {
     // #fixme - collide with walls
     let oob = cell.x < 0 || cell.y < 0 || cell.x >= i32(args.size.x) || cell.y >= i32(args.size.y) ;
     if !oob {
-        let blocked = (map_data.cells[cell.x + cell.y * i32(args.size.x)] & (1u << 15u)) == 0;
-        if blocked {
+        let free = (map_data.cells[cell.x + cell.y * i32(args.size.x)] & (1u << 15u)) == 0;
+        if free {
             return delta_vec;
         }
     }
@@ -280,14 +312,58 @@ fn wall_collide(center: v2f, cell: v2i32, delta_vec: v2f) -> v2f {
     let r = args.radius;
     if diff_len_sq > r * r { return delta_vec;}
 
-    if diff_len_sq == 0 {
-        return delta_vec - delta_vec * 0.999;
-    }
-
     let out_v = delta_vec - normalize(diff) * (r - sqrt(diff_len_sq));
+
+    *collided |= true;
 
     return  out_v;
 } 
+
+fn unstuck(idx: u32, center: v2f, cell: v2i32) {
+    let cell_f = v2f(cell);
+    let orig = v2f(args.grid_min.x, args.grid_min.y + args.grid_size.y);
+
+    var half_cell = args.cell_size * 0.5f;
+    half_cell.y *= -1;
+    let box_c = v2f(orig + v2f(args.cell_size.x * cell_f.x, -args.cell_size.y * cell_f.y)) + half_cell;
+
+    let diff = box_c - center;
+    let diff_len_sq = diff.x * diff.x + diff.y * diff.y;
+    let r = args.radius * 2.5;
+    if diff_len_sq == 0 {
+        particles.data[idx].pos.x -= r;
+        return;
+    }
+    let diff_n = normalize(diff);
+    particles.data[idx].pos -= (diff_n) * r;
+    particles.data[idx].vel = -diff_n;
+}  
+const repell =array(
+    normalize(v2f(1.0, -1.0)) ,
+    normalize(v2f(0.0, -1.0)) * 1.002, // bias
+    normalize(v2f(-1.0, -1.0)),
+    normalize(v2f(1.0, 0.0)),
+    normalize(v2f(-1.0, 0.0)),
+    normalize(v2f(1.0, 1.0)),
+    normalize(v2f(0.0, 1.0)),
+    normalize(v2f(-1.0, 1.0)),
+    v2f(0.0, 0.0),
+);
+
+const magic = u32(489319885u); 
+//var<private> state : u32 = 4999559u;  
+
+fn xorshift32(state: u32) -> u32 {
+    var x = state + magic;
+    x = x ^ (x << 13);
+    x = x ^ (x >> 17);
+    x = x ^ (x << 5);
+    return x;
+}
+fn xorshift32_f32(state: u32) -> f32 {
+    var x = xorshift32(state);
+    return fract(cos(f32(x)) * 537.73);
+}
 
 @compute @workgroup_size(64)
 fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_id)lid: vec3u) {
@@ -307,60 +383,162 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     let pos = particles.data[idx].pos;
     let pos_rel_to_min = pos - grid_min; 
     //===================================================== 
-    let cell_sz = args.cell_size;   
+    let cell_sz = args.cell_size;
     var cell_x = u32((pos_rel_to_min.x / cell_sz.x));
     var cell_y = args.size.y - u32(((pos_rel_to_min.y / cell_sz.y) + 1.0));
     cell_x = min(cell_x, args.size.x);
     cell_y = min(cell_y, args.size.y);
     let this_cell: v2i32 = v2i32(i32(cell_x), i32(cell_y));
-    let cell_idx = cell_y * args.size.x + cell_x;
-
-    //var flow_dir: v2f = flow_directions.cells[cell_idx];
-
+    let cell_idx = cell_y * args.size.x + cell_x; 
     //=====================================================
     let subdiv_cell_sz = args.cell_size * 0.5;
     var sub_cell_x = u32((pos_rel_to_min.x / subdiv_cell_sz.x));
     var sub_cell_y = (args.size.y * 2) - u32(((pos_rel_to_min.y / subdiv_cell_sz.y) + 1.0));
     sub_cell_x = min(sub_cell_x, args.size.x * 2);
-    sub_cell_y = min(sub_cell_y, args.size.y * 2); 
-    let sub_cell_idx = sub_cell_y * args.size.x * 2  + sub_cell_x; 
-    var flow_dir: v2f = flow_sub2.cells[sub_cell_idx]; 
-    //=====================================================
+    sub_cell_y = min(sub_cell_y, args.size.y * 2);
+    let sub_cell_idx = sub_cell_y * args.size.x * 2 + sub_cell_x;
+    var flow_dir: v2f = flow_sub2.cells[sub_cell_idx];
 
     let cur_vel = particles.data[idx].vel;
     let target_vel = flow_dir * args.speed_base * 2 ;
 
     var vel = cur_vel * (1.0 - args.drag * dt);
     vel = select(vel, target_vel, vel.x == 0 && vel.y == 0);
-    vel = lerpVec(vel, target_vel, dt * ((2 - args.inertia) * 3 + 0.01));
+    vel = lerpVec(vel, target_vel, dt * (abs(2 - args.inertia) * 3 + 0.15));
     vel = select(vel, target_vel, args.inertia == 0.0);//#fixme
 
     vel = select(normalize(vel) * args.speed_max, v2f(), vel.x == 0 && vel.y == 0);
 
-    particles.data[idx].vel = vel;
-    var delta_vec = particles.data[idx].vel * dt * 0.5 ; 
+    var delta_vec = particles.data[idx].vel * dt * 0.5 ;
+
+    let oob = this_cell.x < 0 || this_cell.y < 0 || this_cell.x >= i32(args.size.x) || this_cell.y >= i32(args.size.y) ;
+    let stuck = oob || ((map_data.cells[this_cell.x + this_cell.y * i32(args.size.x)] & (1u << 15u)) > 1);
+
+    let neigbors = array(
+        this_cell + vec2<i32>(-1, -1),
+        this_cell + vec2<i32>(0, -1),
+        this_cell + vec2<i32>(1, -1),
+        this_cell + vec2<i32>(-1, 0),
+        this_cell + vec2<i32>(1, 0),
+        this_cell + vec2<i32>(-1, 1),
+        this_cell + vec2<i32>(0, 1),
+        this_cell + vec2<i32>(1, 1),
+        this_cell + vec2<i32>(0, 0),
+    );
+    const neigbor_offset = array(
+        vec2<i32>(-1, -1),
+        vec2<i32>(0, -1),
+        vec2<i32>(1, -1),
+        vec2<i32>(-1, 0),
+        vec2<i32>(1, 0),
+        vec2<i32>(-1, 1),
+        vec2<i32>(0, 1),
+        vec2<i32>(1, 1),
+        vec2<i32>(0, 0),
+    );
+    
+    //=====================================================
+    // separation    
+    let orig = args.grid_min + v2f(0, args.grid_size.y);
+    let sep_cell_sz: f32 = args.grid_size.y / f32(args.spatial_table_size.y);
+    let sep_pos_rel: v2f = pos - orig;
+    var sep_cell_x = u32(sep_pos_rel.x / sep_cell_sz);
+    var sep_cell_y = u32(abs(sep_pos_rel.y) / sep_cell_sz);
+    sep_cell_x = min(sep_cell_x, args.spatial_table_size.x);
+    sep_cell_y = min(sep_cell_y, args.spatial_table_size.y);
+
+    let table_self_idx = u32(sep_cell_y) * args.spatial_table_size.x + u32(sep_cell_x);
+
+    var repell_sum = v2f(0.0, 0.0);
+    for (var j = 0; j < 9; j++) {
+        let s_cell: v2i32 = v2i32(i32(sep_cell_x), i32(sep_cell_y)) + neigbor_offset[j];
+
+        var s_oob = s_cell.x < 0 || s_cell.y < 0 ;
+        s_oob = s_oob || s_cell.x >= i32(args.spatial_table_size.x) || s_cell.y >= i32(args.spatial_table_size.y) ;
+
+        //if s_oob {continue;}
+
+        let sep_idx = u32(s_cell.y) * args.spatial_table_size.x + u32(s_cell.x);
+        let sep_v =  cnt_table.cells[sep_idx] * 2;//clamp(cnt_table.cells[sep_idx], 0u, 10u);
+        let sep_v_rel = f32(sep_v) / 10.0;
+        repell_sum += repell[j] * sep_v_rel;
+    }
+    if repell_sum.x != 0 || repell_sum.y != 0 {
+        vel += normalize(repell_sum) * args.separation * dt * args.speed_max * 8;
+    }
+
+    //vel *= f32(cnt_table.cells[table_self_idx]) * args.radius * 10;
+
+    //=====================================================
 
     // #fixme only check in direction of movement
-    delta_vec = wall_collide(pos, this_cell + v2i32(0, 1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(0, -1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(-1, 0), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(1, 0), delta_vec);
+    var collided: bool = false;
+    let dumpen = 0.39f;
+    let filter_val = 0.515f;
+    let flip_unstuck = array(
+        normalize(v2f(-1.0, -1.0)) * dumpen,
+        normalize(v2f(filter_val, -1.0)) * dumpen,
+        normalize(v2f(-1.0, -1.0)) * dumpen,
+        normalize(v2f(-1.0, filter_val)) * dumpen,
+        normalize(v2f(-1.0, filter_val)) * dumpen,
+        normalize(v2f(-1.0, -1.0)) * dumpen,
+        normalize(v2f(filter_val, -1.0)) * dumpen,
+        normalize(v2f(-1.0, -1.0)) * dumpen
+    );
 
-    delta_vec = wall_collide(pos, this_cell + v2i32(1, 1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(1, -1), delta_vec);
+    if stuck {
+        unstuck(idx, pos, this_cell);
+        return;
+    }
+
+    var flip_mult: vec2<f32> = vec2<f32>();
+    for (var j = 0; j < 8; j++) {
+        delta_vec = wall_collide(idx, pos, neigbors[j], delta_vec, &collided);
+        if collided {
+            flip_mult = flip_unstuck[j];
+            break;
+        }
+    }
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, 1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, -1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 0), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 0), delta_vec, &collided);
+
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, -1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, -1), delta_vec, &collided);
     // split into two to reduce chance of glitching out
-    delta_vec = particles.data[idx].vel * dt * 0.5 ;
-    delta_vec = wall_collide(pos, this_cell + v2i32(0, 1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(0, -1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(-1, 0), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(1, 0), delta_vec);
+    if !collided {
+        delta_vec = particles.data[idx].vel * dt * 0.5 ;
+        for (var j = 0; j < 8; j++) {
+            delta_vec = wall_collide(idx, pos, neigbors[j], delta_vec, &collided);
+            if collided {
+                flip_mult = flip_unstuck[j];
+                break;
+            }
+        }
+    }
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, 1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, -1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 0), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 0), delta_vec, &collided);
 
-    delta_vec = wall_collide(pos, this_cell + v2i32(1, 1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(-1, -1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(-1, 1), delta_vec);
-    delta_vec = wall_collide(pos, this_cell + v2i32(1, -1), delta_vec);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, -1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 1), delta_vec, &collided);
+    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, -1), delta_vec, &collided);
 
-    particles.data[idx].pos += delta_vec;
+    if collided {
+        // vel = v2f();
+        // vel = length(vel) * normalize(v2f(f32(flip_mult.x), f32(flip_mult.y)));
+        let normal_d = normalize(v2f(f32(flip_mult.x), f32(flip_mult.y)));
+        vel = v2f(vel.x * flip_mult.x, vel.y * flip_mult.y) * 2.0f;
+        particles.data[idx].vel = vel ;
+        particles.data[idx].pos += vel * dt ;//args.radius * normal_d * 3.25;
+    } else {
+        particles.data[idx].vel = vel;
+        particles.data[idx].pos += delta_vec;
+    }
+    //unstuck(idx, pos, this_cell);
 }

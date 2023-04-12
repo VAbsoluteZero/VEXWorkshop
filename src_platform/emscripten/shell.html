@@ -1,14 +1,21 @@
 <!doctype html>
 <html lang="en-us">
+
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Emscripten-Generated Code</title>
+    <title>Particles</title>
     <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: rgb(36, 33, 33);
+        }
+
         .emscripten {
             padding-right: 0;
-            margin-left: auto;
-            margin-right: auto;
+            margin-left: 0;
+            margin-right: 0;
             display: block;
         }
 
@@ -17,28 +24,33 @@
             width: 80%;
         }
 
-        div.emscripten {
-            text-align: center;
-        }
-
-        div.emscripten_border {
-            border: 1px solid black;
-        }
         /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
         canvas.emscripten {
             border: 0px none;
-            background-color: black;
+            display: block;
+            background-color: rgb(36, 33, 33);
         }
     </style>
 </head>
+
 <body>
-    <hr />
-    <div class="emscripten_border">
-        <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
-    </div>
-    <hr />
+    <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
 
     <script type='text/javascript'>
+        var cvs = document.getElementById("canvas");
+        function resizeCanvas() {
+            cvs.style.width = window.innerWidth + "px";
+            cvs.style.height = window.innerHeight + "px";
+            // cvs.width = window.innerWidth * window.devicePixelRatio;
+            // cvs.height = window.innerHeight * window.devicePixelRatio;
+            console.log("canvas (css) resized to x: " + cvs.style.width + " y:" + cvs.style.height);
+            // console.log("resized (device) x: " + cvs.width + " y:" + cvs.height);
+        }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+        cvs.width = window.innerWidth;
+        cvs.height = window.innerHeight;
+
         var Module;
         (async () => {
             Module = {
@@ -58,16 +70,12 @@
                     text = Array.prototype.slice.call(arguments).join(' ');
                     console.error(text);
                 },
-                canvas: (function () {
-                    var canvas = document.getElementById('canvas');
-                    return canvas;
-                })(),
                 setStatus: function (text) {
                     console.log("status: " + text);
                 },
                 totalDependencies: 0,
                 monitorRunDependencies: function (left) {
-                    this.totalDependencies = Math.max(this.totalDependencies, left); 
+                    this.totalDependencies = Math.max(this.totalDependencies, left);
                 }
             };
             window.onerror = function () {
@@ -89,4 +97,5 @@
     </script>
     {{{ SCRIPT }}}
 </body>
+
 </html>

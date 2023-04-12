@@ -1,5 +1,13 @@
 #pragma once
-#include <application/Platfrom.h> 
+#include <application/Platfrom.h>
+
+#ifndef __EMSCRIPTEN__
+#define VEX_PF_StressPreset 0
+#define VEX_PF_WebDemo 1
+#else
+#define VEX_PF_StressPreset 0
+#define VEX_PF_WebDemo 1
+#endif
 
 namespace vex
 {
@@ -11,28 +19,28 @@ namespace vex
         .min = 0,
         .max = 8,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
-    }; 
+    };
     static inline const auto opt_grid_color = SettingsContainer::EntryDesc<v4f>{
         .key_name = "pf.GridColor",
         .info = "Color of the grid.",
-        .default_val = v4f(Color::gray()) * 0.7f,
+        .default_val = v4f(Color::black()) * 0.57f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
-    }; 
+    };
     // heatmap
     static inline const auto opt_heatmap_opacity = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.heatmapOpacity",
         .info = "Heatmap opacity.",
-        .default_val = 1.0f,
+        .default_val = 0.50f,
         .min = 0.00f,
         .max = 1.00f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
-    }; 
+    };
 
     // particles
     static inline const auto opt_part_color = SettingsContainer::EntryDesc<v4f>{
         .key_name = "pf.ParticleColor",
         .info = "Color of a particle.",
-        .default_val = v4f(Color::green()),
+        .default_val = v4f(0.1f, 0.13f, 0.6f, 0.4f),
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_auto_color = SettingsContainer::EntryDesc<bool>{
@@ -40,37 +48,37 @@ namespace vex
         .info = "Color of a particle determined by its generation.",
         .default_val = false,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
-    }; 
+    };
     static inline const auto opt_part_speed = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.PtSym_FlowFieldForce",
         .info = "Base speed of a particle in units per second.",
-        .default_val = 2.0f,
-        .min = 0.00f,
-        .max = 8.00f,
+        .default_val = 3.0f,
+        .min = VEX_PF_WebDemo ? 0.0f : 0.00f,
+        .max = VEX_PF_WebDemo ? 5.00f : 8.0f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_speed_max = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.PtSym_SpeedClamp",
         .info = "Max normalized speed value.",
-        .default_val = 2.0f,
-        .min = 0.00f,
-        .max = 12.00f,
+        .default_val = 2.8f,
+        .min = VEX_PF_WebDemo ? 0.5f : 0.00f,
+        .max = VEX_PF_WebDemo ? 6.0f : 10.00f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_inertia = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.PtSym_Inertia",
         .info = "Constant that determins how quickly velocity may change.",
         .default_val = 1.00f,
-        .min = 0.00f,
-        .max = 2.00f,
+        .min = VEX_PF_WebDemo ? 0.25f : 0.00f,
+        .max = 1.50f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_radius = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.PtSym_PhysicalRadius",
         .info = "Radius of a particle relative to cell size.",
-        .default_val = 0.25f,
+        .default_val = 0.125f,
         .min = 0.125f,
-        .max = 0.5f,
+        .max = 0.125f * 2.0f,
         .flags = SettingsContainer::Flags::k_visible_in_ui |
                  SettingsContainer::Flags::k_ui_min_as_step,
     };
@@ -80,15 +88,17 @@ namespace vex
         .default_val = 0.05f,
         .min = 0.00f,
         .max = 0.75f,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
+        .flags = VEX_PF_WebDemo ? 0 : SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_sep = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.PtSym_Separation",
         .info = "Force that pushes particles away when they get too close.",
-        .default_val = 0.05f,
-        .min = 0.00f,
-        .max = 0.75f,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
+        .default_val = 0.35f,
+        .min = VEX_PF_WebDemo ? 0.05f : 0.00f,
+        .max = VEX_PF_WebDemo ? 0.75f : 0.50f,
+        .flags = VEX_PF_WebDemo ? (SettingsContainer::Flags::k_visible_in_ui |
+                                      SettingsContainer::Flags::k_ui_min_as_step)
+                                : SettingsContainer::Flags::k_visible_in_ui,
     };
 
 
@@ -114,12 +124,12 @@ namespace vex
         .key_name = "pf.ShowCostOnSmallMaps",
         .info = "Show or hide movement cost",
         .default_val = false,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
+        .flags = VEX_PF_WebDemo? 0 : SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_wallbias_numbers = SettingsContainer::EntryDesc<bool>{
         .key_name = "pf.WallBias",
         .info = "Walls will push flow vectors away a bit",
         .default_val = true,
-        .flags = SettingsContainer::Flags::k_visible_in_ui,
+        .flags = VEX_PF_WebDemo ? 0 : SettingsContainer::Flags::k_visible_in_ui,
     };
 } // namespace vex

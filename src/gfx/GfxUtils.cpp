@@ -8,6 +8,14 @@
 #include <fstream>
 #include <glm/gtx/norm.hpp>
 
+#if defined(__EMSCRIPTEN__)
+    // #include <filesystem.hpp>
+    // #define USING_FS_REPLACEMENT 10
+    // #else
+    #include <filesystem>
+    #define USING_FS_REPLACEMENT 0
+#endif
+
 using namespace vex;
 
 void vex::TextShaderLib::build(const char* rel_path)
@@ -15,9 +23,10 @@ void vex::TextShaderLib::build(const char* rel_path)
     spdlog::stopwatch sw;
     defer_ { SPDLOG_WARN("Building TextShaderLib took {} seconds", sw); };
 
+
     path_to_dir = std::string(rel_path);
     vex::InlineBufferAllocator<1024 * 20> stackbuf;
-    auto al = stackbuf.makeAllocatorHandle();
+    auto al = stackbuf.makeAllocatorHandle(); 
 
     for (const auto& entry : std::filesystem::recursive_directory_iterator(path_to_dir))
     {
@@ -26,22 +35,13 @@ void vex::TextShaderLib::build(const char* rel_path)
 
         auto adjusted_name = std::string(VEX_SHADER_CONTENT_ROOT) + file_name;
         std::ifstream m_stream(adjusted_name, std::ios::binary | std::ios::ate);
-         
+
+
         if (m_stream.fail() || m_stream.bad())
             continue;
 
-        auto f_time = std::filesystem::last_write_time(adjusted_name);
-        u64 timestamp = f_time.time_since_epoch().count();
-
-        size_t size = std::filesystem::file_size(adjusted_name);
-
-        char* buffer = (char*)al.alloc(size + 1, 1);
-        m_stream.seekg(0);
-        m_stream.read(buffer, size);
-        if (size == 0)
-            continue;
-
         auto ext = path.extension().string();
+
         auto type = [](std::string& ext) -> ShaderSourceType
         {
             if (ext == ".wgsl")
@@ -50,9 +50,24 @@ void vex::TextShaderLib::build(const char* rel_path)
                 return ShaderSourceType::HLSL;
             return ShaderSourceType::Invalid;
         }(ext);
-
         if (type == ShaderSourceType::Invalid)
-            continue;
+            continue; 
+
+        size_t size = std::filesystem::file_size(adjusted_name); 
+        if (size < 64)
+            continue; 
+
+        char* buffer = (char*)al.alloc(size + 1, 1); 
+
+        m_stream.seekg(0);
+        m_stream.read(buffer, size); 
+
+#if __EMSCRIPTEN__
+        u64 timestamp = 0;
+#else
+        auto f_time = std::filesystem::last_write_time(adjusted_name);
+        u64 timestamp = f_time.time_since_epoch().count();
+#endif
 
         buffer[size] = '\0';
         this->shad_src.emplace(std::move(file_name), ShaderSource{buffer, type, timestamp});
@@ -115,11 +130,11 @@ void vex::TextShaderLib::reloadIfNewer(const char* file_name)
 
         char* buffer = (char*)al.alloc(size + 1, 1);
         m_stream.seekg(0);
-        m_stream.read(buffer, size); 
+        m_stream.read(buffer, size);
         buffer[size] = '\0';
 
         entry->text = buffer;
-        entry->timestamp= timestamp;
+        entry->timestamp = timestamp;
         entry->reloaded_dirty_flag = true;
 
         stackbuf.reset();

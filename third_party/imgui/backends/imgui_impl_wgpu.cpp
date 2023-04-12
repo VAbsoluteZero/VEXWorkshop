@@ -292,8 +292,10 @@ static void SafeRelease(ImDrawVert*& res)
         delete[] res;
     res = nullptr;
 }
-#ifdef VEX_GFX_WEBGPU_DAWN
+#if defined(VEX_GFX_WEBGPU_DAWN) 
 #define WGPU_REL(x, a) x##Release(a)
+#elif defined(__EMSCRIPTEN__) 
+#define WGPU_REL(x, a)  
 #else
 #define WGPU_REL(x, a) x##Drop
 #endif
@@ -365,22 +367,26 @@ static void SafeRelease(FrameResources& res)
     SafeRelease(res.VertexBufferHost);
 }
 
-static WGPUProgrammableStageDescriptor ImGui_ImplWGPU_CreateShaderModule(
-    uint32_t* binary_data, uint32_t binary_data_size)
-{
-    WGPUShaderModuleSPIRVDescriptor spirv_desc = {};
-    spirv_desc.chain.sType = WGPUSType_ShaderModuleSPIRVDescriptor;
-    spirv_desc.codeSize = binary_data_size;
-    spirv_desc.code = binary_data;
-
-    WGPUShaderModuleDescriptor desc = {};
-    desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&spirv_desc);
-
-    WGPUProgrammableStageDescriptor stage_desc = {};
-    stage_desc.module = wgpuDeviceCreateShaderModule(g_wgpuDevice, &desc);
-    stage_desc.entryPoint = "main";
-    return stage_desc;
-}
+//static WGPUProgrammableStageDescriptor ImGui_ImplWGPU_CreateShaderModule(
+//    uint32_t* binary_data, uint32_t binary_data_size)
+//{
+//    WGPUShaderModuleSPIRVDescriptor spirv_desc = {};
+//    spirv_desc.chain.sType = WGPUSType_ShaderModuleSPIRVDescriptor;
+//    spirv_desc.codeSize = binary_data_size;
+//#ifdef VEX_GFX_WEBGPU_DAWN
+//    spirv_desc.code = binary_data;
+//#else 
+//    spirv_desc.source = binary_data;
+//#endif
+//
+//    WGPUShaderModuleDescriptor desc = {};
+//    desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&spirv_desc);
+//
+//    WGPUProgrammableStageDescriptor stage_desc = {};
+//    stage_desc.module = wgpuDeviceCreateShaderModule(g_wgpuDevice, &desc);
+//    stage_desc.entryPoint = "main";
+//    return stage_desc;
+//}
 
 static WGPUBindGroup ImGui_ImplWGPU_CreateImageBindGroup(
     WGPUBindGroupLayout layout, WGPUTextureView texture)
@@ -675,7 +681,7 @@ WGPUShaderModule wgpu_create_shader_module_from_wgsl(WGPUDevice device, const ch
 #if VEX_GFX_WEBGPU_DAWN
         .source = source,
 #else
-        .code = source,
+        .source = source,
 #endif
     };
     WGPUShaderModuleDescriptor shader_module_desc = {

@@ -3,13 +3,22 @@
 #include <VFramework/VEXBase.h>
 #include <gfx/GfxUtils.h>
 
-#ifdef VEX_GFX_WEBGPU_DAWN
+#if defined(VEX_GFX_WEBGPU_DAWN)
     #include <webgpu.h>
     #define WGPU_REL(x, a)       \
         if (a)                   \
         {                        \
             wgpu##x##Release(a); \
             a = nullptr;         \
+        }
+#elif defined(__EMSCRIPTEN__)
+    #include <wgpu/webgpu.h>
+void wgpuDeviceTick(auto a) {}
+    #define WGPU_REL(x, a) \
+                           \
+        if (a)             \
+        {                  \
+            a = nullptr;   \
         }
 #else
     #include <wgpu/webgpu.h>
@@ -90,10 +99,7 @@ namespace wgfx
         WGPUQueue queue = nullptr;
         WGPUComputePassEncoder comp_pass = nullptr;
 
-        void release(bool release_view = false)
-        { 
-            WGPU_REL(CommandEncoder, encoder);
-        };
+        void release(bool release_view = false) { WGPU_REL(CommandEncoder, encoder); };
     };
 
     struct Globals
@@ -107,8 +113,8 @@ namespace wgfx
         WGPUSwapChain swap_chain = nullptr;
         WGPUTextureFormat main_texture_fmt{};
 
-        //WGPUPipelineLayout debug_layout = nullptr;
-        //WGPURenderPipeline debug_pipeline = nullptr;
+        // WGPUPipelineLayout debug_layout = nullptr;
+        // WGPURenderPipeline debug_pipeline = nullptr;
 
         auto isValid() const -> bool;
         void release();
@@ -204,8 +210,7 @@ namespace wgfx
     };
 
     template <typename CTX, typename UBO>
-    static void updateUniform(
-        const CTX& context, GpuBuffer& unibuf, UBO ubo_transforms)
+    static void updateUniform(const CTX& context, GpuBuffer& unibuf, UBO ubo_transforms)
     {
         wgpuQueueWriteBuffer(context.queue, unibuf.buffer, 0, (u8*)&ubo_transforms, sizeof(UBO));
     }
@@ -249,10 +254,8 @@ namespace wgfx
             bool flip_y = false;
         };
 
-        static Texture loadFormData(
-            const GpuContext& ctx, LoadImgResult& data, LoadArgs options);
-        static Texture loadFormFile(
-            const GpuContext& ctx, const char* filename, LoadArgs options);
+        static Texture loadFormData(const GpuContext& ctx, LoadImgResult& data, LoadArgs options);
+        static Texture loadFormFile(const GpuContext& ctx, const char* filename, LoadArgs options);
         static void copyImageToTexture(const GpuContext& ctx, WGPUTexture texture, void* pixels,
             WGPUExtent3D size, u32 channels);
     };

@@ -22,13 +22,16 @@ namespace vex::flow
         float time = 0.0f;
         float grid_half_size = 16;
         float camera_h = 4.0f;
+        float cell_sz = 4.0f;
     };
 
-    struct UBOMvp4Colors4Floats
+    struct UBOGrid
     {
         mtx4 model_view_proj = mtx4_identity;
         v4f data1 = {};
         v4f data2 = {};
+        v2f grid_sz{1.0f, 1.0f};
+        v2f unused_padding{ 1.0f, 1.0f };
     };
     struct ViewportGrid
     {
@@ -395,7 +398,8 @@ namespace vex::flow
             v2u32 bounds{};
         };
 
-        void spawnForSymulation(const wgfx::GpuContext& ctx, ROSpan<Particle> parts);
+        void resetParticleBuffer(const wgfx::GpuContext& ctx, ROSpan<Particle> parts);
+        void spawnForSimulation(const wgfx::GpuContext& ctx, ROSpan<Particle> parts);
 
         void init(const wgfx::GpuContext& ctx, const TextShaderLib& text_shad_lib, InitArgs args);
 

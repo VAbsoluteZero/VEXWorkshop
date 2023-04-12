@@ -136,8 +136,8 @@ static WGPUBindGroup createBindGroups(const GpuContext& context,
     return out_bind_group;
 }
 
-static WGPURenderPipeline createPipeline(const TextShaderLib& shader_lib,
-    const GpuContext& context, WGPUPipelineLayout pipeline_layout)
+static WGPURenderPipeline createPipeline(
+    const TextShaderLib& shader_lib, const GpuContext& context, WGPUPipelineLayout pipeline_layout)
 {
     using namespace pl_init_data;
     auto* src = shader_lib.shad_src.find("content/shaders/wgsl/basic_unlit.wgsl"sv);
@@ -316,7 +316,7 @@ void TexturedQuadDemo::init(Application& owner, InitArgs args)
         if (!check(src, "shader not found"))
             return;
         WGPUShaderModule shad = shaderFromSrc(globals.device, src->text.c_str());
-         
+
         temp_geom.uniform_buf = [&]() -> GpuBuffer
         {
             UBOMvp ubo_transforms;
@@ -392,8 +392,7 @@ void TexturedQuadDemo::update(Application& owner)
         return;
     auto& options = owner.getSettings();
     auto opt_dict = options.settings;
-    if (auto entry = opt_dict.find("gfx.pause");
-        entry && entry->value.getValueOr<bool>(false))
+    if (auto entry = opt_dict.find("gfx.pause"); entry && entry->value.getValueOr<bool>(false))
         return;
     if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
         return;

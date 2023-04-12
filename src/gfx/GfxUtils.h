@@ -6,7 +6,7 @@
 
 #include <span>
 
-#if VEX_MSVC == 0
+#if VEX_MSVC == 0 || !defined(__EMSCRIPTEN__)
 #ifdef NDEBUG
 #define VEX_SHADER_CONTENT_ROOT "../../../"
 #else

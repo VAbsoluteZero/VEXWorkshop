@@ -2,11 +2,17 @@
 
 #include <SDL.h>
 #include <spdlog/spdlog.h>
+
+#ifdef VEX_EMSCRIPTEN
+#include <emscripten.h>
+#include <emscripten/html5.h> 
+#endif
+
 using namespace vex;
 
 std::unique_ptr<SDLWindow> vex::SDLWindow::create(const WindowParams& params)
 {
-    uint32_t mode = SDL_WindowFlags::SDL_WINDOW_SHOWN;
+    uint32_t mode = SDL_WindowFlags::SDL_WINDOW_SHOWN | SDL_WindowFlags::SDL_WINDOW_ALLOW_HIGHDPI;
 
     if (params.m == EWindowMode::BorderlessFullscreen)
         mode |= SDL_WindowFlags::SDL_WINDOW_BORDERLESS;
@@ -29,7 +35,12 @@ std::unique_ptr<SDLWindow> vex::SDLWindow::create(const WindowParams& params)
             h = (int)(r.h * 0.75f);
         }
     }
+
+    SPDLOG_INFO("SDL::CreateWindow: {}, {}", w, h);
     SDL_Window* window = SDL_CreateWindow(params.name.c_str(), x, y, w, h, mode);
+
+    SDL_GetWindowSize(window, &w, &h);
+    SPDLOG_INFO("SDL::SDL_GetWindowSize: {}, {}", w, h);
 
     if (nullptr == window)
     {
@@ -64,7 +75,11 @@ std::unique_ptr<SDLWindow> vex::SDLWindow::create(const WindowParams& params)
 v2u32 vex::SDLWindow::windowSize()
 {
     v2i32 size;
+#ifdef VEX_EMSCRIPTEN
+    emscripten_get_canvas_element_size("canvas", &size.x, &size.y);
+#else
     SDL_GetWindowSize(sdl_window, &size.x, &size.y);
+#endif
     return {(u32)size.x, (u32)size.y};
 }
 
