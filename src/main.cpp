@@ -39,8 +39,13 @@ int main(int argc, char** argv)
         false;
 #endif
     config.target_framerate = 300; 
+      
 
-    spdlog::stopwatch sw;
+    const auto pp = __lzcnt(0b1111);
+    const auto pp1 = __lzcnt(0b100111);
+    const auto pp2 = __lzcnt(argc);
+
+    spdlog::stopwatch sw; 
     auto& app = vex::Application::init(config, registerAvailableDemoCtors());
 
     SPDLOG_INFO(" ---------------- application initialization finished ---------------- ");

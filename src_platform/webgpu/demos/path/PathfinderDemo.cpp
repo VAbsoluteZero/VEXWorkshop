@@ -6,6 +6,7 @@
 #include <utils/CLI.h>
 #include <utils/ImGuiUtils.h>
 
+#include <Tracy.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -20,6 +21,7 @@ constexpr const char* console_name = "Console##pathfind";
 
 void Flow::Map1b::fromImage(Flow::Map1b& out, const char* img)
 {
+    ZoneScopedN("create map from file");
     spdlog::stopwatch sw;
     defer_ { SPDLOG_WARN("Texture loader: loading PNG, elapsed: {} seconds", sw); };
 
@@ -108,6 +110,7 @@ vex::flow::FlowfieldPF::~FlowfieldPF()
 }
 void FlowfieldPF::init(Application& owner, InitArgs args)
 {
+    ZoneScopedN("FlowfieldPF::Init");
     defer_ { frame_alloc_resource.reset(); };
 
     auto* backend = owner.getGraphicsBackend();
@@ -134,8 +137,10 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
 #elif VEX_PF_WebDemo
         Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map64.png");
 #else
-        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map32.png");
+        Flow::Map1b::fromImage(init_data, "content/sprites/flow/grid_map64.png");
 #endif
+
+        ZoneScopedN("create wgpu pipelines");
         processed_map.size = {init_data.size.x, init_data.size.y};
         processed_map.data.reserve(init_data.size.x * init_data.size.y);
         for (u8 c : init_data.source)
@@ -170,6 +175,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
 
     // init console variables
     {
+        ZoneScopedN("Init options");
         auto& options = owner.getSettings();
         opt_grid_thickness.addTo(options);
         opt_grid_color.addTo(options);
@@ -227,7 +233,7 @@ void FlowfieldPF::init(Application& owner, InitArgs args)
         -10, 10);                                              // near/far
 
     // add input hooks
-#if VEX_PF_WebDemo == 1
+#if VEX_PF_WebDemo == 0
     owner.input.addTrigger("ShaderReload"_trig,
         Trigger{
             .fn_logic =
@@ -265,6 +271,7 @@ struct NearSearchClient
 
 void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, SpawnLocation args)
 {
+    ZoneScopedN("Spawning particles");
     if ((num_particles == max_particles) && !spawn_args.reset)
         return;
     if (init_data.isBlocked(goal_cell))
@@ -272,11 +279,6 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
 
     NearSearchClient client{
         .near = {(u32)(init_data.size.y * init_data.size.x / 2), frame_alloc},
-        // #if VEX_PF_StressPreset
-        //         .max_len = (i32)glm::round(init_data.size.y * init_data.size.y * 0.5f),
-        // #else
-        //         .max_len = (i32)(init_data.size.y * 4),
-        // #endif
         .max_dist = (u32)spawn_args.radius,
     };
 
@@ -288,8 +290,10 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     const i32 num_to_spawn = glm::clamp(spawn_args.count, 0, max_particles);
 
     SPDLOG_INFO("spawning {} particles", num_to_spawn);
-
-    Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
+    {
+        ZoneScopedN("BFS with client");
+        Flow::gridSyncBFSWithClient<decltype(client), false>({args.cell}, init_data, client);
+    }
     const u32 client_len = (u32)client.near.size();
     vex::Buffer<v2f> cells = {frame_alloc, (i32)client_len};
 
@@ -301,42 +305,43 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
     }
 
     vex::Buffer<Part> particles = {frame_alloc, num_to_spawn};
-    //   vex::Buffer<i32> rejection = {frame_alloc, (i32)client_len};
-    // rejection.addUninitialized(client_len);
-    // for (auto& it : rejection)
-    //     it = max_per_cell;
     particles.reserve(num_to_spawn);
 
     if (spawn_args.reset)
     {
         num_particles = 0;
     }
-
-    const float padding = map_area.part_radius * sz * 1.01f;
-    for (auto i = 0; i < num_to_spawn; ++i)
+    // place particles
     {
-        if (num_particles + i >= max_particles)
-            break;
+        ZoneScopedN("Place particles randomly");
+        const float padding = map_area.part_radius * sz * 1.01f;
+        for (auto i = 0; i < num_to_spawn; ++i)
+        {
+            if (num_particles + i >= max_particles)
+                break;
 
-        float f_idx = i / ((float)num_to_spawn);
-        auto entry_idx = (i32)(glm::floor(f_idx * client_len));
-        v2f cell_idx = cells[entry_idx];
-        volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding * 2);
-        volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding * 2);
-        Part particle = {
-            .pos = cell_idx + v2f{rnd_x, rnd_y},
-            .vel = v2f_zero,
-        };
-        particles.add(particle);
+            float f_idx = i / ((float)num_to_spawn);
+            auto entry_idx = (i32)(glm::floor(f_idx * client_len));
+            v2f cell_idx = cells[entry_idx];
+            volatile float rnd_x = padding + rng::Rand::randFloat01() * (sz - padding * 2);
+            volatile float rnd_y = padding + rng::Rand::randFloat01() * (sz - padding * 2);
+            Part particle = {
+                .pos = cell_idx + v2f{rnd_x, rnd_y},
+                .vel = v2f_zero,
+            };
+            particles.add(particle);
+        }
     }
 
     if (spawn_args.reset)
     {
+        ZoneScopedN("copy particles to gpu");
         num_particles = num_to_spawn;
         part_sys.resetParticleBuffer(ctx, particles.constSpan());
     }
     else
     {
+        ZoneScopedN("copy particles to gpu");
         part_sys.spawnForSimulation(ctx, particles.constSpan());
         num_particles += particles.len;
     }
@@ -344,6 +349,7 @@ void FlowfieldPF::trySpawningParticlesAtLocation(const wgfx::GpuContext& ctx, Sp
 
 void FlowfieldPF::update(Application& owner)
 {
+    ZoneScopedN("FlowfieldPF::Update");
     // skip update if paused, invalid or modal window is shown
     if (shouldPause(owner) || viewports.imgui_views.size() < 1)
         return;
@@ -357,26 +363,19 @@ void FlowfieldPF::update(Application& owner)
         return;
     }
 
-    // owner.input.ifTriggered("EscDown"_trig,
-    //     [&](const input::Trigger& self)
-    //     {
-    //         goal_cell = { 1024, 1024 };
-    //         num_particles = 0;
-    //         sub_goals.clear();
-    //         return true;
-    //     });
-
     const auto& time = owner.getTime();
     auto& options = owner.getSettings();
     if (init_data.contains(goal_cell) && !init_data.isBlocked(goal_cell))
     {
         spdlog::stopwatch sw;
         defer_ { bfs_search_dur_ms = sw.elapsed() / 1ms; };
+        ZoneNamedN(main_bfs, "BFS", true);
         if (options.valueOr(opt_allow_diagonal.key_name, true))
             Flow::gridSyncBFS<true>({goal_cell}, init_data, processed_map);
         else
             Flow::gridSyncBFS<false>({goal_cell}, init_data, processed_map);
 
+        ZoneNamedN(sub_bfs, "process sub goals", true);
         NearSearchClient client{
             .near = {32, frame_alloc},
             .max_len = (i32)(init_data.size.y * 3),
@@ -422,10 +421,11 @@ void FlowfieldPF::update(Application& owner)
     bool has_focus = vp_wrapper.mouse_over && vp_wrapper.gui_visible;
     if (has_focus)
     { // process input
-#if VEX_PF_WebDemo == 1
+#if VEX_PF_WebDemo == 0
         owner.input.ifTriggered("ShaderReload"_trig,
             [&](const input::Trigger& self)
             {
+                ZoneScopedN("Shader Reload");
                 spdlog::stopwatch sw;
                 defer_
                 {
@@ -510,7 +510,8 @@ void FlowfieldPF::update(Application& owner)
         //         return true;
         //     });
     }
-    {
+    { 
+        ZoneScopedN("Wgpu draw and compute");
         auto& wgpu_ctx = viewport.setupForDrawing(globals);
 
         auto model_view_proj = camera.mtx.projection * camera.mtx.view;
@@ -527,8 +528,8 @@ void FlowfieldPF::update(Application& owner)
             .grid_half_size = init_data.size.x / 2.0f,
             .camera_h = camera.height,
             .cell_sz = map_area.cell_size.x};
-        { // draw HEATMAP & background
-
+        { // draw HEATMAP & background 
+            ZoneScopedN("Draw heatmap");
             // heatmap WRITES to storage buffer that contains search result
             // #fixme - restructure whole thing so buffers and layers are separated
             heatmap.draw(wgpu_ctx, draw_args,
@@ -540,6 +541,7 @@ void FlowfieldPF::update(Application& owner)
                 });
         }
         { // compute pass
+            ZoneScopedN("Compute fields");
             wgpuDeviceTick(wgpu_ctx.device);
             auto encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
 
@@ -549,7 +551,7 @@ void FlowfieldPF::update(Application& owner)
                 .queue = wgpu_ctx.queue,
                 .comp_pass = wgpuCommandEncoderBeginComputePass(encoder, nullptr),
             };
-            auto submit_cmp = [](CompContext& ctx) -> void
+            auto submit_cmds_fn = [](CompContext& ctx) -> void
             {
                 WGPUCommandBufferDescriptor ctx_desc_fin{nullptr, "compute submit"};
                 auto cmd_buf = wgpuCommandEncoderFinish(ctx.encoder, &ctx_desc_fin);
@@ -564,7 +566,7 @@ void FlowfieldPF::update(Application& owner)
                                                   .flags = flags_comp,
                                               });
 
-            submit_cmp(compute_ctx);
+            submit_cmds_fn(compute_ctx);
 
             compute_ctx.encoder = wgpuDeviceCreateCommandEncoder(wgpu_ctx.device, nullptr);
             compute_ctx.comp_pass = wgpuCommandEncoderBeginComputePass(
@@ -578,10 +580,11 @@ void FlowfieldPF::update(Application& owner)
                                               .time = (float)time.unscaled_runtime,
                                               .dt = time.delta_time_f32,
                                           });
-            submit_cmp(compute_ctx);
+            submit_cmds_fn(compute_ctx);
         }
 
-        { // overlays
+        { // overlays 
+            ZoneScopedN("Draw overlays");
             if (draw_args.settings->valueOr(opt_show_dbg_overlay.key_name, false))
             {
                 debug_overlay.draw(wgpu_ctx, draw_args,
@@ -608,14 +611,18 @@ void FlowfieldPF::update(Application& owner)
                 .num_particles = (u32)num_particles,
             });
 
-        // SUBMIT
-        viewport.finishAndSubmit();
-        wgpuDeviceTick(wgpu_ctx.device);
+        // SUBMIT 
+        { 
+            ZoneScopedN("Submit commands and Tick");
+            viewport.finishAndSubmit();
+            wgpuDeviceTick(wgpu_ctx.device);
+        }
     }
 }
 
 void FlowfieldPF::drawUI(Application& owner)
 { //
+    ZoneScopedN("Draw FlowfieldPF UI");
     ImGui::PushFont(vex::g_view_hub.visuals.fnt_accent);
     defer_ { ImGui::PopFont(); };
 
@@ -643,7 +650,10 @@ void FlowfieldPF::drawUI(Application& owner)
 #if VEX_PF_WebDemo == 1
     ui.console_wnd.is_open = false;
 #endif
-    ui.drawStandardUI(owner, &viewports);
+    {
+        ZoneScopedN("Draw Standard UI");
+        ui.drawStandardUI(owner, &viewports);
+    }
 
     if (ImGui::BeginMainMenuBar())
     {
@@ -658,7 +668,8 @@ void FlowfieldPF::drawUI(Application& owner)
 
     defer_ { ImGui::End(); }; // close window region
     if (ImGui::Begin(ids::main_vp_name))
-    {
+    { 
+        ZoneScopedN("Draw MainViewport UI");
         {
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
             ImGui::PushFont(vex::g_view_hub.visuals.fnt_tiny);
@@ -722,7 +733,7 @@ void FlowfieldPF::drawUI(Application& owner)
         {
             if (ImGui::Button(ICON_CI_DEBUG_START "##pf_pause"))
                 is_pause_enabled_cv->value.set<bool>(false);
-        } 
+        }
 
         std::string item_id;
         item_id.reserve(80);
@@ -775,7 +786,7 @@ void FlowfieldPF::drawUI(Application& owner)
                 "##pf_options", side_panel_size, false);
             defer_ { ImGui::EndChild(); };
             ImGui::Indent(4);
-            defer_ { ImGui::Unindent(); }; 
+            defer_ { ImGui::Unindent(); };
 
             for (auto& [k, v] : options.settings)
             {
@@ -841,7 +852,7 @@ void FlowfieldPF::drawUI(Application& owner)
         defer_ { ImGui::EndMainMenuBar(); };
         ImGui::Bullet();
         ImGui::Text("[particles:%d/%d] ", num_particles, max_particles);
-        ImGui::Bullet(); 
+        ImGui::Bullet();
         {
             ImGui::SetNextItemWidth(105);
             auto time_scale = options.settings.find(opt_time_scale.key_name);
@@ -873,6 +884,7 @@ void FlowfieldPF::drawUI(Application& owner)
 }
 void FlowfieldPF::postFrame(Application& owner)
 {
+    ZoneScopedN("FlowfieldPF::PostFrame");
     frame_alloc_resource.reset();
     viewports.postFrame();
 }

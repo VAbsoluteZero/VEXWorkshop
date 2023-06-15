@@ -25,13 +25,14 @@
                 "SDL_SSEMATH": "ON",
                 "SDL_MMX": "ON",
                 "SDL_ASSEMBLY": "ON",
+                "VEX_USE_TRACY": false,
                 "VEX_USE_DAWN": false,
                 "VEX_USE_WGPU": false,
                 "VEX_USE_DX11": false,
                 "VEX_USE_EMSCRIPTEN": false
             }
         },
-        { 
+        {
             "name": "clang_base",
             "displayName": "Clang default",
             "inherits": "DefaultCfg",
@@ -88,6 +89,28 @@
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "VEX_USE_DAWN": true
+            }
+        },
+        {
+            "name": "clang_win_rel_dawn_profile",
+            "displayName": "[Profiling] ClangDawn ReleaseDbgInfo",
+            "inherits": "clang_base",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "VEX_USE_TRACY": true,
+                "VEX_USE_DAWN": true
+            }
+        },
+        {
+            "name": "clang_win_dbg_dawn_profile",
+            "displayName": "[Profiling] ClangDawn Debug",
+            "inherits": "clang_base",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "VEX_USE_TRACY": true,
                 "VEX_USE_DAWN": true
             }
         },

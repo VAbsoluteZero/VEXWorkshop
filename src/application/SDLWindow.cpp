@@ -2,6 +2,8 @@
 
 #include <SDL.h>
 #include <spdlog/spdlog.h>
+#include <Tracy.hpp>
+
 
 #ifdef VEX_EMSCRIPTEN
 #include <emscripten.h>
@@ -12,6 +14,7 @@ using namespace vex;
 
 std::unique_ptr<SDLWindow> vex::SDLWindow::create(const WindowParams& params)
 {
+    ZoneScopedN("startup:create window");
     uint32_t mode = SDL_WindowFlags::SDL_WINDOW_SHOWN | SDL_WindowFlags::SDL_WINDOW_ALLOW_HIGHDPI;
 
     if (params.m == EWindowMode::BorderlessFullscreen)

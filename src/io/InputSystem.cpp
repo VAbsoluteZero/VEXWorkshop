@@ -5,6 +5,8 @@
 #include <imgui_impl_sdl.h>
 #include <utils/ImGuiUtils.h>
 
+#include <Tracy.hpp>
+
 #define sid(v) ((u32)SignalId::v)
 
 using namespace vex;
@@ -74,7 +76,7 @@ vex::input::InputSystem::InputSystem()
             .fn_logic =
                 [](Trigger& self, const InputState& state)
             {
-                //const auto moves = state.this_frame[sid(MouseScroll)].state > SignalState::None;
+                // const auto moves = state.this_frame[sid(MouseScroll)].state > SignalState::None;
                 if ((state.this_frame[sid(MouseScroll)].state > SignalState::None))
                 {
                     self.input_data[SignalId::MouseScroll] = state.this_frame[sid(MouseScroll)];
@@ -141,6 +143,7 @@ vex::input::InputSystem::InputSystem()
 
 void vex::input::InputSystem::poll(float dt)
 {
+    ZoneScopedN("Input:Poll");
     SDL_Event sdl_event = {};
     auto& st = state.this_frame;
     while (SDL_PollEvent(&sdl_event) != 0)
@@ -243,6 +246,7 @@ void vex::input::InputSystem::poll(float dt)
 
 void vex::input::InputSystem::updateTriggers()
 {
+    ZoneScopedN("Input:UpdateTriggers");
     for (auto& [name, trigger] : triggers)
     {
         bool triggered = trigger.callProcessDelegate(trigger, state);
@@ -252,6 +256,7 @@ void vex::input::InputSystem::updateTriggers()
 
 void vex::input::InputSystem::onFrameEnd()
 {
+    ZoneScopedN("Input:FrameEnd");
     const auto cnt = (u32)SignalId::sMax;
     for (u32 i = 0; i < cnt; ++i)
     {

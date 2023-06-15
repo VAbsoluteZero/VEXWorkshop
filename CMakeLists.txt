@@ -70,7 +70,7 @@ if(NOT EXISTS "${VEX_ROOTDIR}/VCore")
     message(FATAL_ERROR "Couldn't find VEX lib or fetch submodules. VEX_FETCH either off or failed.")
 endif() 
 # -------------------------------------------------------------------------------------------------
-# SUBDIRECTORY (for every platfrom)  
+# SUBDIRECTORY (for every platfrom)   
 # -------------------------------------------------------------------------------------------------
 add_subdirectory("third_party/spdlog")   
 add_subdirectory("third_party/glm")   
@@ -161,7 +161,7 @@ elseif (WIN32)
     add_subdirectory("third_party/SDL2") 
     include_directories("${VEXWorkshop_SOURCE_DIR}/src_platform/windows/")
      
-    add_compile_definitions( SPDLOG_COMPILED_LIB)
+    add_compile_definitions( SPDLOG_COMPILED_LIB)   
 endif() 
 # ------------------------------------------------------------------------------------------------- 
 if (VEX_BACKEND_WEBGPU) 
@@ -198,6 +198,16 @@ file(GLOB_RECURSE VEX_SRC
 )
 
 set(VEX_ALLSRC ${VEX_SRC})
+
+if (VEX_USE_TRACY AND NOT EMSCRIPTEN) 
+    #TRACY_ENABLE
+    add_compile_definitions(TRACY_ENABLE=1)
+else()
+    add_compile_definitions(TRACY_ENABLE=0)
+endif()
+list (APPEND VEX_ALLSRC "${VEXWorkshop_SOURCE_DIR}/third_party/tracy/TracyClient.cpp") 
+include_directories("${VEXWorkshop_SOURCE_DIR}/third_party/tracy/tracy/")
+
 list (APPEND VEX_ALLSRC ${VEX_GOL_SRC})
 list (APPEND VEX_ALLSRC ${VEX_PLATFORM_SRC}) 
 
@@ -355,7 +365,7 @@ if(NOT VEX_MSVC_CLANG)
     add_compile_definitions(VEX_MSVC=1)
     add_compile_definitions(VEX_CLANG=0)
 else()
-    add_compile_definitions(VEX_MSVC=0)
+    add_compile_definitions(VEX_MSVC=0) 
     add_compile_definitions(VEX_CLANG=1)
 endif()
 # ------------------------------------------------------------------------------------------------- 

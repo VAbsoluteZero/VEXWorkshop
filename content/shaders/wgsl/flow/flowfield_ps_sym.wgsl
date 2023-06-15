@@ -364,6 +364,17 @@ fn xorshift32_f32(state: u32) -> f32 {
     var x = xorshift32(state);
     return fract(cos(f32(x)) * 537.73);
 }
+const angle_step =  pi / 4.0;
+const drift_dirs  = array( 
+    vec2<f32>(f32(cos(angle_step * f32(0))), f32(sin(angle_step * f32(0)))),
+    vec2<f32>(f32(cos(angle_step * f32(1))), f32(sin(angle_step * f32(1)))),
+    vec2<f32>(f32(cos(angle_step * f32(2))), f32(sin(angle_step * f32(2)))),
+    vec2<f32>(f32(cos(angle_step * f32(3))), f32(sin(angle_step * f32(3)))),
+    vec2<f32>(f32(cos(angle_step * f32(4))), f32(sin(angle_step * f32(4)))),
+    vec2<f32>(f32(cos(angle_step * f32(5))), f32(sin(angle_step * f32(5)))),
+    vec2<f32>(f32(cos(angle_step * f32(6))), f32(sin(angle_step * f32(6)))),
+    vec2<f32>(f32(cos(angle_step * f32(7))), f32(sin(angle_step * f32(7))))
+);
 
 @compute @workgroup_size(64)
 fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_id)lid: vec3u) {
@@ -410,6 +421,7 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     vel = select(normalize(vel) * args.speed_max, v2f(), vel.x == 0 && vel.y == 0);
 
     var delta_vec = particles.data[idx].vel * dt * 0.5 ;
+    let planned_delta_vec = delta_vec;
 
     let oob = this_cell.x < 0 || this_cell.y < 0 || this_cell.x >= i32(args.size.x) || this_cell.y >= i32(args.size.y) ;
     let stuck = oob || ((map_data.cells[this_cell.x + this_cell.y * i32(args.size.x)] & (1u << 15u)) > 1);
@@ -450,6 +462,8 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     let table_self_idx = u32(sep_cell_y) * args.spatial_table_size.x + u32(sep_cell_x);
 
     var repell_sum = v2f(0.0, 0.0);
+    var others_density = 0u;
+    var self_density = 0u;
     for (var j = 0; j < 9; j++) {
         let s_cell: v2i32 = v2i32(i32(sep_cell_x), i32(sep_cell_y)) + neigbor_offset[j];
 
@@ -459,13 +473,21 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
         //if s_oob {continue;}
 
         let sep_idx = u32(s_cell.y) * args.spatial_table_size.x + u32(s_cell.x);
-        let sep_v =  cnt_table.cells[sep_idx] * 2;//clamp(cnt_table.cells[sep_idx], 0u, 10u);
-        let sep_v_rel = f32(sep_v) / 10.0;
+        let sep_v = cnt_table.cells[sep_idx];
+        others_density += select(0u, sep_v, j != 8);
+        self_density += select(sep_v, 0u, j != 8);
+        let sep_v_rel = f32(sep_v) / 5.0;
         repell_sum += repell[j] * sep_v_rel;
     }
     if repell_sum.x != 0 || repell_sum.y != 0 {
         vel += normalize(repell_sum) * args.separation * dt * args.speed_max * 8;
     }
+
+    let rand_u32 = xorshift32(u32(dt * 1732173.0) * idx);
+    let rand_f32_01 = abs(fract(cos(f32(rand_u32)) * 537.73));
+    let dir_drift: v2f = drift_dirs[rand_u32 % 8];
+    let drift_val = f32(clamp(self_density, 1, 20)) * f32(3 - clamp(others_density, 0, 2)) * 1.5;
+    vel += dir_drift * dt * args.separation * args.speed_max * select(drift_val, 0.1, self_density == 1);
 
     //vel *= f32(cnt_table.cells[table_self_idx]) * args.radius * 10;
 
@@ -475,15 +497,16 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
     var collided: bool = false;
     let dumpen = 0.39f;
     let filter_val = 0.515f;
+    let reflect_val = -0.550f;
     let flip_unstuck = array(
-        normalize(v2f(-1.0, -1.0)) * dumpen,
-        normalize(v2f(filter_val, -1.0)) * dumpen,
-        normalize(v2f(-1.0, -1.0)) * dumpen,
-        normalize(v2f(-1.0, filter_val)) * dumpen,
-        normalize(v2f(-1.0, filter_val)) * dumpen,
-        normalize(v2f(-1.0, -1.0)) * dumpen,
-        normalize(v2f(filter_val, -1.0)) * dumpen,
-        normalize(v2f(-1.0, -1.0)) * dumpen
+        normalize(v2f(reflect_val, reflect_val)) * dumpen,
+        normalize(v2f(filter_val, reflect_val)) * dumpen,
+        normalize(v2f(reflect_val, reflect_val)) * dumpen,
+        normalize(v2f(reflect_val, filter_val)) * dumpen,
+        normalize(v2f(reflect_val, filter_val)) * dumpen,
+        normalize(v2f(reflect_val, reflect_val)) * dumpen,
+        normalize(v2f(filter_val, reflect_val)) * dumpen,
+        normalize(v2f(reflect_val, reflect_val)) * dumpen
     );
 
     if stuck {
@@ -499,16 +522,6 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
             break;
         }
     }
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, 1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, -1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 0), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 0), delta_vec, &collided);
-
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, -1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, -1), delta_vec, &collided);
-    // split into two to reduce chance of glitching out
     if !collided {
         delta_vec = particles.data[idx].vel * dt * 0.5 ;
         for (var j = 0; j < 8; j++) {
@@ -519,26 +532,15 @@ fn cs_main(@builtin(global_invocation_id)gid: vec3u, @builtin(local_invocation_i
             }
         }
     }
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, 1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(0, -1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 0), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 0), delta_vec, &collided);
-
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, 1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, -1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(-1, 1), delta_vec, &collided);
-    // delta_vec = wall_collide(idx, pos, this_cell + v2i32(1, -1), delta_vec, &collided);
 
     if collided {
-        // vel = v2f();
-        // vel = length(vel) * normalize(v2f(f32(flip_mult.x), f32(flip_mult.y)));
         let normal_d = normalize(v2f(f32(flip_mult.x), f32(flip_mult.y)));
-        vel = v2f(vel.x * flip_mult.x, vel.y * flip_mult.y) * 2.0f;
-        particles.data[idx].vel = vel ;
-        particles.data[idx].pos += vel * dt ;//args.radius * normal_d * 3.25;
+        vel = v2f(vel.x * flip_mult.x, vel.y * flip_mult.y) * (0.74 + (0.20 - rand_f32_01 * 0.25));
+        particles.data[idx].vel = vel;
+        let push = select(v2f(), normalize(planned_delta_vec), planned_delta_vec.x != 0 && planned_delta_vec.y != 0);
+        particles.data[idx].pos += push * args.speed_base * dt * -0.01;//args.radius * normal_d * 3.25;
     } else {
         particles.data[idx].vel = vel;
         particles.data[idx].pos += delta_vec;
     }
-    //unstuck(idx, pos, this_cell);
 }

@@ -12,6 +12,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <Tracy.hpp>
 
 #ifdef __EMSCRIPTEN__
     #include <emscripten.h>
@@ -23,6 +24,7 @@
 
 void wgfx::Viewport::initialize(WGPUDevice device, const vex::ViewportOptions& args)
 {
+    ZoneScopedN("Viewport::Initialize");
     options = args;
     {
         WGPUTextureDescriptor tex_desc{
@@ -88,6 +90,7 @@ void wgfx::Viewport::initialize(WGPUDevice device, const vex::ViewportOptions& a
 
 wgfx::GpuContext& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
 {
+    ZoneScopedN("Viewport::SetupForDrawing");
     auto encoder = wgpuDeviceCreateCommandEncoder(globals.device, &this->encoder_desc);
 
     this->color_attachment.view = view;
@@ -118,6 +121,7 @@ wgfx::GpuContext& wgfx::Viewport::setupForDrawing(const wgfx::Globals& globals)
 
 void wgfx::wgpuWait(std::atomic_bool& flag)
 {
+    ZoneScoped;
     while (!flag.load())
     {
 #ifndef __EMSCRIPTEN__
@@ -131,6 +135,7 @@ void wgfx::wgpuWait(std::atomic_bool& flag)
 void wgfx::wgpuPollWait(
     const GpuContext& context, std::atomic_bool& flag, double microsec_timeout)
 {
+    ZoneScoped;
     using namespace std::chrono_literals;
     spdlog::stopwatch sw;
     while (!flag)
@@ -156,6 +161,7 @@ WGPUInstance wgfx::createInstance(WGPUInstanceDescriptor desc)
 
 void wgfx::requestDevice(Globals& globals, WGPUDeviceDescriptor const* descriptor)
 {
+    ZoneScopedN("request wgpu device");
 #ifndef __EMSCRIPTEN__
     std::atomic_bool request_done = ATOMIC_VAR_INIT(false);
     auto cb = [&](WGPURequestDeviceStatus status, WGPUDevice in_device, char const* message, void*)
@@ -175,6 +181,7 @@ void wgfx::requestDevice(Globals& globals, WGPUDeviceDescriptor const* descripto
 
 void wgfx::requestAdapter(Globals& globals, WGPURequestAdapterOptions& options)
 {
+    ZoneScopedN("request wgpu adapter");
     std::atomic_bool request_done = ATOMIC_VAR_INIT(false);
     auto cb =
         [&](WGPURequestAdapterStatus status, WGPUAdapter in_adapter, char const* message, void*)
@@ -195,6 +202,7 @@ void wgfx::requestAdapter(Globals& globals, WGPURequestAdapterOptions& options)
 
 WGPUSurface wgfx::getWGPUSurface(WGPUInstance instance, SDL_Window* sdl_window)
 {
+    ZoneScopedN("request wgpu surface");
 #ifdef _WIN64
     {
         SDL_SysWMinfo sdl_wm_info;
@@ -239,7 +247,9 @@ void wgfx::swapchainPresent(WGPUSwapChain swap_chain)
     emscripten_request_animation_frame(v_emscripten_stub, nullptr);
 }
 #else
-void wgfx::swapchainPresent(WGPUSwapChain swap_chain) { wgpuSwapChainPresent(swap_chain); }
+void wgfx::swapchainPresent(WGPUSwapChain swap_chain) {
+    ZoneScopedN("present frame");
+    wgpuSwapChainPresent(swap_chain); }
 #endif
 
 auto wgfx::Globals::isValid() const -> bool
@@ -262,6 +272,7 @@ void wgfx::Globals::release()
 
 wgfx::GpuBuffer wgfx::GpuBuffer::create(WGPUDevice device, GpuBuffer::Desc desc)
 {
+    ZoneScopedN("Create Wgpu Buffer");
     const uint32_t size = (desc.size + 3) & ~3;
     GpuBuffer out_buf = {.desc = desc};
     WGPUBufferDescriptor buffer_desc = {
@@ -277,6 +288,7 @@ wgfx::GpuBuffer wgfx::GpuBuffer::create(WGPUDevice device, GpuBuffer::Desc desc)
 wgfx::GpuBuffer wgfx::GpuBuffer::create(
     WGPUDevice device, GpuBuffer::Desc desc, u8* data, u32 data_len_bytes)
 {
+    ZoneScopedN("Create Wgpu Buffer with Data");
     const uint32_t size = (desc.size + 3) & ~3;
     GpuBuffer wgpu_buffer = {.desc = desc};
     WGPUBufferDescriptor buffer_desc = {
@@ -300,6 +312,7 @@ wgfx::GpuBuffer wgfx::GpuBuffer::create(
 
 void wgfx::GpuBuffer::copyViaStaging(CpyArgs args)
 {
+    ZoneScoped;
     auto& [device, encoder, at_offset, data, data_len] = args;
 
     const auto buff_size = (data_len + 3) & ~3;
@@ -325,6 +338,7 @@ void wgfx::GpuBuffer::copyViaStaging(CpyArgs args)
 
 WGPUCommandBuffer wgfx::copyBufferToTexture(wgfx::CopyBuffToTexArgs args)
 {
+    ZoneScoped;
     WGPUCommandEncoder cmd_encoder = wgpuDeviceCreateCommandEncoder(args.device, nullptr);
     wgpuCommandEncoderCopyBufferToTexture(
         cmd_encoder, args.source_view, args.dest_view, &args.texture_size);
@@ -336,6 +350,7 @@ WGPUCommandBuffer wgfx::copyBufferToTexture(wgfx::CopyBuffToTexArgs args)
 
 WGPUShaderModule wgfx::shaderFromSrc(WGPUDevice device, const char* src)
 {
+    ZoneScopedN("Compile shader from source");
     checkLethal(src, "Unrecoverable : got nullptr instead of WGSL shader source");
     WGPUShaderModuleWGSLDescriptor shaderCodeDesc{};
     shaderCodeDesc.chain.next = nullptr;
@@ -353,6 +368,7 @@ WGPUShaderModule wgfx::shaderFromSrc(WGPUDevice device, const char* src)
 WGPUShaderModule wgfx::reloadShader(
     vex::TextShaderLib& shader_lib, const GpuContext& context, const char* shader_name)
 {
+    ZoneScoped;
     shader_lib.reloadIfNewer(shader_name);
     auto* src = shader_lib.shad_src.find(shader_name);
     if (!check(src, "shader not found") || !std::exchange( src->reloaded_dirty_flag , false))
@@ -448,6 +464,7 @@ WGPUFragmentState wgfx::makeFragmentState(WGPUDevice device, const FragShaderDes
 wgfx::Texture wgfx::Texture::loadFormData(
     const GpuContext& ctx, LoadImgResult& loaded_img, LoadArgs options)
 {
+    ZoneScopedN("load texture from memory");
     u8* data = loaded_img.data;
     if (!checkAlways(data, "failed to load texture"))
     {
@@ -486,6 +503,7 @@ wgfx::Texture wgfx::Texture::loadFormData(
 wgfx::Texture wgfx::Texture::loadFormFile(
     const GpuContext& ctx, const char* filename, LoadArgs options)
 {
+    ZoneScopedN("load texture from file");
     LoadImgResult loaded_img = loadImage(filename, options.flip_y);
     auto tex = loadFormData(ctx, loaded_img, options);
     loaded_img.release();
@@ -495,6 +513,7 @@ wgfx::Texture wgfx::Texture::loadFormFile(
 void wgfx::Texture::copyImageToTexture(const GpuContext& ctx, WGPUTexture texture, void* pixels,
     WGPUExtent3D size, uint32_t channels)
 {
+    ZoneScopedN("copy image to texture");
     const u64 data_size = size.width * size.height * size.depthOrArrayLayers * channels;
     WGPUImageCopyTexture cpy_desc{
         .texture = texture,
@@ -518,6 +537,7 @@ void wgfx::Texture::copyImageToTexture(const GpuContext& ctx, WGPUTexture textur
 wgfx::TextureView wgfx::TextureView::create(
     WGPUDevice device, const Texture& from_tex, CreationArgs options)
 {
+    ZoneScoped;
     const bool is_cubemap = from_tex.depth == 6u;
     WGPUTextureViewDescriptor texture_view_dec = {
         .format = from_tex.format,
@@ -560,6 +580,7 @@ wgfx::TextureView wgfx::TextureView::create(
 
 wgfx::LoadImgResult wgfx::loadImage(const char* filename, bool flip_y)
 {
+    ZoneScopedN("STBI load image");
     int width = 0, height = 0;
     int read_comps = 4;
     stbi_set_flip_vertically_on_load(flip_y);

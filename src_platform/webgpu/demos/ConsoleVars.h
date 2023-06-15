@@ -54,7 +54,7 @@ namespace vex
         .info = "Base speed of a particle in units per second.",
         .default_val = 3.0f,
         .min = VEX_PF_WebDemo ? 0.0f : 0.00f,
-        .max = VEX_PF_WebDemo ? 5.00f : 8.0f,
+        .max = VEX_PF_WebDemo ? 5.00f : 7.0f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_speed_max = SettingsContainer::EntryDesc<float>{
@@ -62,7 +62,7 @@ namespace vex
         .info = "Max normalized speed value.",
         .default_val = 2.8f,
         .min = VEX_PF_WebDemo ? 0.5f : 0.00f,
-        .max = VEX_PF_WebDemo ? 6.0f : 10.00f,
+        .max = VEX_PF_WebDemo ? 5.0f : 7.00f,
         .flags = SettingsContainer::Flags::k_visible_in_ui,
     };
     static inline const auto opt_part_inertia = SettingsContainer::EntryDesc<float>{
@@ -93,9 +93,9 @@ namespace vex
     static inline const auto opt_part_sep = SettingsContainer::EntryDesc<float>{
         .key_name = "pf.PtSym_Separation",
         .info = "Force that pushes particles away when they get too close.",
-        .default_val = 0.35f,
+        .default_val = 0.30f,
         .min = VEX_PF_WebDemo ? 0.05f : 0.00f,
-        .max = VEX_PF_WebDemo ? 0.75f : 0.50f,
+        .max = VEX_PF_WebDemo ? 0.50f : 0.50f,
         .flags = VEX_PF_WebDemo ? (SettingsContainer::Flags::k_visible_in_ui |
                                       SettingsContainer::Flags::k_ui_min_as_step)
                                 : SettingsContainer::Flags::k_visible_in_ui,

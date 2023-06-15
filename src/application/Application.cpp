@@ -11,6 +11,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
 
+#include <Tracy.hpp>
 #include <algorithm>
 #include <functional>
 #include <thread>
@@ -24,8 +25,8 @@
 #ifdef VEX_EMSCRIPTEN
     #include <emscripten.h>
     #include <emscripten/html5.h>
- 
-static auto g_cached_canvas_sz = v2i32{0,0};
+
+static auto g_cached_canvas_sz = v2i32{0, 0};
 #else
     #include <ini.h>
 #endif
@@ -45,15 +46,17 @@ static inline const auto opt_imgui_demo = vex::SettingsContainer::EntryDesc<bool
 static void setupLoggers();
 static void setupSettings(vex::Application& app);
 
-#ifdef VEX_EMSCRIPTEN 
-extern "C" {
-    void vex_em_update_wnd_size(int x, int y) { 
-    }
+#ifdef VEX_EMSCRIPTEN
+extern "C"
+{
+    void vex_em_update_wnd_size(int x, int y) {}
 }
 #endif
 
 vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSamples&& samples)
 {
+    FrameMarkNamed("Initialization 'frame'");
+    ZoneScopedN("startup:initialization");
     setupLoggers();
 
     auto config = in_config;
@@ -92,7 +95,7 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
         int width = 0;
         int height = 0;
         emscripten_get_canvas_element_size("canvas", &width, &height);
-        auto ratio = emscripten_get_device_pixel_ratio(); 
+        auto ratio = emscripten_get_device_pixel_ratio();
         config.WindowArgs.h = height;
         config.WindowArgs.w = width;
         config.WindowArgs.x = 0;
@@ -134,16 +137,18 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
     self.framerate.target_framerate = config.target_framerate;
     self.allow_demo_transition = config.allow_demo_changes;
 
-    using namespace std::literals::chrono_literals;
-    std::this_thread::sleep_for(2ms);
+    // using namespace std::literals::chrono_literals;
+    // std::this_thread::sleep_for(2ms);
 
 #if ENABLE_IMGUI // Init ImGui related stuff
     [[maybe_unused]] auto c = ImGui::CreateContext();
     g_view_hub.onFirstPaintCall(self.main_window->windowSize(), self.main_window->display_size.y);
     ImGui::GetStyle() = g_view_hub.visuals.styles[EImGuiStyle::DeepDark];
 #endif
+
     if (!self.gfx_backend)
     {
+        ZoneScopedN("startup:create graphics backend");
 #ifdef VEX_RENDER_DX11
         // self.setGraphicsBackend<SdlDx11Application>(true);
         self.setGraphicsBackend<DirectX11App>(true);
@@ -157,13 +162,15 @@ vex::Application& vex::Application::init(const StartupConfig& in_config, DemoSam
     opt_imgui_demo.addTo(self.getSettings());
     opt_time_scale.addTo(self.getSettings());
 
-    SPDLOG_INFO("created appication instance");
+    SPDLOG_INFO("created application instance");
 
     return self;
 }
 
 bool vex::Application::activateDemo(const char* id)
 {
+    ZoneScopedN("create demo instance");
+
     if (auto* entry = all_demos.demos.find(id); entry)
     {
         SPDLOG_INFO(" activate demo : {}", id);
@@ -195,15 +202,17 @@ i32 vex::Application::runLoop()
         ImGuiSizes::g_cvs_sz = size;
         SPDLOG_INFO("window resized, {}x : {}y", size.x, size.y);
     };
-     
+
     do
     {
+        FrameMarkNamed("Main thread loop");
         input.poll(ftime.unscalled_dt_f32);
-        input.updateTriggers(); 
+        input.updateTriggers();
 
         //-----------------------------------------------------------------------------
         // prepare frame
         {
+            ZoneScopedN("Gfx::StartFrame");
             if (pending_demo.hasAnyValue())
             {
                 DemoSamples::Entry& ent = pending_demo.get<DemoSamples::Entry>();
@@ -234,13 +243,16 @@ i32 vex::Application::runLoop()
         {
             if (active_demo)
             {
+                ZoneScopedN("Demo Update");
                 active_demo->update(*this);
             }
+            ZoneScopedN("Gfx::Frame");
             gfx_backend->frame(*this);
         }
         //-----------------------------------------------------------------------------
         // imgui draw callbacks
         {
+            ZoneScopedN("App::UI");
             showAppLevelUI();
             settings.ifHasValue<float>(opt_time_scale.key_name,
                 [&](float scale)
@@ -251,13 +263,18 @@ i32 vex::Application::runLoop()
         //-----------------------------------------------------------------------------
         // post frame
         {
-            gfx_backend->postFrame(*this);
+            {
+                ZoneScopedN("Gfx::PostFrame");
+                gfx_backend->postFrame(*this);
+            }
+            ZoneScopedN("Demo::PostFrame");
             if (active_demo)
                 active_demo->postFrame(*this);
             input.onFrameEnd();
         }
         // time & fps
         {
+            ZoneScopedN("App::Waiting(FPS limit)");
             using namespace std::chrono_literals;
             framerate.frame_number++;
             auto ft_elapsed = g_frame_sw.elapsed();
@@ -297,26 +314,24 @@ i32 vex::Application::runLoop()
     // save #fixme
     {
 #ifndef __EMSCRIPTEN__
-        {// set to dict
-            v2i32 size;
-    v2i32 pos;
-    auto wnd = main_window->getRawWindow();
-    SDL_GetWindowSize(wnd, &size.x, &size.y);
-    SDL_GetWindowPosition(wnd, &pos.x, &pos.y);
+        v2i32 size;
+        v2i32 pos;
+        auto wnd = main_window->getRawWindow();
+        SDL_GetWindowSize(wnd, &size.x, &size.y);
+        SDL_GetWindowPosition(wnd, &pos.x, &pos.y);
 
-    mINI::INIFile file("cfg.ini");
-    mINI::INIStructure ini;
+        mINI::INIFile file("cfg.ini");
+        mINI::INIStructure ini;
 
-    ini["window"sv]["pos"sv] = fmt::format("{} {}", pos.x, pos.y);
-    ini["window"sv]["size"sv] = fmt::format("{} {}", size.x, size.y);
-    file.generate(ini);
-}
+        ini["window"sv]["pos"sv] = fmt::format("{} {}", pos.x, pos.y);
+        ini["window"sv]["size"sv] = fmt::format("{} {}", size.x, size.y);
+        file.generate(ini);
 #endif
-}
+    }
 
-SDL_Quit();
+    SDL_Quit();
 
-return 0;
+    return 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -347,7 +362,10 @@ void vex::Application::showAppLevelUI()
             gui_demo_selection_flag = false;
     }
     if (active_demo)
+    {
+        ZoneScopedN("Demo::DrawUI");
         active_demo->drawUI(*this);
+    }
 
     for (auto& [view_name, view] : g_view_hub.views)
     {

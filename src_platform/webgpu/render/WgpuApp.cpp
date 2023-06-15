@@ -53,7 +53,7 @@ struct WgpuRenderInterface
 
             WGPURequestAdapterOptions req_opts = {.nextInChain = nullptr,
                 .compatibleSurface = globals.surface,
-                .powerPreference = WGPUPowerPreference_Undefined,
+                .powerPreference = WGPUPowerPreference_HighPerformance,
                 .forceFallbackAdapter = false};
             wgfx::requestAdapter(globals, req_opts);
 
